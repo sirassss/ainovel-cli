@@ -23,7 +23,7 @@ func ValidateRecords(records []domain.ChapterRecord) error {
 	slices.SortFunc(records, func(a, b domain.ChapterRecord) int { return a.Chapter - b.Chapter })
 	for _, record := range records {
 		if err := chapterfacts.Validate(record.Facts); err != nil {
-			return fmt.Errorf("第 %d 章事实无效: %w", record.Chapter, err)
+			return fmt.Errorf("Sự thật chương %d không hợp lệ: %w", record.Chapter, err)
 		}
 	}
 	_, _, _, _, err := projectWorld(records)
@@ -35,7 +35,7 @@ func (p *Projector) Apply(records []domain.ChapterRecord) error {
 	slices.SortFunc(records, func(a, b domain.ChapterRecord) int { return a.Chapter - b.Chapter })
 	for _, record := range records {
 		if err := chapterfacts.Validate(record.Facts); err != nil {
-			return fmt.Errorf("第 %d 章事实无效: %w", record.Chapter, err)
+			return fmt.Errorf("Sự thật chương %d không hợp lệ: %w", record.Chapter, err)
 		}
 	}
 
@@ -54,29 +54,29 @@ func (p *Projector) Apply(records []domain.ChapterRecord) error {
 			Chapter: record.Chapter, Title: facts.Title, Summary: facts.Summary,
 			Characters: facts.Characters, KeyEvents: facts.KeyEvents,
 		}); err != nil {
-			return fmt.Errorf("保存第 %d 章摘要: %w", record.Chapter, err)
+			return fmt.Errorf("Lưu tóm tắt chương %d: %w", record.Chapter, err)
 		}
 	}
 	if err := p.store.World.SaveTimeline(timeline); err != nil {
-		return fmt.Errorf("重建时间线: %w", err)
+		return fmt.Errorf("Dựng lại dòng thời gian: %w", err)
 	}
 	if err := p.store.World.SaveForeshadowLedger(ledger); err != nil {
-		return fmt.Errorf("重建伏笔账本: %w", err)
+		return fmt.Errorf("Dựng lại sổ phục bút: %w", err)
 	}
 	if err := p.store.World.SaveRelationships(relationships); err != nil {
-		return fmt.Errorf("重建人物关系: %w", err)
+		return fmt.Errorf("Dựng lại quan hệ nhân vật: %w", err)
 	}
 	if err := p.store.World.SaveStateChanges(changes); err != nil {
-		return fmt.Errorf("重建状态变化: %w", err)
+		return fmt.Errorf("Dựng lại biến đổi trạng thái: %w", err)
 	}
 	if err := p.store.Cast.Save(cast); err != nil {
-		return fmt.Errorf("重建配角名册: %w", err)
+		return fmt.Errorf("Dựng lại danh sách nhân vật phụ: %w", err)
 	}
 	if err := p.updateProgress(records); err != nil {
 		return err
 	}
 	if err := p.store.World.SaveAuthorRevisionStyle(projectStyle(records)); err != nil {
-		return fmt.Errorf("保存用户修订风格: %w", err)
+		return fmt.Errorf("Lưu văn phong sửa đổi của người dùng: %w", err)
 	}
 	return p.refreshRuleViolations(records)
 }
@@ -107,7 +107,7 @@ func projectWorld(records []domain.ChapterRecord) ([]domain.TimelineEvent, []dom
 			switch update.Action {
 			case "plant":
 				if strings.TrimSpace(update.ID) == "" || strings.TrimSpace(update.Description) == "" {
-					return nil, nil, nil, nil, fmt.Errorf("第 %d 章伏笔 plant 缺少 id 或 description", chapter)
+					return nil, nil, nil, nil, fmt.Errorf("Phục bút plant của chương %d thiếu id hoặc description", chapter)
 				}
 				if exists {
 					if ledger[idx].Description == "" {
@@ -119,17 +119,17 @@ func projectWorld(records []domain.ChapterRecord) ([]domain.TimelineEvent, []dom
 				ledger = append(ledger, domain.ForeshadowEntry{ID: update.ID, Description: update.Description, PlantedAt: chapter, Status: "planted"})
 			case "advance":
 				if !exists {
-					return nil, nil, nil, nil, fmt.Errorf("第 %d 章推进未知伏笔 %q", chapter, update.ID)
+					return nil, nil, nil, nil, fmt.Errorf("Chương %d đẩy tiếp phục bút không xác định %q", chapter, update.ID)
 				}
 				ledger[idx].Status = "advanced"
 			case "resolve":
 				if !exists {
-					return nil, nil, nil, nil, fmt.Errorf("第 %d 章回收未知伏笔 %q", chapter, update.ID)
+					return nil, nil, nil, nil, fmt.Errorf("Chương %d thu phục bút không xác định %q", chapter, update.ID)
 				}
 				ledger[idx].Status = "resolved"
 				ledger[idx].ResolvedAt = chapter
 			default:
-				return nil, nil, nil, nil, fmt.Errorf("第 %d 章伏笔操作非法: %q", chapter, update.Action)
+				return nil, nil, nil, nil, fmt.Errorf("Thao tác phục bút của chương %d không hợp lệ: %q", chapter, update.Action)
 			}
 		}
 	}
@@ -147,7 +147,7 @@ func projectWorld(records []domain.ChapterRecord) ([]domain.TimelineEvent, []dom
 func (p *Projector) projectCast(records []domain.ChapterRecord) ([]domain.CastEntry, error) {
 	characters, err := p.store.Characters.Load()
 	if err != nil {
-		return nil, fmt.Errorf("读取核心角色: %w", err)
+		return nil, fmt.Errorf("Đọc nhân vật cốt lõi: %w", err)
 	}
 	core := make(map[string]bool)
 	for _, character := range characters {
@@ -196,10 +196,10 @@ func (p *Projector) projectCast(records []domain.ChapterRecord) ([]domain.CastEn
 func (p *Projector) updateProgress(records []domain.ChapterRecord) error {
 	progress, err := p.store.Progress.Load()
 	if err != nil {
-		return fmt.Errorf("读取进度: %w", err)
+		return fmt.Errorf("Đọc tiến độ: %w", err)
 	}
 	if progress == nil {
-		return fmt.Errorf("progress 未初始化")
+		return fmt.Errorf("progress chưa được khởi tạo")
 	}
 	progress.ChapterWordCounts = make(map[int]int, len(records))
 	progress.TotalWordCount = 0
@@ -213,7 +213,7 @@ func (p *Projector) updateProgress(records []domain.ChapterRecord) error {
 		setChapterHistory(&progress.StrandHistory, record.Chapter, record.Facts.DominantStrand)
 	}
 	if err := p.store.Progress.Save(progress); err != nil {
-		return fmt.Errorf("更新章节进度投影: %w", err)
+		return fmt.Errorf("Cập nhật phép chiếu tiến độ chương: %w", err)
 	}
 	return nil
 }
@@ -221,14 +221,14 @@ func (p *Projector) updateProgress(records []domain.ChapterRecord) error {
 func (p *Projector) refreshRuleViolations(records []domain.ChapterRecord) error {
 	structured := rules.SystemDefaults().Structured
 	if snapshot, err := p.store.UserRules.Load(); err != nil {
-		return fmt.Errorf("读取用户规则: %w", err)
+		return fmt.Errorf("Đọc quy tắc người dùng: %w", err)
 	} else if snapshot != nil {
 		structured = snapshot.Structured
 	}
 	for _, record := range records {
 		violations := append(rules.Lint(record.Content), rules.Check(record.Content, structured)...)
 		if err := p.store.World.SaveRuleViolations(record.Chapter, violations); err != nil {
-			return fmt.Errorf("更新第 %d 章机械检查: %w", record.Chapter, err)
+			return fmt.Errorf("Cập nhật kiểm tra cơ học của chương %d: %w", record.Chapter, err)
 		}
 	}
 	return nil

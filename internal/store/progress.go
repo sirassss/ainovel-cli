@@ -118,10 +118,10 @@ func (s *ProgressStore) StartChapter(chapter int) error {
 			return err
 		}
 		if p == nil {
-			return fmt.Errorf("progress 未初始化: %w", errs.ErrToolPrecondition)
+			return fmt.Errorf("progress chưa được khởi tạo: %w", errs.ErrToolPrecondition)
 		}
 		if p.Phase != domain.PhaseWriting {
-			return fmt.Errorf("章节写作仅允许在 writing 阶段（当前 phase=%s）: %w", p.Phase, errs.ErrToolPrecondition)
+			return fmt.Errorf("Chỉ được viết chương ở giai đoạn writing (hiện phase=%s): %w", p.Phase, errs.ErrToolPrecondition)
 		}
 		if p.Flow != domain.FlowRewriting && p.Flow != domain.FlowPolishing {
 			p.Flow = domain.FlowWriting
@@ -234,10 +234,10 @@ func (s *ProgressStore) Reopen(chapters []int, reason string) error {
 			return err
 		}
 		if p == nil {
-			return fmt.Errorf("progress 未初始化: %w", errs.ErrToolPrecondition)
+			return fmt.Errorf("progress chưa được khởi tạo: %w", errs.ErrToolPrecondition)
 		}
 		if p.Phase != domain.PhaseComplete {
-			return fmt.Errorf("reopen 仅适用于已完结的书（当前 phase=%s）: %w", p.Phase, errs.ErrToolPrecondition)
+			return fmt.Errorf("reopen chỉ áp dụng cho sách đã hoàn kết (hiện phase=%s): %w", p.Phase, errs.ErrToolPrecondition)
 		}
 		normalized, err := normalizePendingRewrites(chapters, p.CompletedChapters)
 		if err != nil {
@@ -263,10 +263,10 @@ func (s *ProgressStore) ReopenContinue() error {
 			return err
 		}
 		if p == nil {
-			return fmt.Errorf("progress 未初始化: %w", errs.ErrToolPrecondition)
+			return fmt.Errorf("progress chưa được khởi tạo: %w", errs.ErrToolPrecondition)
 		}
 		if p.Phase != domain.PhaseComplete {
-			return fmt.Errorf("重开仅适用于已完结的书（当前 phase=%s）: %w", p.Phase, errs.ErrToolPrecondition)
+			return fmt.Errorf("Mở lại chỉ áp dụng cho sách đã hoàn kết (hiện phase=%s): %w", p.Phase, errs.ErrToolPrecondition)
 		}
 		p.Phase = domain.PhaseWriting
 		p.ReopenCount++ // 审计 + 保证再完结的 progress digest 与上次不同（见字段注释）
@@ -370,11 +370,11 @@ func (s *ProgressStore) ApplyReviewOutcome(flow domain.FlowState, chapters []int
 			return err
 		}
 		if p == nil {
-			return fmt.Errorf("progress 未初始化: %w", errs.ErrToolPrecondition)
+			return fmt.Errorf("progress chưa được khởi tạo: %w", errs.ErrToolPrecondition)
 		}
 		if len(chapters) > 0 {
 			if flow == domain.FlowWriting {
-				return fmt.Errorf("返工章节非空时 flow 不能为 writing: %w", errs.ErrToolConflict)
+				return fmt.Errorf("Khi còn chương viết lại thì flow không được là writing: %w", errs.ErrToolConflict)
 			}
 			if err := domain.ValidateFlowTransition(p.Flow, flow); err != nil {
 				return err
@@ -475,10 +475,10 @@ func (s *ProgressStore) ValidateChapterWork(chapter int) error {
 		return err
 	}
 	if p == nil {
-		return fmt.Errorf("progress 未初始化: %w", errs.ErrToolPrecondition)
+		return fmt.Errorf("progress chưa được khởi tạo: %w", errs.ErrToolPrecondition)
 	}
 	if p.Phase != domain.PhaseWriting {
-		return fmt.Errorf("章节写作仅允许在 writing 阶段（当前 phase=%s）: %w", p.Phase, errs.ErrToolPrecondition)
+		return fmt.Errorf("Chỉ được viết chương ở giai đoạn writing (hiện phase=%s): %w", p.Phase, errs.ErrToolPrecondition)
 	}
 	if p.Flow != domain.FlowRewriting && p.Flow != domain.FlowPolishing {
 		return nil
@@ -490,11 +490,11 @@ func (s *ProgressStore) ValidateChapterWork(chapter int) error {
 		return nil
 	}
 
-	verb := "重写"
+	verb := "viết lại"
 	if p.Flow == domain.FlowPolishing {
-		verb = "打磨"
+		verb = "trau chuốt"
 	}
-	return fmt.Errorf("第 %d 章不在待%s队列中，当前队列：%v。请先处理队列内章节，再动新章节: %w", chapter, verb, p.PendingRewrites, errs.ErrToolConflict)
+	return fmt.Errorf("Chương %d không nằm trong hàng đợi %s, hàng đợi hiện tại: %v. Hãy xử lý các chương trong hàng đợi trước rồi mới viết chương mới: %w", chapter, verb, p.PendingRewrites, errs.ErrToolConflict)
 }
 
 func normalizePendingRewrites(chapters, completed []int) ([]int, error) {
@@ -525,7 +525,7 @@ func normalizePendingRewrites(chapters, completed []int) ([]int, error) {
 		normalized = append(normalized, ch)
 	}
 	if len(invalid) > 0 {
-		return nil, fmt.Errorf("pending_rewrites 只能包含已完成章节，非法章节：%v，completed_chapters=%v: %w", invalid, completed, errs.ErrToolPrecondition)
+		return nil, fmt.Errorf("pending_rewrites chỉ được chứa chương đã hoàn thành, chương không hợp lệ: %v, completed_chapters=%v: %w", invalid, completed, errs.ErrToolPrecondition)
 	}
 	return normalized, nil
 }

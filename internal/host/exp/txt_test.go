@@ -83,6 +83,7 @@ func TestBuildLocations(t *testing.T) {
 
 func TestRenderTXT_TitleAndChapter(t *testing.T) {
 	got := renderTXT(
+		labelsFor("zh"),
 		"光斑",
 		[]int{1, 2},
 		chapterTitleIndex{1: "雨夜归人", 2: "破晓"},
@@ -112,6 +113,7 @@ func TestRenderTXT_TitleAndChapter(t *testing.T) {
 
 func TestRenderTXT_EmptyBookTitleNoTitleLine(t *testing.T) {
 	got := renderTXT(
+		labelsFor("zh"),
 		"",
 		[]int{1},
 		chapterTitleIndex{1: "雨夜归人"},
@@ -134,6 +136,7 @@ func TestRenderTXT_LayeredVolume(t *testing.T) {
 		2: {VolumeIdx: 1, VolumeTitle: "起源"},
 	}
 	got := renderTXT(
+		labelsFor("zh"),
 		"X", []int{1, 2},
 		chapterTitleIndex{1: "A", 2: "B"},
 		locs,
@@ -153,6 +156,7 @@ func TestRenderTXT_LayeredVolume(t *testing.T) {
 
 func TestRenderTXT_ChapterWithoutTitleFallsBackToNumberOnly(t *testing.T) {
 	got := renderTXT(
+		labelsFor("zh"),
 		"", []int{5},
 		chapterTitleIndex{}, // 没有标题
 		nil,

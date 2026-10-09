@@ -32,7 +32,7 @@ func NewService(st *store.Store, model agentcore.ChatModel, opts rules.LoadOptio
 func (s *Service) normalizeOrDegrade(ctx context.Context, source, text string) rules.Candidate {
 	cand, err := s.norm.Normalize(ctx, source, text)
 	if err != nil {
-		slog.Warn("规则归一化失败，降级为原文偏好", "module", "rules", "source", source, "err", err)
+		slog.Warn("Chuẩn hóa quy tắc thất bại, hạ xuống thành sở thích nguyên văn", "module", "rules", "source", source, "err", err)
 		return degraded(source, text)
 	}
 	return cand

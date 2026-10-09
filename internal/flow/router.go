@@ -123,14 +123,14 @@ func Route(s State) *Instruction {
 	//    尚未落盘任何设定（选型是语义判断），由 Engine 的 planStartFallback 补裁。
 	if p.Phase != domain.PhaseWriting {
 		if len(s.FoundationMissing) > 0 && s.PlanningTier != "" {
-			task := fmt.Sprintf("补齐基础设定与作品信息缺项：%s；book 使用 save_book，其余基础设定使用 save_foundation 落盘", strings.Join(s.FoundationMissing, "、"))
+			task := fmt.Sprintf("Bổ sung các mục còn thiếu của thiết lập nền tảng và thông tin tác phẩm: %s; book dùng save_book, các thiết lập nền tảng khác lưu bằng save_foundation", strings.Join(s.FoundationMissing, ", "))
 			if len(s.FoundationMissing) == 1 && s.FoundationMissing[0] == "foundation_audit" {
-				task = "基础设定已齐全：重新调用 novel_context 读取全部已落盘工件与 foundation_status.fingerprint，审查跨文件语义一致性后调用 audit_foundation；有问题先修正并重新审查"
+				task = "Thiết lập nền tảng đã đủ: gọi lại novel_context để đọc toàn bộ sản phẩm đã lưu và foundation_status.fingerprint, thẩm tra tính nhất quán ngữ nghĩa giữa các tệp rồi gọi audit_foundation; nếu có vấn đề thì sửa trước và thẩm tra lại"
 			}
 			return &Instruction{
 				Agent:  plannerForTier(s.PlanningTier),
 				Task:   task,
-				Reason: "基础设定缺项未齐，照缺项续派同一规划师",
+				Reason: "Thiết lập nền tảng còn thiếu mục, tiếp tục giao cho cùng kiến trúc sư theo các mục còn thiếu",
 			}
 		}
 		return nil
@@ -139,24 +139,24 @@ func Route(s State) *Instruction {
 	// 3. 重写/打磨队列优先（事实已在工具层落盘，Router 只照单派发）
 	if len(p.PendingRewrites) > 0 {
 		ch := p.PendingRewrites[0]
-		verb := "重写"
+		verb := "Viết lại"
 		if p.Flow == domain.FlowPolishing {
-			verb = "打磨"
+			verb = "Trau chuốt"
 		}
-		task := fmt.Sprintf("%s第 %d 章", verb, ch)
+		task := fmt.Sprintf("%s chương %d", verb, ch)
 		if s.RewriteHeadNeedsDirective {
 			// 只说"重写第 N 章"等于没给方向：实测 Editor 把 architect_directive_unclear
 			// 判为返工队列里最严重的一条。这里不另派规划师——多插一次派单会让
 			// 规划失败时队列永远排不空——而是要求 Writer 自己先把方向落成契约再动笔。
 			task += fmt.Sprintf(
-				"。本章尚无 chapter_contract：请先调 plan_chapter(chapter=%d) 写清重写目标"+
-					"（goal 要回答\"改成什么样\"，而不是复述\"哪里错了\"；"+
-					"必要时补 payoff_points / continuity_checks / hook_goal），再据此重写正文", ch)
+				". Chương này chưa có chapter_contract: hãy gọi plan_chapter(chapter=%d) để nêu rõ mục tiêu viết lại"+
+					"(goal phải trả lời \"sửa thành như thế nào\", không phải nhắc lại \"sai ở đâu\"; "+
+					"nếu cần bổ sung payoff_points / continuity_checks / hook_goal), rồi dựa vào đó viết lại chính văn", ch)
 		}
 		return &Instruction{
 			Agent:   "writer",
 			Task:    task,
-			Reason:  fmt.Sprintf("PendingRewrites 队列剩余 %d 章", len(p.PendingRewrites)),
+			Reason:  fmt.Sprintf("Hàng đợi viết lại (PendingRewrites) còn %d chương", len(p.PendingRewrites)),
 			Chapter: ch,
 		}
 	}
@@ -179,28 +179,28 @@ func Route(s State) *Instruction {
 			return &Instruction{
 				Agent: "editor",
 				Task: fmt.Sprintf(
-					"审阅第 %d 卷第 %d 弧（第 %d-%d 章）：调用 novel_context(chapter=%d)，save_review 使用 scope=arc、chapter=%d",
+					"Thẩm duyệt tập %d cung %d (chương %d-%d): gọi novel_context(chapter=%d), save_review dùng scope=arc, chapter=%d",
 					refresh.Volume, refresh.Arc, refresh.StartChapter, refresh.EndChapter, refresh.EndChapter, refresh.EndChapter,
 				),
-				Reason: "弧级审阅缺失",
+				Reason: "Thiếu thẩm duyệt cấp cung",
 			}
 		case AggregateArcSummary:
 			return &Instruction{
 				Agent:  "editor",
-				Task:   fmt.Sprintf("生成第 %d 卷第 %d 弧摘要、角色快照与写作规则（save_arc_summary）", refresh.Volume, refresh.Arc),
-				Reason: "弧级摘要缺失",
+				Task:   fmt.Sprintf("Tạo tóm tắt tập %d cung %d, snapshot nhân vật và quy tắc viết (save_arc_summary)", refresh.Volume, refresh.Arc),
+				Reason: "Thiếu tóm tắt cấp cung",
 			}
 		case AggregateVolumeSummary:
 			return &Instruction{
 				Agent:  "editor",
-				Task:   fmt.Sprintf("生成第 %d 卷卷摘要（save_volume_summary）", refresh.Volume),
-				Reason: "卷摘要缺失",
+				Task:   fmt.Sprintf("Tạo tóm tắt tập %d (save_volume_summary)", refresh.Volume),
+				Reason: "Thiếu tóm tắt tập",
 			}
 		case AggregateGlobalReview:
 			return &Instruction{
 				Agent:  "editor",
-				Task:   fmt.Sprintf("审阅前 %d 章：调用 novel_context(chapter=%d)，save_review 使用 scope=global、chapter=%d", refresh.EndChapter, refresh.EndChapter, refresh.EndChapter),
-				Reason: "全局审阅缺失",
+				Task:   fmt.Sprintf("Thẩm duyệt %d chương đầu: gọi novel_context(chapter=%d), save_review dùng scope=global, chapter=%d", refresh.EndChapter, refresh.EndChapter, refresh.EndChapter),
+				Reason: "Thiếu thẩm duyệt toàn cục",
 			}
 		}
 	}
@@ -208,8 +208,8 @@ func Route(s State) *Instruction {
 	if s.ImmediateFeedbackCount > 0 {
 		return &Instruction{
 			Agent:  plannerForTier(s.PlanningTier),
-			Task:   "仅处理 novel_context 中的外部修订 writer_feedback：核对已发生剧情与后续计划，需要调整时调用 revise_outline 或相应结构工具，无需调整时调用 resolve_outline_feedback；不得处理 foundation_status 或其它规划，落盘后用一句话结束",
-			Reason: fmt.Sprintf("有 %d 条外部修订影响尚未传播到后续规划", s.ImmediateFeedbackCount),
+			Task:   "Chỉ xử lý writer_feedback là phần sửa đổi bên ngoài trong novel_context: đối chiếu cốt truyện đã xảy ra với kế hoạch phía sau; cần điều chỉnh thì gọi revise_outline hoặc công cụ cấu trúc tương ứng, không cần thì gọi resolve_outline_feedback; không được xử lý foundation_status hay quy hoạch khác; lưu xong thì kết thúc bằng một câu",
+			Reason: fmt.Sprintf("Có %d sửa đổi bên ngoài chưa được lan truyền sang quy hoạch phía sau", s.ImmediateFeedbackCount),
 		}
 	}
 
@@ -221,34 +221,34 @@ func Route(s State) *Instruction {
 			return &Instruction{
 				Agent: "editor",
 				Task: fmt.Sprintf(
-					"对第 %d 卷第 %d 弧（第 %d-%d 章）做弧级评审：调用 novel_context(chapter=%d)，save_review 使用 scope=arc、chapter=%d；issues[].chapters 只能落在该区间",
+					"Thẩm duyệt cấp cung cho tập %d cung %d (chương %d-%d): gọi novel_context(chapter=%d), save_review dùng scope=arc, chapter=%d; issues[].chapters chỉ được nằm trong khoảng này",
 					b.Volume, b.Arc, b.StartChapter, b.EndChapter, b.EndChapter, b.EndChapter,
 				),
-				Reason: "弧末评审未完成",
+				Reason: "Thẩm duyệt cuối cung chưa hoàn tất",
 			}
 		case !s.HasArcSummary:
 			return &Instruction{
 				Agent:  "editor",
-				Task:   fmt.Sprintf("生成第 %d 卷第 %d 弧摘要、角色快照与写作规则（save_arc_summary）", b.Volume, b.Arc),
-				Reason: "弧摘要未完成",
+				Task:   fmt.Sprintf("Tạo tóm tắt tập %d cung %d, snapshot nhân vật và quy tắc viết (save_arc_summary)", b.Volume, b.Arc),
+				Reason: "Tóm tắt cung chưa hoàn tất",
 			}
 		case b.IsVolumeEnd && !s.HasVolumeSummary:
 			return &Instruction{
 				Agent:  "editor",
-				Task:   fmt.Sprintf("生成第 %d 卷卷摘要（save_volume_summary）", b.Volume),
-				Reason: "卷摘要未完成",
+				Task:   fmt.Sprintf("Tạo tóm tắt tập %d (save_volume_summary)", b.Volume),
+				Reason: "Tóm tắt tập chưa hoàn tất",
 			}
 		case b.NeedsExpansion && b.NextArc > 0:
 			return &Instruction{
 				Agent:  "architect_long",
-				Task:   fmt.Sprintf("展开第 %d 卷第 %d 弧（save_foundation type=expand_arc）", b.NextVolume, b.NextArc),
-				Reason: "下一弧骨架待展开",
+				Task:   fmt.Sprintf("Mở rộng tập %d cung %d (save_foundation type=expand_arc)", b.NextVolume, b.NextArc),
+				Reason: "Khung xương cung kế tiếp chờ mở rộng",
 			}
 		case b.NeedsNewVolume:
 			return &Instruction{
 				Agent:  "architect_long",
-				Task:   "创建下一卷：按完结判定清单评估后调用 save_foundation——故事继续 → type=append_volume；故事接近终点 → type=append_volume 且卷 JSON 顶层带 \"final\": true（收官卷，整卷收线，写完自动完结）；全部完结条件当下已满足 → type=complete_book。三选一均须附 reason 参数写明判定理由",
-				Reason: "卷末需决定追加新卷、收官卷或结束全书",
+				Task:   "Tạo tập kế tiếp: sau khi đánh giá theo danh sách kiểm tra hoàn kết, gọi save_foundation — truyện tiếp tục → type=append_volume; truyện gần đến đích → type=append_volume và JSON tập có \"final\": true ở cấp cao nhất (tập khép lại, thu toàn bộ tuyến, viết xong tự hoàn kết); mọi điều kiện hoàn kết hiện đã thỏa → type=complete_book. Cả ba lựa chọn đều phải kèm tham số reason ghi rõ lý do phán định",
+				Reason: "Cuối tập cần quyết định thêm tập mới, tập khép lại hay kết thúc cả truyện",
 			}
 		}
 	}
@@ -260,7 +260,7 @@ func Route(s State) *Instruction {
 		if due, reason := domain.ShouldReview(len(p.CompletedChapters)); due && !s.HasGlobalReview {
 			return &Instruction{
 				Agent:  "editor",
-				Task:   fmt.Sprintf("对前 %d 章做全局审阅（save_review scope=global, chapter=%d）", s.LastCompleted, s.LastCompleted),
+				Task:   fmt.Sprintf("Thẩm duyệt toàn cục %d chương đầu (save_review scope=global, chapter=%d)", s.LastCompleted, s.LastCompleted),
 				Reason: reason,
 			}
 		}
@@ -276,18 +276,18 @@ func Route(s State) *Instruction {
 		return &Instruction{
 			Agent: plannerForTier(s.PlanningTier),
 			Task: fmt.Sprintf(
-				"非分层大纲已写完（已完成 %d 章，共 %d 章）：若故事已收束，调用 save_foundation(type=complete_book)；若仍需继续，用 revise_outline 从第 %d 章续接后续计划",
+				"Đại cương phẳng đã viết xong (đã hoàn thành %d/%d chương): nếu truyện đã khép lại, gọi save_foundation(type=complete_book); nếu cần viết tiếp, dùng revise_outline nối kế hoạch từ chương %d",
 				len(p.CompletedChapters), p.TotalChapters, next,
 			),
-			Reason: "非分层大纲已耗尽，需决定完结或续接",
+			Reason: "Đại cương phẳng đã cạn, cần quyết định hoàn kết hay nối tiếp",
 		}
 	}
 
 	// 13. 正常续写
 	return &Instruction{
 		Agent:   "writer",
-		Task:    fmt.Sprintf("写第 %d 章", next),
-		Reason:  "续写下一章",
+		Task:    fmt.Sprintf("Viết chương %d", next),
+		Reason:  "Viết tiếp chương kế",
 		Chapter: next,
 	}
 }

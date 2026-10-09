@@ -58,7 +58,7 @@ func TestSaveVolumeSummaryRejectsNonDueVolume(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := NewSaveVolumeSummaryTool(s).Execute(context.Background(), args); err == nil || !strings.Contains(err.Error(), "聚合写入目标不匹配") {
+	if _, err := NewSaveVolumeSummaryTool(s).Execute(context.Background(), args); err == nil || !strings.Contains(err.Error(), "Mục tiêu ghi tổng hợp không khớp") {
 		t.Fatalf("expected non-due volume rejection, got %v", err)
 	}
 	if summary, err := s.Summaries.LoadVolumeSummary(2); err != nil || summary != nil {

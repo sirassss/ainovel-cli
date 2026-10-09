@@ -185,12 +185,12 @@ func StalledOutline(entries []OutlineEntry) string {
 		}
 	}
 	if worst, n := mostRepeated(hooks); n >= maxHookRepeat {
-		return fmt.Sprintf("大纲空转：同一 hook 在 %d/%d 章重复——%q。"+
-			"每章 hook 必须是本章新产生的后果，且由下一章兑现；请逐章改写", n, len(entries), truncateRunes(worst, 40))
+		return fmt.Sprintf("Đại cương quay vòng: cùng một hook lặp ở %d/%d chương — %q. "+
+			"hook của mỗi chương phải là hệ quả mới phát sinh trong chương đó và được chương kế tiếp đáp lại; hãy viết lại từng chương", n, len(entries), truncateRunes(worst, 40))
 	}
 	if worst, n := mostRepeated(events); n >= maxCoreEventRepeat {
-		return fmt.Sprintf("大纲空转：同一 core_event 在 %d 章重复——%q。"+
-			"每章须发生不同的事并改变处境；请逐章改写", n, truncateRunes(worst, 40))
+		return fmt.Sprintf("Đại cương quay vòng: cùng một core_event lặp ở %d chương — %q. "+
+			"Mỗi chương phải xảy ra việc khác nhau và làm thay đổi tình thế; hãy viết lại từng chương", n, truncateRunes(worst, 40))
 	}
 	return ""
 }
@@ -226,7 +226,7 @@ func SkeletonArcs(volumes []VolumeOutline) []string {
 	for vi := range volumes {
 		for ai := range volumes[vi].Arcs {
 			if a := &volumes[vi].Arcs[ai]; !a.IsExpanded() {
-				out = append(out, fmt.Sprintf("第 %d 卷第 %d 弧「%s」", volumes[vi].Index, a.Index, a.Title))
+				out = append(out, fmt.Sprintf("Tập %d cung %d \"%s\"", volumes[vi].Index, a.Index, a.Title))
 			}
 		}
 	}

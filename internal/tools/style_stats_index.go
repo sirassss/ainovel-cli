@@ -94,10 +94,10 @@ func (s *StyleStatsIndex) ChapterCommitted(chapter int, text string) {
 func (s *StyleStatsIndex) loadChapter(chapter int) (string, error) {
 	text, err := s.store.Drafts.LoadChapterText(chapter)
 	if err != nil {
-		return "", fmt.Errorf("读取第 %d 章终稿: %w", chapter, err)
+		return "", fmt.Errorf("Đọc bản chính thức chương %d: %w", chapter, err)
 	}
 	if text == "" {
-		return "", fmt.Errorf("第 %d 章已标记完成但终稿不存在", chapter)
+		return "", fmt.Errorf("Chương %d đã đánh dấu hoàn thành nhưng bản chính thức không tồn tại", chapter)
 	}
 	return text, nil
 }
@@ -108,10 +108,10 @@ func normalizeCompletedChapters(chapters []int) ([]int, map[int]struct{}, error)
 	set := make(map[int]struct{}, len(normalized))
 	for _, chapter := range normalized {
 		if chapter <= 0 {
-			return nil, nil, fmt.Errorf("已完成章节号必须大于 0，实际为 %d", chapter)
+			return nil, nil, fmt.Errorf("Số chương đã hoàn thành phải lớn hơn 0, thực tế là %d", chapter)
 		}
 		if _, exists := set[chapter]; exists {
-			return nil, nil, fmt.Errorf("已完成章节重复：第 %d 章", chapter)
+			return nil, nil, fmt.Errorf("Chương đã hoàn thành bị lặp: chương %d", chapter)
 		}
 		set[chapter] = struct{}{}
 	}

@@ -118,7 +118,7 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 		// 详情在 tui.log 中被误读成两次独立故障。
 		if call, ok := o.toolStarts[ev.Progress.Agent]; ok {
 			delete(o.toolStarts, ev.Progress.Agent)
-			detail := fmt.Sprintf("%s 错误: %s", ev.Progress.Tool, msg)
+			detail := fmt.Sprintf("%s lỗi: %s", ev.Progress.Tool, msg)
 			finishEv := Event{
 				ID:         call.id,
 				Time:       call.start,
@@ -126,7 +126,7 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 				Failed:     true,
 				Category:   "TOOL",
 				Agent:      ev.Progress.Agent,
-				Summary:    fmt.Sprintf("%s 错误: %s", call.summary, truncate(msg, 100)),
+				Summary:    fmt.Sprintf("%s lỗi: %s", call.summary, truncate(msg, 100)),
 				Detail:     detail,
 				Kind:       errorKind(nil, msg),
 				Level:      "error",
@@ -142,8 +142,8 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 			Time:     time.Now(),
 			Category: "ERROR",
 			Agent:    ev.Progress.Agent,
-			Summary:  fmt.Sprintf("%s 错误: %s", ev.Progress.Tool, truncate(msg, 100)),
-			Detail:   fmt.Sprintf("%s 错误: %s", ev.Progress.Tool, msg),
+			Summary:  fmt.Sprintf("%s lỗi: %s", ev.Progress.Tool, truncate(msg, 100)),
+			Detail:   fmt.Sprintf("%s lỗi: %s", ev.Progress.Tool, msg),
 			Kind:     errorKind(nil, msg),
 			Level:    "error",
 			Depth:    1,
@@ -181,16 +181,16 @@ func dispatchSummary(agent, task string) string {
 	if firstLine == "" {
 		return agent
 	}
-	return agent + "（" + truncate(firstLine, 30) + "）"
+	return agent + " (" + truncate(firstLine, 30) + ")"
 }
 
 func dispatchDetail(task, reason string) string {
 	var parts []string
 	if strings.TrimSpace(reason) != "" {
-		parts = append(parts, "派发原因: "+reason)
+		parts = append(parts, "Lý do phân công: "+reason)
 	}
 	if strings.TrimSpace(task) != "" {
-		parts = append(parts, "完整任务:\n"+task)
+		parts = append(parts, "Nhiệm vụ đầy đủ:\n"+task)
 	}
 	return strings.Join(parts, "\n")
 }
@@ -309,7 +309,7 @@ func (o *observer) emitCallFinish(call *activeCall, category, agentName string, 
 	} else if failed {
 		detail = callErr.Error()
 		kind = errorKind(callErr, detail)
-		summary = fmt.Sprintf("%s 错误: %s", call.summary, truncate(detail, 100))
+		summary = fmt.Sprintf("%s lỗi: %s", call.summary, truncate(detail, 100))
 	}
 	finishEv := Event{
 		ID:         call.id,
@@ -346,7 +346,7 @@ func displayToolName(tool string, args json.RawMessage) string {
 			Chapter int `json:"chapter"`
 		}
 		if json.Unmarshal(args, &p) == nil && p.Chapter > 0 {
-			return fmt.Sprintf("%s(第%d章)", tool, p.Chapter)
+			return fmt.Sprintf("%s (chương %d)", tool, p.Chapter)
 		}
 	case "save_review":
 		var p struct {
@@ -358,12 +358,12 @@ func displayToolName(tool string, args json.RawMessage) string {
 			label := ""
 			switch p.Scope {
 			case "arc":
-				label = "本弧"
+				label = "cung này"
 			case "global":
-				label = "全局"
+				label = "toàn cục"
 			default:
 				if p.Chapter > 0 {
-					label = fmt.Sprintf("第%d章", p.Chapter)
+					label = fmt.Sprintf("chương %d", p.Chapter)
 				}
 			}
 			if label == "" {
@@ -379,7 +379,7 @@ func displayToolName(tool string, args json.RawMessage) string {
 			Chapter int `json:"chapter"`
 		}
 		if json.Unmarshal(args, &p) == nil && p.Chapter > 0 {
-			return fmt.Sprintf("%s(第%d章)", tool, p.Chapter)
+			return fmt.Sprintf("%s (chương %d)", tool, p.Chapter)
 		}
 	case "read_chapter":
 		var p struct {
@@ -390,11 +390,11 @@ func displayToolName(tool string, args json.RawMessage) string {
 		if json.Unmarshal(args, &p) == nil && p.Chapter > 0 {
 			suffix := ""
 			if p.Character != "" {
-				suffix = "·" + p.Character + "对话"
+				suffix = "·" + p.Character + "hội thoại"
 			} else if p.Source == "draft" {
-				suffix = "·草稿"
+				suffix = " · bản nháp"
 			}
-			return fmt.Sprintf("%s(第%d章%s)", tool, p.Chapter, suffix)
+			return fmt.Sprintf("%s (chương %d%s)", tool, p.Chapter, suffix)
 		}
 	}
 	return tool

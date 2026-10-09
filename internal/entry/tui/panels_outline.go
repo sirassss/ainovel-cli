@@ -150,7 +150,7 @@ func renderDetailContent(snap host.UISnapshot, contentW int) string {
 		b.WriteString(panelTitleStyle.Render(outlineHeader))
 		b.WriteString("\n")
 		b.WriteString(renderOutlineSection(snap, contentW))
-		
+
 		compassStyle := lipgloss.NewStyle().Foreground(colorDim).Italic(true)
 		if snap.Layered {
 			if snap.NextVolumeTitle != "" {

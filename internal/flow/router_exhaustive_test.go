@@ -99,16 +99,16 @@ func classify(t *testing.T, inst *Instruction) expectKind {
 	switch inst.Agent {
 	case "writer":
 		switch {
-		case contains(inst.Task, "重写") || contains(inst.Task, "打磨"):
+		case contains(inst.Task, "Viết lại") || contains(inst.Task, "Trau chuốt"):
 			return expectRewrite
-		case contains(inst.Task, "写第"):
+		case contains(inst.Task, "Viết chương"):
 			return expectNextChapter
 		}
 	case "editor":
 		switch {
-		case contains(inst.Task, "弧级评审"):
+		case contains(inst.Task, "Thẩm duyệt cấp cung"):
 			return expectArcReview
-		case contains(inst.Task, "全局审阅"):
+		case contains(inst.Task, "Thẩm duyệt toàn cục"):
 			return expectGlobalReview
 		case contains(inst.Task, "save_arc_summary"):
 			return expectArcSummary
@@ -117,7 +117,7 @@ func classify(t *testing.T, inst *Instruction) expectKind {
 		}
 	case "architect_long":
 		switch {
-		case contains(inst.Task, "补齐基础设定"):
+		case contains(inst.Task, "Bổ sung các mục còn thiếu"):
 			return expectFoundationFill
 		case contains(inst.Task, "writer_feedback"):
 			return expectOutlineFeedback
@@ -127,7 +127,7 @@ func classify(t *testing.T, inst *Instruction) expectKind {
 			return expectNewVolume
 		}
 	case "architect_short":
-		if contains(inst.Task, "补齐基础设定") {
+		if contains(inst.Task, "Bổ sung các mục còn thiếu") {
 			return expectFoundationFill
 		}
 		if contains(inst.Task, "writer_feedback") {
@@ -305,7 +305,7 @@ func assertConservation(t *testing.T, s State, inst *Instruction) {
 		if s.PlanningTier == domain.PlanningTierShort {
 			wantPlanner = "architect_short"
 		}
-		if inst.Agent != wantPlanner || !contains(inst.Task, "补齐基础设定") || inst.Chapter != 0 {
+		if inst.Agent != wantPlanner || !contains(inst.Task, "Bổ sung các mục còn thiếu") || inst.Chapter != 0 {
 			t.Fatalf("规划期指令必须是补齐派单且规划师匹配 tier=%q：%+v", s.PlanningTier, inst)
 		}
 		return
@@ -319,9 +319,9 @@ func assertConservation(t *testing.T, s State, inst *Instruction) {
 			if inst.Chapter != p.PendingRewrites[0] {
 				t.Fatalf("重写队列非空时必须派队列头 %d，got %d", p.PendingRewrites[0], inst.Chapter)
 			}
-			wantVerb := "重写"
+			wantVerb := "Viết lại"
 			if p.Flow == domain.FlowPolishing {
-				wantVerb = "打磨"
+				wantVerb = "Trau chuốt"
 			}
 			if !contains(inst.Task, wantVerb) {
 				t.Fatalf("队列任务动词应为 %q：%q", wantVerb, inst.Task)

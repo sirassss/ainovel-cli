@@ -3,9 +3,9 @@ package notify
 import (
 	"bytes"
 	"context"
-	"log/slog"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"

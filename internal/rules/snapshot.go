@@ -182,10 +182,14 @@ func SystemDefaults() Candidate {
 		Source: "system_defaults",
 		Structured: Structured{
 			// 定长固定串的 AI 套句；checker 字面子串匹配，带变量的模式（不是X而是Y）归语义层。
+			// han:keep đường cơ sở từ gây nhàm/cụm từ cấm tiếng Trung (chế độ zh)
 			ForbiddenPhrases: []string{"某种程度上", "值得注意的是", "不知为何", "五味杂陈"},
 			FatigueWords: map[string]int{
+				// han:keep đường cơ sở từ gây nhàm/cụm từ cấm tiếng Trung (chế độ zh)
 				"不禁": 1, "竟然": 1, "仿佛": 2, "此外": 1, "然而": 2,
+				// han:keep đường cơ sở từ gây nhàm/cụm từ cấm tiếng Trung (chế độ zh)
 				"一丝": 2, "一抹": 2, "一缕": 2, "宛如": 1, "不由得": 1,
+				// han:keep đường cơ sở từ gây nhàm/cụm từ cấm tiếng Trung (chế độ zh)
 				"像一": 3, "沉默了": 2, "没有说话": 2, "几息": 3, "一息": 3, "数息": 2,
 			},
 		},

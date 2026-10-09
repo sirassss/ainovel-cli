@@ -41,28 +41,28 @@ func DefaultHomeRulesDir() string {
 
 // homeRulesReadme 是首次引导时写入 ~/.ainovel/rules/README.txt 的说明。
 // 刻意用 .txt 后缀而非 .md——扫描只认 .md，这份说明不会被当成规则归一化。
-const homeRulesReadme = `这里放全局写作偏好，跨所有书生效。
+const homeRulesReadme = `Đặt ở đây các sở thích viết toàn cục, có hiệu lực với mọi cuốn sách.
 
-新建一个 .md 文件（如 my-style.md），用大白话写要求就行——
-不需要任何格式、不需要 YAML：
+Tạo một tệp .md mới (như my-style.md) và viết yêu cầu bằng lời thường là được —
+không cần định dạng nào, không cần YAML:
 
-    # 角色
-    - 主角林尘别写成圣母，外冷内热即可
-    # 风格
-    - 多用身体感知（指节发白）替代情绪标签（紧张）
-    - 对话别太书面，每章 3000 字左右
-    - 不要出现"某种程度上"这种 AI 腔
+    # Nhân vật
+    - Nhân vật chính Lâm Trần đừng viết thành người hiền lành quá mức, lạnh ngoài nóng trong là được
+    # Văn phong
+    - Dùng nhiều cảm nhận cơ thể (khớp ngón tay trắng bệch) thay cho nhãn cảm xúc (căng thẳng)
+    - Đối thoại đừng quá sách vở, mỗi chương khoảng 3000 chữ
+    - Đừng xuất hiện kiểu giọng AI như "ở một mức độ nào đó"
 
-写完不用管格式：系统会用模型把这些自然语言要求归一化成结构化约束
-（字数范围、禁用词、疲劳词阈值等），写作时自动遵循、提交时自动自检。
+Viết xong không cần lo định dạng: hệ thống dùng model chuẩn hóa các yêu cầu bằng ngôn ngữ tự nhiên này
+thành ràng buộc có cấu trúc (khoảng số chữ, từ cấm, ngưỡng từ gây nhàm, v.v.), tự động tuân theo khi viết
+và tự kiểm tra khi nộp chương.
 
-多个 .md 按文件名字典序合并；点开头的隐藏文件、非 .md 文件都会被忽略
-（所以这份 README.txt 不会被当成规则）。
+Nhiều tệp .md được gộp theo thứ tự từ điển của tên tệp; tệp ẩn bắt đầu bằng dấu chấm và tệp không phải .md đều bị bỏ qua
+(vì vậy README.txt này sẽ không bị coi là quy tắc).
 
-常见 AI 套句、疲劳词的机械基线已内置，开箱即用，不写也没关系。
+Đường cơ sở cơ học về các câu sáo của AI và từ gây nhàm đã được tích hợp sẵn, dùng ngay được, không viết cũng không sao.
 
-加载优先级（高 → 低）：./.ainovel/rules/*.md（本书） > ~/.ainovel/rules/*.md（这里） > 内置默认
-`
+Thứ tự ưu tiên nạp (cao -> thấp): ./.ainovel/rules/*.md (cuốn sách này) > ~/.ainovel/rules/*.md (ở đây) > mặc định tích hợp`
 
 // EnsureHomeRulesDir 尽力创建 ~/.ainovel/rules/ 目录并写入 README.txt 引导，
 // 让用户发现这个全局偏好扩展点、知道怎么写。

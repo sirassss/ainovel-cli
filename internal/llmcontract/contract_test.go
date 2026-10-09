@@ -245,7 +245,7 @@ func TestValidateJSONEnforcesStrictContract(t *testing.T) {
 func TestValidateJSONRejectsInvalidEnumContract(t *testing.T) {
 	contract := testContract()
 	contract.Schema["enum"] = []any{1}
-	if err := ValidateJSON(contract.Schema, []byte(`{"action":"a","reason":"ok"}`)); err == nil || !strings.Contains(err.Error(), "enum 契约非法") {
+	if err := ValidateJSON(contract.Schema, []byte(`{"action":"a","reason":"ok"}`)); err == nil || !strings.Contains(err.Error(), "enum không hợp lệ") {
 		t.Fatalf("应暴露非法 enum 契约，err=%v", err)
 	}
 }

@@ -221,7 +221,7 @@ func (t *UsageTracker) flagMissingUsage(agentName string) {
 	t.loggedMissingUsage = true
 	t.mu.Unlock()
 	if shouldLog {
-		slog.Warn("LLM 响应未携带 usage 数据，缓存/成本面板将无累计——通常是上游 streaming 未按 OpenAI include_usage 协议发 final usage chunk",
+		slog.Warn("Phản hồi LLM không kèm dữ liệu usage, bảng điều khiển cache/chi phí sẽ không có số cộng dồn — thường do upstream streaming không gửi final usage chunk theo giao thức include_usage của OpenAI",
 			"module", "usage", "agent", agentName)
 		if t.onMissingUsage != nil {
 			t.onMissingUsage()
@@ -529,7 +529,7 @@ func (t *UsageTracker) autoSaveLoop(ctx context.Context) {
 	var pending bool
 	flush := func() {
 		if err := t.SaveNow(); err != nil {
-			slog.Warn("usage 落盘失败", "module", "usage", "err", err)
+			slog.Warn("Lưu usage thất bại", "module", "usage", "err", err)
 		}
 		pending = false
 	}

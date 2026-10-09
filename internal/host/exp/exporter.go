@@ -35,22 +35,22 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 		opts.Format = f
 	}
 	if opts.Format != FormatTXT && opts.Format != FormatEPUB {
-		return nil, fmt.Errorf("exp: 暂不支持的格式 %q", opts.Format)
+		return nil, fmt.Errorf("exp: định dạng chưa được hỗ trợ %q", opts.Format)
 	}
 
 	progress, err := deps.Store.Progress.Load()
 	if err != nil {
-		return nil, fmt.Errorf("加载 progress 失败：%w", err)
+		return nil, fmt.Errorf("Tải progress thất bại: %w", err)
 	}
 	if progress == nil || len(progress.CompletedChapters) == 0 {
-		return nil, fmt.Errorf("尚无已完成章节，无内容可导出")
+		return nil, fmt.Errorf("Chưa có chương nào hoàn thành, không có nội dung để xuất")
 	}
 	book, err := deps.Store.Book.Load()
 	if err != nil {
-		return nil, fmt.Errorf("加载作品信息失败：%w", err)
+		return nil, fmt.Errorf("Tải thông tin tác phẩm thất bại: %w", err)
 	}
 	if book == nil {
-		return nil, fmt.Errorf("作品信息不存在，无法导出")
+		return nil, fmt.Errorf("Thông tin tác phẩm không tồn tại, không thể xuất")
 	}
 
 	completed := make(map[int]struct{}, len(progress.CompletedChapters))
@@ -71,7 +71,7 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 		to = maxCh
 	}
 	if from > to {
-		return nil, fmt.Errorf("章节范围无效：from=%d > to=%d", from, to)
+		return nil, fmt.Errorf("Khoảng chương không hợp lệ: from=%d > to=%d", from, to)
 	}
 
 	var chapters, skipped []int
@@ -83,17 +83,17 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 		}
 	}
 	if len(chapters) == 0 {
-		return nil, fmt.Errorf("范围 %d..%d 内无已完成章节", from, to)
+		return nil, fmt.Errorf("Không có chương hoàn thành nào trong khoảng %d..%d", from, to)
 	}
 
 	bodies := make(map[int]string, len(chapters))
 	for _, ch := range chapters {
 		text, err := deps.Store.Drafts.LoadChapterText(ch)
 		if err != nil {
-			return nil, fmt.Errorf("读取第 %d 章失败：%w", ch, err)
+			return nil, fmt.Errorf("Đọc chương %d thất bại: %w", ch, err)
 		}
 		if strings.TrimSpace(text) == "" {
-			return nil, fmt.Errorf("progress 标记第 %d 章已完成，但 chapters/%02d.md 缺失或为空", ch, ch)
+			return nil, fmt.Errorf("progress đánh dấu chương %d đã hoàn thành, nhưng chapters/%02d.md thiếu hoặc rỗng", ch, ch)
 		}
 		bodies[ch] = text
 	}
@@ -111,9 +111,9 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 
 	if !opts.Overwrite {
 		if _, err := os.Stat(outPath); err == nil {
-			return nil, fmt.Errorf("文件已存在：%s（添加 --overwrite 覆盖）", outPath)
+			return nil, fmt.Errorf("Tệp đã tồn tại: %s (thêm --overwrite để ghi đè)", outPath)
 		} else if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("检查输出路径失败：%w", err)
+			return nil, fmt.Errorf("Kiểm tra đường dẫn đầu ra thất bại: %w", err)
 		}
 	}
 
@@ -121,7 +121,7 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 	for _, ch := range chapters {
 		summary, err := deps.Store.Summaries.LoadSummary(ch)
 		if err != nil {
-			return nil, fmt.Errorf("读取第 %d 章摘要失败：%w", ch, err)
+			return nil, fmt.Errorf("Đọc tóm tắt chương %d thất bại: %w", ch, err)
 		}
 		if summary != nil && strings.TrimSpace(summary.Title) != "" {
 			titleIdx[ch] = summary.Title
@@ -135,17 +135,17 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 	var data []byte
 	switch opts.Format {
 	case FormatTXT:
-		data = []byte(renderTXT(book.Title, chapters, titleIdx, locations, bodies))
+		data = []byte(renderTXT(labelsFor(deps.Store.Language()), book.Title, chapters, titleIdx, locations, bodies))
 	case FormatEPUB:
-		buf, err := renderEPUB(*book, chapters, titleIdx, locations, bodies)
+		buf, err := renderEPUB(labelsFor(deps.Store.Language()), *book, chapters, titleIdx, locations, bodies)
 		if err != nil {
-			return nil, fmt.Errorf("渲染 EPUB 失败：%w", err)
+			return nil, fmt.Errorf("Kết xuất EPUB thất bại: %w", err)
 		}
 		data = buf
 	}
 
 	if err := atomicWrite(outPath, data); err != nil {
-		return nil, fmt.Errorf("写入失败：%w", err)
+		return nil, fmt.Errorf("Ghi tệp thất bại: %w", err)
 	}
 
 	return &Result{
@@ -167,7 +167,7 @@ func inferFormat(path string) (Format, error) {
 	case ".epub":
 		return FormatEPUB, nil
 	default:
-		return "", fmt.Errorf("无法从扩展名 %q 推断格式（支持 .txt / .epub）", filepath.Ext(path))
+		return "", fmt.Errorf("Không suy ra được định dạng từ phần mở rộng %q (hỗ trợ .txt / .epub)", filepath.Ext(path))
 	}
 }
 

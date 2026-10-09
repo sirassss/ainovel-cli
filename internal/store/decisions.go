@@ -116,7 +116,7 @@ func (s *DecisionStore) committedDataUnlocked() ([]byte, error) {
 	if err := os.Truncate(s.io.path(decisionsFile), int64(keep)); err != nil {
 		return nil, err
 	}
-	slog.Warn("已修复裁定审计的未提交尾部",
+	slog.Warn("Đã sửa phần đuôi chưa commit của kiểm toán tài phán",
 		"module", "store", "file", decisionsFile, "discarded_bytes", len(data)-keep)
 	return data[:keep], nil
 }

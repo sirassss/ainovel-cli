@@ -103,7 +103,7 @@ func appendScriptMixing(vs []Violation, text string) []Violation {
 	}
 	return append(vs, Violation{
 		Rule:     rule,
-		Target:   strings.Join(examples, "、"),
+		Target:   strings.Join(examples, ", "),
 		Actual:   len(matches),
 		Severity: SeverityWarning,
 	})

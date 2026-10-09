@@ -109,8 +109,8 @@ func TestRoute_PendingRewritesFirst(t *testing.T) {
 	if got == nil || got.Agent != "writer" {
 		t.Fatalf("expected writer for rewrites, got %+v", got)
 	}
-	if got.Task != "重写第 3 章" {
-		t.Errorf("expected '重写第 3 章', got %q", got.Task)
+	if got.Task != "Viết lại chương 3" {
+		t.Errorf("expected 'Viết lại chương 3', got %q", got.Task)
 	}
 	if got.Chapter != 3 {
 		t.Errorf("expected Chapter=3, got %d", got.Chapter)
@@ -121,7 +121,7 @@ func TestRoute_PendingPolishingVerb(t *testing.T) {
 	p := writingProgress([]int{1}, domain.FlowPolishing)
 	p.PendingRewrites = []int{2}
 	got := Route(State{Progress: p})
-	if got == nil || got.Task != "打磨第 2 章" {
+	if got == nil || got.Task != "Trau chuốt chương 2" {
 		t.Fatalf("expected polish verb, got %+v", got)
 	}
 }
@@ -157,10 +157,10 @@ func TestRoute_ArcEndNeedsReview(t *testing.T) {
 	if got == nil || got.Agent != "editor" {
 		t.Fatalf("expected editor for arc review, got %+v", got)
 	}
-	if got.Reason != "弧末评审未完成" {
+	if got.Reason != "Thẩm duyệt cuối cung chưa hoàn tất" {
 		t.Errorf("reason mismatch: %q", got.Reason)
 	}
-	if !strings.Contains(got.Task, "第 11-22 章") || !strings.Contains(got.Task, "chapter=22") {
+	if !strings.Contains(got.Task, "chương 11-22") || !strings.Contains(got.Task, "chapter=22") {
 		t.Fatalf("arc review task must carry exact span and endpoint: %q", got.Task)
 	}
 }
@@ -178,7 +178,7 @@ func TestRoute_ArcEndHasReviewNeedsSummary(t *testing.T) {
 		HasArcReview: true,
 	}
 	got := Route(s)
-	if got == nil || got.Agent != "editor" || got.Reason != "弧摘要未完成" {
+	if got == nil || got.Agent != "editor" || got.Reason != "Tóm tắt cung chưa hoàn tất" {
 		t.Fatalf("expected arc summary editor call, got %+v", got)
 	}
 }
@@ -198,7 +198,7 @@ func TestRoute_VolumeEndNeedsVolumeSummary(t *testing.T) {
 		HasArcSummary: true,
 	}
 	got := Route(s)
-	if got == nil || got.Reason != "卷摘要未完成" {
+	if got == nil || got.Reason != "Tóm tắt tập chưa hoàn tất" {
 		t.Fatalf("expected volume summary request, got %+v", got)
 	}
 }
@@ -223,7 +223,7 @@ func TestRoute_NeedsArcExpansion(t *testing.T) {
 	if got == nil || got.Agent != "architect_long" {
 		t.Fatalf("expected architect_long for expansion, got %+v", got)
 	}
-	if got.Reason != "下一弧骨架待展开" {
+	if got.Reason != "Khung xương cung kế tiếp chờ mở rộng" {
 		t.Errorf("reason mismatch: %q", got.Reason)
 	}
 }
@@ -245,7 +245,7 @@ func TestRoute_NeedsNewVolume(t *testing.T) {
 		HasVolumeSummary: true,
 	}
 	got := Route(s)
-	if got == nil || got.Agent != "architect_long" || got.Reason != "卷末需决定追加新卷、收官卷或结束全书" {
+	if got == nil || got.Agent != "architect_long" || got.Reason != "Cuối tập cần quyết định thêm tập mới, tập khép lại hay kết thúc cả truyện" {
 		t.Fatalf("expected append_volume/complete_book dispatch, got %+v", got)
 	}
 }
@@ -257,8 +257,8 @@ func TestRoute_NormalContinue(t *testing.T) {
 	if got == nil || got.Agent != "writer" {
 		t.Fatalf("expected writer for next chapter, got %+v", got)
 	}
-	if got.Task != "写第 4 章" {
-		t.Errorf("expected '写第 4 章', got %q", got.Task)
+	if got.Task != "Viết chương 4" {
+		t.Errorf("expected 'Viết chương 4', got %q", got.Task)
 	}
 	if got.Chapter != 4 {
 		t.Errorf("expected Chapter=4, got %d", got.Chapter)
@@ -272,7 +272,7 @@ func TestRoute_ExternalRevisionDispatchesArchitectBeforeWriter(t *testing.T) {
 		Progress: p, LastCompleted: 3, PlanningTier: domain.PlanningTierShort,
 		ImmediateFeedbackCount: 2,
 	})
-	if got == nil || got.Agent != "architect_short" || !strings.Contains(got.Reason, "2 条") {
+	if got == nil || got.Agent != "architect_short" || !strings.Contains(got.Reason, "2 sửa đổi") {
 		t.Fatalf("expected architect to consume feedback, got %+v", got)
 	}
 }
@@ -301,7 +301,7 @@ func TestRoute_NonLayeredOutlineExhaustedDispatchesArchitect(t *testing.T) {
 	if got == nil || got.Agent != "architect_short" {
 		t.Fatalf("expected architect_short at outline exhaustion, got %+v", got)
 	}
-	for _, want := range []string{"complete_book", "revise_outline", "第 4 章"} {
+	for _, want := range []string{"complete_book", "revise_outline", "chương 4"} {
 		if !strings.Contains(got.Task, want) {
 			t.Errorf("task missing %q: %s", want, got.Task)
 		}
@@ -356,7 +356,7 @@ func TestRoute_PlanningFillDispatchesSamePlanner(t *testing.T) {
 	if got == nil || got.Agent != "architect_long" {
 		t.Fatalf("long tier 应续派 architect_long,got %+v", got)
 	}
-	for _, want := range []string{"补齐基础设定", "characters", "world_rules", "save_foundation"} {
+	for _, want := range []string{"Bổ sung các mục còn thiếu", "characters", "world_rules", "save_foundation"} {
 		if !contains(got.Task, want) {
 			t.Errorf("补齐任务缺少 %q: %s", want, got.Task)
 		}

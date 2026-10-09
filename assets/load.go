@@ -272,6 +272,7 @@ Khi trong planning_memory hoặc working_memory của novel_context xuất hiệ
 
 Nguyên tắc sử dụng: Học hỏi cấu trúc, nhịp điệu, móc câu, cách giải phóng thông tin và thủ pháp cuốn hút độc giả; tuyệt đối không sao chép câu văn nguyên văn, tên nhân vật, địa danh, thiết lập độc quyền hay phân đoạn cố định. Nếu simulation_profile xung đột với yêu cầu rõ ràng của người dùng, ưu tiên tuân thủ yêu cầu của người dùng.`
 
+// han:keep hướng dẫn mô phỏng văn phong bản zh (simulationGuidanceZH)
 const simulationGuidanceZH = `## 仿写画像
 
 当 novel_context 的 planning_memory 或 working_memory 中存在 simulation_profile 时，必须把它视为当前作品的仿写方向约束。{{role}} 应读取其中的 style、lexicon、plot_design、hook_design、pacing_density、reader_engagement 和 role_guidance。

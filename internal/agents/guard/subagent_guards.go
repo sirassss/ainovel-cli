@@ -62,7 +62,7 @@ func newCheckpointDeltaGuard(st *store.Store, agentName string, requiredSteps []
 	return func(_ context.Context, info agentcore.StopInfo) agentcore.StopDecision {
 		// 不可恢复错误：直接升级，不浪费一次催促。
 		if _, hard := hardStopReasons[info.Message.StopReason]; hard {
-			slog.Error("subagent stop_guard 检测到不可恢复停机，立即升级",
+			slog.Error("subagent stop_guard phát hiện dừng không thể phục hồi, leo thang ngay",
 				"module", "agent.guard", "agent", agentName,
 				"turn", info.TurnIndex, "stop_reason", info.Message.StopReason)
 			if onBlock != nil {
@@ -99,14 +99,14 @@ func newCheckpointDeltaGuard(st *store.Store, agentName string, requiredSteps []
 		lastBlockSeq.Store(latestSeq)
 		n := consecutive.Add(1)
 		if n > subagentMaxConsecutiveBlocks {
-			slog.Error("subagent stop_guard 连续阻拦超限，升级为终止",
+			slog.Error("subagent stop_guard chặn liên tiếp quá giới hạn, leo thang thành chấm dứt",
 				"module", "agent.guard", "agent", agentName, "turn", info.TurnIndex, "consecutive", n)
 			if onBlock != nil {
 				onBlock(agentName, "escalated", n)
 			}
 			return agentcore.StopDecision{Allow: false, Escalate: true}
 		}
-		slog.Warn("subagent stop_guard 拦截 end_turn",
+		slog.Warn("subagent stop_guard chặn end_turn",
 			"module", "agent.guard", "agent", agentName, "turn", info.TurnIndex, "consecutive", n)
 		if onBlock != nil {
 			onBlock(agentName, "blocked", n)
@@ -136,11 +136,11 @@ func writerBlockMsg(seen map[string]struct{}) string {
 	_, hasCheck := seen["consistency_check"]
 	switch {
 	case !hasDraft && !hasEdit:
-		return "禁止结束：本轮尚未落盘任何正文。请按 plan_chapter → draft_chapter → check_consistency → commit_chapter 的顺序完成本章；正文只输出在聊天里等于丢失，必须通过工具落盘并提交。"
+		return "Cấm kết thúc: lượt này chưa lưu chính văn nào. Hãy hoàn thành chương theo thứ tự plan_chapter → draft_chapter → check_consistency → commit_chapter; chính văn chỉ xuất trong chat là coi như mất, phải lưu và nộp qua công cụ."
 	case !hasCheck:
-		return "禁止结束：正文已落盘但未收尾。请先调 check_consistency 核对一致性，再调 commit_chapter 提交本章。draft_chapter / edit_chapter 只是保存草稿，不算完成。"
+		return "Cấm kết thúc: chính văn đã lưu nhưng chưa hoàn tất. Hãy gọi check_consistency để đối chiếu tính nhất quán, rồi gọi commit_chapter để nộp chương. draft_chapter / edit_chapter chỉ lưu bản nháp, chưa tính là hoàn thành."
 	default:
-		return "禁止结束：本章只差 commit_chapter 提交。请立即调用 commit_chapter；若它返回错误，先按错误信息处理（核对章节号、按提示补齐前置动作）再重试提交，不要在未提交的状态下结束。"
+		return "Cấm kết thúc: chương này chỉ còn thiếu bước nộp commit_chapter. Hãy gọi commit_chapter ngay; nếu nó trả về lỗi thì xử lý theo thông báo lỗi (kiểm tra số chương, bổ sung thao tác tiên quyết theo gợi ý) rồi nộp lại, không được kết thúc khi chưa nộp."
 	}
 }
 
@@ -151,7 +151,7 @@ func NewArchitectStopGuard(st *store.Store, onBlock BlockHook) agentcore.StopGua
 			"book", "premise", "outline", "layered_outline", "characters", "world_rules",
 			"foundation_audit", "expand_arc", "append_volume", "update_compass", "complete_book", "revise_outline", "resolve_outline_feedback", "plan",
 		},
-		staticBlockMsg("你必须调用 save_book、save_foundation、revise_outline、resolve_outline_feedback、audit_foundation 或 plan_chapter（为返工队列章写重写指令）将产出落盘后才能结束。只输出 Markdown/JSON 文字等于丢失。"),
+		staticBlockMsg("Bạn phải gọi save_book, save_foundation, revise_outline, resolve_outline_feedback, audit_foundation hoặc plan_chapter (viết chỉ thị viết lại cho chương trong hàng đợi viết lại) để lưu sản phẩm rồi mới được kết thúc. Chỉ xuất văn bản Markdown/JSON là coi như mất."),
 		onBlock,
 	)
 }
@@ -166,16 +166,18 @@ func NewArchitectStopGuard(st *store.Store, onBlock BlockHook) agentcore.StopGua
 // 否决该次退出并催促，直到对应摘要落盘。
 func NewEditorStopGuard(st *store.Store, task string, onBlock BlockHook) agentcore.StopGuard {
 	switch {
-	case strings.Contains(task, "save_volume_summary") || strings.Contains(task, "卷摘要"):
+	// han:keep khớp văn bản nhiệm vụ của chế độ zh; bản Việt thêm ở điều kiện bên cạnh
+	case strings.Contains(task, "save_volume_summary") || strings.Contains(task, "卷摘要") || strings.Contains(strings.ToLower(task), "tóm tắt tập"):
 		return newCheckpointDeltaGuard(st, "editor", []string{"volume_summary"},
-			staticBlockMsg("本次任务是生成卷摘要：你必须调用 save_volume_summary 落盘后才能结束，save_review 复核不算完成。"), onBlock)
-	case strings.Contains(task, "save_arc_summary") || strings.Contains(task, "弧摘要"):
+			staticBlockMsg("Nhiệm vụ lần này là tạo tóm tắt tập: bạn phải gọi save_volume_summary để lưu rồi mới được kết thúc; save_review (kiểm tra lại) không tính là hoàn thành."), onBlock)
+	// han:keep khớp văn bản nhiệm vụ của chế độ zh; bản Việt thêm ở điều kiện bên cạnh
+	case strings.Contains(task, "save_arc_summary") || strings.Contains(task, "弧摘要") || strings.Contains(strings.ToLower(task), "tóm tắt cung"):
 		return newCheckpointDeltaGuard(st, "editor", []string{"arc_summary"},
-			staticBlockMsg("本次任务是生成弧摘要：你必须调用 save_arc_summary 落盘后才能结束，save_review 复核不算完成。"), onBlock)
+			staticBlockMsg("Nhiệm vụ lần này là tạo tóm tắt cung: bạn phải gọi save_arc_summary để lưu rồi mới được kết thúc; save_review (kiểm tra lại) không tính là hoàn thành."), onBlock)
 	default:
 		// 评审或临时任务：任一审阅/摘要落盘即可（保持既有宽松行为）。
 		return newCheckpointDeltaGuard(st, "editor",
 			[]string{"review", "arc_summary", "volume_summary"},
-			staticBlockMsg("你必须调用 save_review / save_arc_summary / save_volume_summary 之一落盘结果后才能结束。"), onBlock)
+			staticBlockMsg("Bạn phải gọi một trong save_review / save_arc_summary / save_volume_summary để lưu kết quả rồi mới được kết thúc."), onBlock)
 	}
 }

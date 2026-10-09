@@ -282,13 +282,13 @@ func (s *OutlineStore) CompletedArcBoundaries(lastCompleted int) ([]ArcBoundary,
 // expandArcUnlocked 内部方法，在 Store.ExpandArc 跨域协调中调用。
 func (s *OutlineStore) expandArcUnlocked(volumeIdx, arcIdx int, expansion domain.ArcExpansion) ([]domain.VolumeOutline, error) {
 	if strings.TrimSpace(expansion.Title) == "" {
-		return nil, fmt.Errorf("弧标题不能为空")
+		return nil, fmt.Errorf("Tiêu đề cung không được để trống")
 	}
 	if strings.TrimSpace(expansion.Goal) == "" {
-		return nil, fmt.Errorf("弧目标不能为空")
+		return nil, fmt.Errorf("Mục tiêu cung không được để trống")
 	}
 	if len(expansion.Chapters) == 0 {
-		return nil, fmt.Errorf("展开弧必须至少包含一章")
+		return nil, fmt.Errorf("Cung mở rộng phải có ít nhất một chương")
 	}
 
 	var volumes []domain.VolumeOutline
@@ -383,13 +383,13 @@ func (s *OutlineStore) reviseFlatTailUnlocked(fromChapter int, replacement []dom
 		return nil, fmt.Errorf("load outline: %w: %w", errs.ErrStoreRead, err)
 	}
 	if fromChapter > len(outline)+1 {
-		return nil, fmt.Errorf("from_chapter=%d 超出大纲末尾 %d: %w",
+		return nil, fmt.Errorf("from_chapter=%d vượt quá cuối đại cương %d: %w",
 			fromChapter, len(outline), errs.ErrToolPrecondition)
 	}
 	updated := append([]domain.OutlineEntry(nil), outline[:fromChapter-1]...)
 	updated = append(updated, replacement...)
 	if len(updated) == 0 {
-		return nil, fmt.Errorf("修订后大纲不能为空: %w", errs.ErrToolPrecondition)
+		return nil, fmt.Errorf("Đại cương sau khi sửa không được để trống: %w", errs.ErrToolPrecondition)
 	}
 	for i := range updated {
 		updated[i].Chapter = i + 1
@@ -443,14 +443,14 @@ func reviseLayeredTail(volumes []domain.VolumeOutline, fromChapter int, replacem
 		local = len(volumes[lastVolume].Arcs[lastArc].Chapters)
 	}
 	if targetVolume < 0 {
-		return fmt.Errorf("from_chapter=%d 不在已展开大纲范围内", fromChapter)
+		return fmt.Errorf("from_chapter=%d nằm ngoài phạm vi đại cương đã mở rộng", fromChapter)
 	}
 
 	arc := &volumes[targetVolume].Arcs[targetArc]
 	updated := append([]domain.OutlineEntry(nil), arc.Chapters[:local]...)
 	updated = append(updated, replacement...)
 	if len(updated) == 0 {
-		return fmt.Errorf("修订后目标弧不能为空")
+		return fmt.Errorf("Cung mục tiêu sau khi sửa không được để trống")
 	}
 	arc.Chapters = updated
 	arc.EstimatedChapters = 0
@@ -461,14 +461,14 @@ func validateAppendVolume(existing []domain.VolumeOutline, vol domain.VolumeOutl
 	if len(existing) > 0 {
 		maxIdx := existing[len(existing)-1].Index
 		if vol.Index <= maxIdx {
-			return fmt.Errorf("卷 Index %d 必须大于现有最大值 %d", vol.Index, maxIdx)
+			return fmt.Errorf("Index của tập %d phải lớn hơn giá trị lớn nhất hiện có %d", vol.Index, maxIdx)
 		}
 	}
 	if len(vol.Arcs) == 0 {
-		return fmt.Errorf("新卷必须至少包含一个弧")
+		return fmt.Errorf("Tập mới phải có ít nhất một cung")
 	}
 	if !vol.Arcs[0].IsExpanded() {
-		return fmt.Errorf("新卷的首弧必须包含详细章节")
+		return fmt.Errorf("Cung đầu của tập mới phải có chương chi tiết")
 	}
 	return nil
 }
@@ -476,7 +476,7 @@ func validateAppendVolume(existing []domain.VolumeOutline, vol domain.VolumeOutl
 // SaveCompass 保存终局方向指南针。
 func (s *OutlineStore) SaveCompass(compass domain.StoryCompass) error {
 	if compass.EndingDirection == "" {
-		return fmt.Errorf("ending_direction 不能为空")
+		return fmt.Errorf("ending_direction không được để trống")
 	}
 	return s.io.WriteJSON("meta/compass.json", compass)
 }

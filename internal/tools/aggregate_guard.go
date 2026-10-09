@@ -18,7 +18,7 @@ func requireAggregateTarget(st *store.Store, kind flow.AggregateKind, volume, ar
 	}
 	due := state.AggregateRefresh
 	if due == nil {
-		return fmt.Errorf("当前没有待处理的 %s 工件: %w", kind, errs.ErrToolPrecondition)
+		return fmt.Errorf("Hiện không có sản phẩm %s nào cần xử lý: %w", kind, errs.ErrToolPrecondition)
 	}
 	targetMismatch := due.Kind != kind
 	switch kind {
@@ -32,7 +32,7 @@ func requireAggregateTarget(st *store.Store, kind flow.AggregateKind, volume, ar
 	endMismatch := endChapter > 0 && due.EndChapter != endChapter
 	if targetMismatch || endMismatch {
 		return fmt.Errorf(
-			"聚合写入目标不匹配：当前应处理 kind=%s volume=%d arc=%d end_chapter=%d，收到 kind=%s volume=%d arc=%d end_chapter=%d: %w",
+			"Mục tiêu ghi tổng hợp không khớp: hiện cần xử lý kind=%s volume=%d arc=%d end_chapter=%d, nhận được kind=%s volume=%d arc=%d end_chapter=%d: %w",
 			due.Kind, due.Volume, due.Arc, due.EndChapter,
 			kind, volume, arc, endChapter, errs.ErrToolConflict,
 		)

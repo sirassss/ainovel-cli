@@ -66,12 +66,12 @@ func (s *Segmentation) Content(normalized []byte, i int) string {
 // 纯函数：模型输出与代码校验分离，"某行是不是章标题"不由 Go 复判，但覆盖不变量必须成立。
 func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []BoundaryDecision) (*Segmentation, error) {
 	if len(decisions) == 0 {
-		return nil, fmt.Errorf("未识别到任何边界")
+		return nil, fmt.Errorf("Không nhận diện được ranh giới nào")
 	}
 	// 前置契约：units 必须按 (Line,Part) 数值序排列（禁止 ID 字典序）。
 	for i := 1; i < len(units); i++ {
 		if !unitLess(units[i-1], units[i]) {
-			return nil, fmt.Errorf("SourceUnit 未按 (Line,Part) 数值序排列：%s 后接 %s", units[i-1].ID, units[i].ID)
+			return nil, fmt.Errorf("SourceUnit không được sắp theo thứ tự số (Line,Part): %s đứng trước %s", units[i-1].ID, units[i].ID)
 		}
 	}
 	unitByID := make(map[string]SourceUnit, len(units))
@@ -88,7 +88,7 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 		switch d.Kind {
 		case kindChapter, kindGroup, kindFrontMatter, kindBackMatter:
 		default:
-			return nil, fmt.Errorf("边界[%d] kind 非法：%q", i, d.Kind)
+			return nil, fmt.Errorf("Ranh giới [%d] kind không hợp lệ: %q", i, d.Kind)
 		}
 		b, err := resolveBoundaryByte(unitByID, d.UnitID, d.Anchor)
 		if err != nil {
@@ -109,7 +109,7 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 			// 完全相同的重复是机械冗余，静默去重；同位语义冲突（kind/标题不同）在调用期
 			// 已重问，走到这里只可能来自修复前的旧缓存——保留先出现者并记 Notes 人工核对。
 			if prev := uniq[n-1].d; prev.Kind != p.d.Kind || boundaryLabel(prev) != boundaryLabel(p.d) {
-				notes = append(notes, fmt.Sprintf("边界 %q 与 %q 重合（byte %d），已保留前者",
+				notes = append(notes, fmt.Sprintf("Ranh giới %q và %q trùng nhau (byte %d), đã giữ cái trước",
 					boundaryLabel(prev), boundaryLabel(p.d), p.byte))
 			}
 			continue
@@ -122,7 +122,7 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 	// 终局否决会让重跑零调用复现同一失败（与空正文章节吸收同哲学，RFC §8.3.5）。
 	// 语义判断本身在调用期已交还模型（chunkValidator.coverStart 重问），此兜底只治愈旧缓存。
 	if head := points[0].byte; head != 0 && strings.TrimSpace(string(normalized[:head])) != "" {
-		notes = append(notes, fmt.Sprintf("起始 %d 字节文本未被模型归属（%s…），已收为 front_matter，请核对是否漏切章节",
+		notes = append(notes, fmt.Sprintf("%d byte văn bản đầu chưa được model gán vào đâu (%s…), đã thu vào front_matter, hãy kiểm tra có bỏ sót chương không",
 			head, snippet(string(normalized[:min(head, 48)]), 24)))
 		points = append([]point{{byte: 0, d: BoundaryDecision{UnitID: units[0].ID, Kind: kindFrontMatter}}}, points...)
 	}
@@ -162,7 +162,7 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 				// 终局一票否决会浪费切分阶段的全部模型调用；标题行并入前段（文本一字不丢），
 				// 记入 Notes 由确认预览呈现，人工不认可可用 --guide 裁定（RFC §8.4 的停点正为此存在）。
 				seg.Notes = append(seg.Notes,
-					fmt.Sprintf("章节标题 %q 无正文（byte %d..%d），已并入前段（常见于锁定/付费占位章节）", title, start, end))
+					fmt.Sprintf("Tiêu đề chương %q không có chính văn (byte %d..%d), đã gộp vào đoạn trước (thường gặp ở chương bị khóa/chương giữ chỗ trả phí)", title, start, end))
 				if !absorb(end) {
 					seg.Matter = append(seg.Matter, MatterSpan{Kind: kindFrontMatter, Title: title, Start: start, End: end})
 				}
@@ -178,7 +178,7 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 		}
 	}
 	if chapterNo == 0 {
-		return nil, fmt.Errorf("切分未产出任何章节（group 不计入章节）")
+		return nil, fmt.Errorf("Chia tách không tạo ra chương nào (group không tính là chương)")
 	}
 	// 同名章节是"同章被误切"的确定性信号（有标题规约的源里章名不该重复），只记 Notes
 	// 交确认预览人工核对（Notes 非空即阻断 --yes）——是否合并不由 Go 裁定。
@@ -186,7 +186,7 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 	for _, c := range seg.Chapters {
 		key := squashSpace(c.Title)
 		if first, ok := titleAt[key]; ok && key != "" {
-			seg.Notes = append(seg.Notes, fmt.Sprintf("第 %d 章与第 %d 章标题相同（%q），疑似同章被误切，请核对",
+			seg.Notes = append(seg.Notes, fmt.Sprintf("Chương %d và chương %d trùng tiêu đề (%q), nghi cùng một chương bị chia nhầm, hãy kiểm tra",
 				c.Number, first, snippet(c.Title, 24)))
 		} else {
 			titleAt[key] = c.Number
@@ -339,7 +339,7 @@ func Segment(ctx context.Context, m callModel, systemPrompt string, normalized [
 			}
 		}
 		// 单块模型调用可达数分钟，逐块回显推进 + 累计边界数，面板才不会整段静默像卡死。
-		prof.step(cur, total, "切分第 %d/%d 块（%s..%s），已识别 %d 个边界...",
+		prof.step(cur, total, "Chia khối %d/%d (%s..%s), đã nhận diện %d ranh giới...",
 			cur, total, lo.ID, hi.ID, len(decisions))
 		// 上下文区字节上限取 chunkBytes/8 但不低于 4096：要拦的是超长行虚拟分片
 		// （单片可达 MaxUnitBytes）吞掉输入预算，普通行的 margin 开销本就无害。
@@ -357,8 +357,8 @@ func Segment(ctx context.Context, m callModel, systemPrompt string, normalized [
 			var tr *errTruncated
 			if errors.As(err, &tr) && owned[1]-owned[0] > 1 {
 				mid := (owned[0] + owned[1]) / 2
-				prof.step(0, 0, "块 %s..%s 边界输出被截断（章节过密），对半缩块重试", lo.ID, hi.ID)
-				prof.logger().Warn("imp 切分输出截断，对半缩块", "chunk", lo.ID+".."+hi.ID)
+				prof.step(0, 0, "Đầu ra ranh giới của khối %s..%s bị cắt (chương quá dày), chia đôi khối rồi thử lại", lo.ID, hi.ID)
+				prof.logger().Warn("imp đầu ra chia tách bị cắt, chia đôi khối", "chunk", lo.ID+".."+hi.ID)
 				left, lerr := chunk([2]int{owned[0], mid}, cur, total)
 				if lerr != nil {
 					return nil, lerr
@@ -369,7 +369,7 @@ func Segment(ctx context.Context, m callModel, systemPrompt string, normalized [
 				}
 				return append(left, right...), nil
 			}
-			return nil, fmt.Errorf("切分区间 %s..%s：%w", lo.ID, hi.ID, err)
+			return nil, fmt.Errorf("Khoảng chia tách %s..%s: %w", lo.ID, hi.ID, err)
 		}
 		// 上下文区边界归相邻块管辖（它会在自己的 owned 区间再报告一次），Go 直接裁掉：
 		// 坐标纪律由代码执行，语义重试只留给真正的语义失败——旧行为对越界反馈重问，
@@ -382,15 +382,15 @@ func Segment(ctx context.Context, m callModel, systemPrompt string, normalized [
 		}
 		if n := len(batch.Boundaries) - len(kept); n > 0 {
 			// 例行坐标纪律而非异常，用普通进度回显——警示色会让用户误以为出错。
-			prof.step(0, 0, "已裁掉 %d 个上下文区多报的边界（归相邻块自行报告，非错误）", n)
+			prof.step(0, 0, "Đã cắt bỏ %d ranh giới báo thừa ở vùng ngữ cảnh (khối kề bên tự báo, không phải lỗi)", n)
 		}
 		// 回显模型的语义判断（识别出的标题），让用户看见模型读懂了什么，而非只有机械计数。
 		if len(kept) > 0 {
-			prof.step(0, 0, "模型识别出：%s", previewBoundaries(kept))
+			prof.step(0, 0, "Model nhận diện: %s", previewBoundaries(kept))
 		}
 		if w != nil {
 			if err := writeArtifact(w, rel, want, boundaryBatch{Boundaries: kept}); err != nil {
-				return nil, fmt.Errorf("落盘切分块 %s..%s：%w", lo.ID, hi.ID, err)
+				return nil, fmt.Errorf("Lưu khối chia tách %s..%s: %w", lo.ID, hi.ID, err)
 			}
 		}
 		return kept, nil
@@ -408,14 +408,14 @@ func Segment(ctx context.Context, m callModel, systemPrompt string, normalized [
 		// 确定性复现同一失败。清缓存换取下次重新切分的模型机会；决策快照经 errSemantic
 		// 统一落 failures/ 供事后排查。清除失败必须如实报告——谎称已清除会让用户重跑
 		// 时再次复读坏缓存（Debug-First）。
-		hint := "块缓存已清除，重跑将重新切分"
+		hint := "Đã xóa bộ nhớ đệm khối, chạy lại sẽ chia lại"
 		if w != nil {
 			if cerr := w.clearDir(dirSegmentChunks); cerr != nil {
-				hint = fmt.Sprintf("块缓存清除失败：%v，重跑前请手动删除 meta/import/segment-chunks/", cerr)
+				hint = fmt.Sprintf("Xóa bộ nhớ đệm khối thất bại: %v, trước khi chạy lại hãy xóa thủ công meta/import/segment-chunks/", cerr)
 			}
 		}
 		raw, _ := json.MarshalIndent(decisions, "", "  ")
-		return nil, &errSemantic{Raw: string(raw), Err: fmt.Errorf("整合全书切分失败（%s）：%w", hint, err)}
+		return nil, &errSemantic{Raw: string(raw), Err: fmt.Errorf("Tích hợp chia tách toàn sách thất bại (%s): %w", hint, err)}
 	}
 	return seg, nil
 }
@@ -451,7 +451,7 @@ func previewBoundaries(bs []BoundaryDecision) string {
 	}
 	s := strings.Join(titles, " / ")
 	if len(bs) > len(titles) {
-		s += fmt.Sprintf("（共 %d 处）", len(bs))
+		s += fmt.Sprintf(" (tổng %d chỗ)", len(bs))
 	}
 	return s
 }
@@ -473,10 +473,10 @@ func (v chunkValidator) validate(bs []BoundaryDecision) error {
 	first := -1
 	for _, b := range bs {
 		if b.UnitID == "" {
-			return fmt.Errorf("边界缺 unit_id")
+			return fmt.Errorf("Ranh giới thiếu unit_id")
 		}
 		if !v.projIDs[b.UnitID] {
-			return fmt.Errorf("边界 unit_id %q 不存在于本次投影中", b.UnitID)
+			return fmt.Errorf("unit_id %q của ranh giới không tồn tại trong phép chiếu lần này", b.UnitID)
 		}
 		if !v.ownedIDs[b.UnitID] {
 			continue
@@ -484,7 +484,7 @@ func (v chunkValidator) validate(bs []BoundaryDecision) error {
 		switch b.Kind {
 		case kindChapter, kindGroup, kindFrontMatter, kindBackMatter:
 		default:
-			return fmt.Errorf("边界 %s kind 非法：%q（只能是 chapter/group/front_matter/back_matter）", b.UnitID, b.Kind)
+			return fmt.Errorf("Ranh giới %s kind không hợp lệ: %q (chỉ được là chapter/group/front_matter/back_matter)", b.UnitID, b.Kind)
 		}
 		at, err := resolveBoundaryByte(v.unitByID, b.UnitID, b.Anchor)
 		if err != nil {
@@ -496,7 +496,7 @@ func (v chunkValidator) validate(bs []BoundaryDecision) error {
 		// front/back matter 的描述性标题低风险，不核对。
 		if (b.Kind == kindChapter || b.Kind == kindGroup) && !b.Uncertain {
 			if t := squashSpace(b.Title); t != "" && !strings.Contains(squashSpace(v.unitByID[b.UnitID].Text), t) {
-				return fmt.Errorf("边界 %s 的标题 %q 在该单元原文中找不到：若这里是上一章的延续正文，请不要为它设边界（由前文边界归属，boundaries 可为空）；若源文此处确实没有标题行、标题是你归纳的，请置 uncertain=true",
+				return fmt.Errorf("Tiêu đề %q của ranh giới %s không tìm thấy trong nguyên văn đơn vị đó: nếu đây là phần tiếp nối chính văn của chương trước thì đừng đặt ranh giới cho nó (do ranh giới trước đó quản, boundaries có thể rỗng); nếu nguồn ở đây thực sự không có dòng tiêu đề mà tiêu đề do bạn tự tóm tắt thì đặt uncertain=true",
 					b.UnitID, snippet(b.Title, 24))
 			}
 		}
@@ -504,7 +504,7 @@ func (v chunkValidator) validate(bs []BoundaryDecision) error {
 		// 是机械冗余，放行后由 resolve 静默去重。
 		if prev, ok := seen[at]; ok {
 			if prev.Kind != b.Kind || boundaryLabel(prev) != boundaryLabel(b) {
-				return fmt.Errorf("边界 %q 与 %q 落在同一位置（%s），语义冲突，请只保留正确的一个",
+				return fmt.Errorf("Ranh giới %q và %q rơi vào cùng một vị trí (%s), xung đột ngữ nghĩa, hãy chỉ giữ cái đúng",
 					boundaryLabel(prev), boundaryLabel(b), b.UnitID)
 			}
 		} else {
@@ -520,7 +520,7 @@ func (v chunkValidator) validate(bs []BoundaryDecision) error {
 			head = len(v.normalized) // 首块一个 owned 边界都没报：全部起始文本未归属
 		}
 		if head > 0 && strings.TrimSpace(string(v.normalized[:head])) != "" {
-			return fmt.Errorf("起始 %d 字节文本（%s…）未归属任何边界，请为文本开头补充边界（front_matter/chapter/group）",
+			return fmt.Errorf("%d byte văn bản đầu (%s…) chưa thuộc ranh giới nào, hãy bổ sung ranh giới ở đầu văn bản (front_matter/chapter/group)",
 				head, snippet(string(v.normalized[:min(head, 48)]), 24))
 		}
 	}

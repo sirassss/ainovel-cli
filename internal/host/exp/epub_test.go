@@ -12,6 +12,7 @@ import (
 
 func TestRenderEPUB_StructuralInvariants(t *testing.T) {
 	data, err := renderEPUB(
+		labelsFor("zh"),
 		domain.BookMetadata{Title: "光斑", Synopsis: "少年在光影交界处追索真相。"},
 		[]int{1, 2},
 		chapterTitleIndex{1: "雨夜归人", 2: "破晓"},
@@ -130,6 +131,7 @@ func TestRenderEPUB_StructuralInvariants(t *testing.T) {
 
 func TestRenderEPUB_HTMLEscape(t *testing.T) {
 	data, err := renderEPUB(
+		labelsFor("zh"),
 		domain.BookMetadata{Title: "A & B", Synopsis: "E < F & G"}, // 特殊字符必须转义
 		[]int{1},
 		chapterTitleIndex{1: "C \"D\""},
@@ -169,6 +171,7 @@ func TestRenderEPUB_LayeredVolume(t *testing.T) {
 		2: {VolumeIdx: 1, VolumeTitle: "起源"},
 	}
 	data, err := renderEPUB(
+		labelsFor("zh"),
 		domain.BookMetadata{Title: "X", Synopsis: "简介"},
 		[]int{1, 2},
 		chapterTitleIndex{1: "A", 2: "B"},
@@ -203,6 +206,7 @@ func TestRenderEPUB_LayeredVolume(t *testing.T) {
 
 func TestRenderEPUB_NoCoverWhenNoTitle(t *testing.T) {
 	data, err := renderEPUB(
+		labelsFor("zh"),
 		domain.BookMetadata{}, []int{1},
 		chapterTitleIndex{1: "唯一一章"},
 		nil,

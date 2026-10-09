@@ -30,7 +30,7 @@ func Run(cfg bootstrap.Config, bundle assets.Bundle, build buildversion.Info) er
 
 	m := NewModel(rt, build.Version)
 	if logErr := rt.FileLogError(); logErr != nil {
-		logWarning := fmt.Errorf("文件日志不可用，已继续使用终端日志：%w", logErr)
+		logWarning := fmt.Errorf("Nhật ký tệp không dùng được, đã tiếp tục dùng nhật ký terminal: %w", logErr)
 		m.err = logWarning
 		m.applyEvent(host.Event{
 			Time: time.Now(), Category: "SYSTEM", Level: "warn",

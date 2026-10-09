@@ -132,7 +132,7 @@ func TestWriterStopGuard_StageAwareBlockMessage(t *testing.T) {
 		t.Fatalf("append consistency_check: %v", err)
 	}
 	d = guard(context.Background(), normalStop)
-	if !strings.Contains(d.InjectMessage, "commit_chapter") || !strings.Contains(d.InjectMessage, "错误") {
+	if !strings.Contains(d.InjectMessage, "commit_chapter") || !strings.Contains(d.InjectMessage, "lỗi") {
 		t.Fatalf("ready-to-commit message should mention commit and error handling, got %q", d.InjectMessage)
 	}
 }

@@ -150,7 +150,7 @@ func TestRun_ExistingFile_NoOverwrite(t *testing.T) {
 	if err == nil {
 		t.Fatal("expect error when target exists and !Overwrite")
 	}
-	if !strings.Contains(err.Error(), "已存在") {
+	if !strings.Contains(err.Error(), "đã tồn tại") {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -284,7 +284,7 @@ func TestRun_UnknownExtension(t *testing.T) {
 	if err == nil {
 		t.Fatal("expect error for unknown extension")
 	}
-	if !strings.Contains(err.Error(), "扩展名") {
+	if !strings.Contains(err.Error(), "phần mở rộng") {
 		t.Errorf("error should mention extension: %v", err)
 	}
 }

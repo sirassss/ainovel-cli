@@ -194,16 +194,16 @@ func renderCommandPalette(width int, items []commandPaletteItem, cursor int) str
 	if selectedIdx < 0 || selectedIdx >= len(visible) {
 		selectedIdx = 0
 	}
-	hint := mutedStyle.Render("↑↓ 选择 · Tab/Enter 接受 · Esc 关闭")
+	hint := mutedStyle.Render("↑↓ chọn · Tab/Enter chấp nhận · Esc đóng")
 	usage := "Usage: " + visible[selectedIdx].Usage
 	if remaining > 0 {
-		usage = usage + " · 还有 " + strconv.Itoa(remaining) + " 个命令"
+		usage = usage + " · còn " + strconv.Itoa(remaining) + " lệnh nữa"
 	}
 	usageLine := mutedStyle.Render(truncateWidth(usage, contentW))
 	body = append(body, usageLine+strings.Repeat(" ", max(0, contentW-lipgloss.Width(usageLine))))
 	body = append(body, hint+strings.Repeat(" ", max(0, contentW-lipgloss.Width(hint))))
 
-	return renderPaddedModalFrame(boxW, len(body)+2, "命令", "", body)
+	return renderPaddedModalFrame(boxW, len(body)+2, "Lệnh", "", body)
 }
 
 func commandPaletteWindow(total, cursor, limit int) (start, end int) {

@@ -81,10 +81,10 @@ func validateAdvanceControl(meta domain.RunMeta) error {
 		return &domain.UnsupportedAdvanceModeError{Mode: meta.AdvanceMode}
 	}
 	if meta.AdvancePermitChapter < 0 {
-		return fmt.Errorf("章节许可不能为负数: %d", meta.AdvancePermitChapter)
+		return fmt.Errorf("Giấy phép chương không được âm: %d", meta.AdvancePermitChapter)
 	}
 	if meta.AdvanceMode == domain.ChapterAdvanceAuto && meta.AdvancePermitChapter != 0 {
-		return fmt.Errorf("auto 模式不能保留章节许可: %d", meta.AdvancePermitChapter)
+		return fmt.Errorf("Chế độ auto không được giữ giấy phép chương: %d", meta.AdvancePermitChapter)
 	}
 	if meta.AdvanceHold != nil {
 		if err := meta.AdvanceHold.Validate(); err != nil {
@@ -152,7 +152,7 @@ func (s *RunMetaStore) SetAdvanceMode(mode domain.ChapterAdvanceMode) error {
 			return err
 		}
 		if meta == nil {
-			return fmt.Errorf("run meta 未初始化")
+			return fmt.Errorf("run meta chưa được khởi tạo")
 		}
 		meta.AdvanceMode = mode
 		if mode == domain.ChapterAdvanceAuto {
@@ -165,7 +165,7 @@ func (s *RunMetaStore) SetAdvanceMode(mode domain.ChapterAdvanceMode) error {
 // GrantAdvancePermit 为 review 模式持久化一个精确章节许可。
 func (s *RunMetaStore) GrantAdvancePermit(chapter int) error {
 	if chapter <= 0 {
-		return fmt.Errorf("章节许可必须大于 0: %d", chapter)
+		return fmt.Errorf("Giấy phép chương phải lớn hơn 0: %d", chapter)
 	}
 	return s.io.WithWriteLock(func() error {
 		meta, err := s.loadUnlocked()
@@ -173,16 +173,16 @@ func (s *RunMetaStore) GrantAdvancePermit(chapter int) error {
 			return err
 		}
 		if meta == nil {
-			return fmt.Errorf("run meta 未初始化")
+			return fmt.Errorf("run meta chưa được khởi tạo")
 		}
 		if meta.AdvanceMode != domain.ChapterAdvanceReview {
-			return fmt.Errorf("仅逐章验收模式可授权下一章（当前 %s）", meta.AdvanceMode)
+			return fmt.Errorf("Chỉ chế độ nghiệm thu từng chương mới được cấp phép chương kế (hiện %s)", meta.AdvanceMode)
 		}
 		if meta.AdvancePermitChapter == chapter {
 			return nil
 		}
 		if meta.AdvancePermitChapter != 0 {
-			return fmt.Errorf("已有第 %d 章许可，拒绝覆盖为第 %d 章", meta.AdvancePermitChapter, chapter)
+			return fmt.Errorf("Đã có giấy phép cho chương %d, từ chối ghi đè thành chương %d", meta.AdvancePermitChapter, chapter)
 		}
 		meta.AdvancePermitChapter = chapter
 		return s.saveUnlocked(*meta)
@@ -200,7 +200,7 @@ func (s *RunMetaStore) ClearAdvancePermit(chapter int) error {
 			return nil
 		}
 		if meta.AdvancePermitChapter != chapter {
-			return fmt.Errorf("章节许可已变化：期望第 %d 章，实际第 %d 章", chapter, meta.AdvancePermitChapter)
+			return fmt.Errorf("Giấy phép chương đã thay đổi: mong đợi chương %d, thực tế chương %d", chapter, meta.AdvancePermitChapter)
 		}
 		meta.AdvancePermitChapter = 0
 		return s.saveUnlocked(*meta)
@@ -218,13 +218,13 @@ func (s *RunMetaStore) SetAdvanceHold(hold domain.AdvanceHold) error {
 			return err
 		}
 		if meta == nil {
-			return fmt.Errorf("run meta 未初始化")
+			return fmt.Errorf("run meta chưa được khởi tạo")
 		}
 		if meta.AdvanceHold != nil {
 			if *meta.AdvanceHold == hold {
 				return nil
 			}
-			return fmt.Errorf("已有一次性暂停意图（%s：%s），拒绝覆盖", meta.AdvanceHold.After, meta.AdvanceHold.Reason)
+			return fmt.Errorf("Đã có ý định tạm dừng một lần (%s: %s), từ chối ghi đè", meta.AdvanceHold.After, meta.AdvanceHold.Reason)
 		}
 		meta.AdvanceHold = &hold
 		return s.saveUnlocked(*meta)
@@ -242,7 +242,7 @@ func (s *RunMetaStore) ClearAdvanceHold(expected domain.AdvanceHold) error {
 			return nil
 		}
 		if *meta.AdvanceHold != expected {
-			return fmt.Errorf("一次性暂停意图已变化，拒绝误清")
+			return fmt.Errorf("Ý định tạm dừng một lần đã thay đổi, từ chối xóa nhầm")
 		}
 		meta.AdvanceHold = nil
 		return s.saveUnlocked(*meta)

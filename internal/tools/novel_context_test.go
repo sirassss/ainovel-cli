@@ -577,7 +577,7 @@ func TestFinalizeContextPayloadReportsAppliedTrimming(t *testing.T) {
 		t.Fatal(err)
 	}
 	summary, _ := payload["_loading_summary"].(string)
-	if !strings.Contains(summary, "裁剪:references") {
+	if !strings.Contains(summary, "cắt bớt:references") {
 		t.Fatalf("loading summary must reflect final trimming, got %q", summary)
 	}
 }
@@ -784,17 +784,17 @@ func TestContextToolSelectedMemoryRecallsStoryThreadsAndReviewLessons(t *testing
 	if containsRecallSummary(payload.Selected.StoryThreads, "建议回看第") {
 		t.Fatalf("expected related_chapters not to be duplicated into story_threads, got %+v", payload.Selected.StoryThreads)
 	}
-	if !containsRecallSummary(payload.Selected.ReviewLessons, "contract 漏项") {
+	if !containsRecallSummary(payload.Selected.ReviewLessons, "thiếu sót so với contract") {
 		t.Fatalf("expected review lesson recall to mention contract miss, got %+v", payload.Selected.ReviewLessons)
 	}
-	if !strings.Contains(payload.Summary, "线索召回:") || !strings.Contains(payload.Summary, "评审召回:") {
+	if !strings.Contains(payload.Summary, "gợi lại manh mối:") || !strings.Contains(payload.Summary, "gợi lại thẩm duyệt:") {
 		t.Fatalf("expected loading summary to report selected memory, got %q", payload.Summary)
 	}
 }
 
 // 久挂未回收的伏笔即使与当前章关键词无关，也应被账龄回填进 story_threads——
 // 这正是相关性召回的盲区（独自悬挂太久、却没在本章撞上关键词的那根线）。
-// 近期埋下的伏笔（账龄 < 阈值）不应被误标为"未回收"。
+// 近期埋下的伏笔（账龄 < 阈值）不应被误标为"chưa thu"。
 func TestContextToolSelectedMemorySurfacesAgingForeshadow(t *testing.T) {
 	dir := t.TempDir()
 	s := store.NewStore(dir)
@@ -841,14 +841,14 @@ func TestContextToolSelectedMemorySurfacesAgingForeshadow(t *testing.T) {
 		t.Fatalf("Unmarshal: %v", err)
 	}
 
-	// 两条久挂伏笔应被回填，且带"未回收"账龄标注。
+	// 两条久挂伏笔应被回填，且带"chưa thu"账龄标注。
 	if !containsRecallSummary(payload.Selected.StoryThreads, "上古封印的裂隙") {
 		t.Fatalf("expected aging foreshadow to surface despite no relevance, got %+v", payload.Selected.StoryThreads)
 	}
 	if !containsRecallSummary(payload.Selected.StoryThreads, "失落的血脉") {
 		t.Fatalf("expected second aging foreshadow to surface, got %+v", payload.Selected.StoryThreads)
 	}
-	if !containsRecallSummary(payload.Selected.StoryThreads, "未回收") {
+	if !containsRecallSummary(payload.Selected.StoryThreads, "chưa thu") {
 		t.Fatalf("expected aging item to carry overdue annotation, got %+v", payload.Selected.StoryThreads)
 	}
 	// 近期伏笔（账龄 <30 且不相关）不应被回填。

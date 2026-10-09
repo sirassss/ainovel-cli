@@ -98,9 +98,9 @@ func TestAcquireExclusive(t *testing.T) {
 		exclusive  string
 		wantErr    string // 空=期望放行
 	}{
-		{"running", lifecycleRunning, false, "", "运行中"},
-		{"cocreating", lifecyclePaused, true, "", "阶段共创"},
-		{"busy", lifecycleIdle, false, "导入", "进行中"},
+		{"running", lifecycleRunning, false, "", "đang chạy"},
+		{"cocreating", lifecyclePaused, true, "", "Đồng sáng tác theo giai đoạn"},
+		{"busy", lifecycleIdle, false, "导入", "đang chạy"},
 		{"idle free", lifecycleIdle, false, "", ""},
 		{"paused free", lifecyclePaused, false, "", ""},
 	}
@@ -217,7 +217,7 @@ func TestBuildStoryStateSummary_Populated(t *testing.T) {
 	}
 
 	got := buildStoryStateSummary(st)
-	for _, want := range []string{"影之诗", "已完成 3 章", "下一章为第 4 章", "主角登临绝巅", "师门血仇未报", "预计 4-6 卷"} {
+	for _, want := range []string{"影之诗", "đã hoàn thành 3 chương", "chương kế là chương 4", "主角登临绝巅", "师门血仇未报", "预计 4-6 卷"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("摘要应含 %q，实际:\n%s", want, got)
 		}
@@ -250,10 +250,10 @@ func TestBuildStoryStateSummaryUsesDynamicPlanningWording(t *testing.T) {
 	}
 
 	got := buildStoryStateSummary(st)
-	if !strings.Contains(got, "当前已细化 2 章（后续按弧动态规划）") {
+	if !strings.Contains(got, "hiện đã chi tiết hóa 2 chương (phần sau quy hoạch động theo cung)") {
 		t.Fatalf("动态规划摘要口径错误:\n%s", got)
 	}
-	if strings.Contains(got, "66") || strings.Contains(got, "规划 2 章") {
+	if strings.Contains(got, "66") || strings.Contains(got, "quy hoạch 2 chương") {
 		t.Fatalf("动态规划摘要不得暗示固定总章数:\n%s", got)
 	}
 }

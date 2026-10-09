@@ -39,13 +39,13 @@ func decide[T any](ctx context.Context, model agentcore.ChatModel, contract llmc
 		Agent:        "arbiter",
 		Hooks: llmcontract.Hooks{
 			Resolved: func(res llmcontract.Resolution) {
-				slog.Debug("裁定协议选择", "module", "arbiter",
+				slog.Debug("Chọn giao thức tài phán", "module", "arbiter",
 					"contract", contract.Name, "structured_mode", res.Mode,
 					"capability_source", res.Source, "provider", res.Provider,
 					"model", res.Model, "schema_fingerprint", contract.Fingerprint())
 			},
 			Correction: func(ev llmcontract.Correction) {
-				slog.Warn("裁定输出自愈", "module", "arbiter", "attempt", ev.Attempt,
+				slog.Warn("Tự phục hồi đầu ra tài phán", "module", "arbiter", "attempt", ev.Attempt,
 					"layer", ev.Layer, "structured_mode", ev.Mode, "err", ev.Err)
 			},
 		},
@@ -71,10 +71,10 @@ func (d *DispatchOp) validate() error {
 		return nil
 	}
 	if !slices.Contains(workerNames, d.Agent) {
-		return fmt.Errorf("dispatch.agent 非法: %q", d.Agent)
+		return fmt.Errorf("dispatch.agent không hợp lệ: %q", d.Agent)
 	}
 	if strings.TrimSpace(d.Task) == "" {
-		return fmt.Errorf("dispatch.task 不能为空")
+		return fmt.Errorf("dispatch.task không được để trống")
 	}
 	return nil
 }
@@ -84,7 +84,7 @@ func (d *DispatchOp) validate() error {
 func dispatchSchema(desc string) map[string]any {
 	return llmcontract.Nullable(schema.Object(
 		schema.Property("agent", schema.Enum(desc, workerNames...)).Required(),
-		schema.Property("task", schema.String("交给该 worker 的完整任务描述")).Required(),
+		schema.Property("task", schema.String("Mô tả nhiệm vụ đầy đủ giao cho worker đó")).Required(),
 	))
 }
 
@@ -93,7 +93,7 @@ func dispatchSchema(desc string) map[string]any {
 func marshalPayload(v any) (string, error) {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("arbiter: 事实包序列化失败: %w", err)
+		return "", fmt.Errorf("arbiter: tuần tự hóa gói sự thật thất bại: %w", err)
 	}
 	return string(data), nil
 }

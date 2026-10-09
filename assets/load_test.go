@@ -2,6 +2,7 @@ package assets
 
 import (
 	"os"
+	"reflect"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -167,5 +168,30 @@ func TestArchitectLongPromptStatesArcLimit(t *testing.T) {
 	}
 	if strings.Contains(p, "`estimated_chapters` ≥ 8") {
 		t.Fatal("không được yêu cầu estimated_chapters ≥ 8: mâu thuẫn với giới hạn 8 chương mỗi cung")
+	}
+}
+
+func TestVietnamesePromptsHaveNoHan(t *testing.T) {
+	hasHan := func(s string) bool {
+		return strings.IndexFunc(s, func(r rune) bool { return r >= 0x4e00 && r <= 0x9fff }) >= 0
+	}
+	for _, style := range []string{"default", "fantasy", "romance", "suspense", "wuxia"} {
+		b := Load(style, LoadOptions{})
+		for name, v := range map[string]any{"Prompts": b.Prompts, "References": b.References} {
+			rv := reflect.ValueOf(v)
+			for i := 0; i < rv.NumField(); i++ {
+				if text := rv.Field(i).String(); hasHan(text) {
+					t.Errorf("style=%s %s.%s còn chữ Hán", style, name, rv.Type().Field(i).Name)
+				}
+			}
+		}
+		if hasHan(b.Voice) {
+			t.Errorf("style=%s Voice còn chữ Hán", style)
+		}
+		for k, v := range b.Styles {
+			if hasHan(v) {
+				t.Errorf("style=%s Styles[%s] còn chữ Hán", style, k)
+			}
+		}
 	}
 }

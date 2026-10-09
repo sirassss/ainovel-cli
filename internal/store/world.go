@@ -173,7 +173,7 @@ func (s *WorldStore) UpdateForeshadow(chapter int, updates []domain.ForeshadowUp
 		}
 		for _, u := range updates {
 			if strings.TrimSpace(u.ID) == "" {
-				return fmt.Errorf("foreshadow id 不能为空")
+				return fmt.Errorf("foreshadow id không được để trống")
 			}
 			switch u.Action {
 			case "plant":
@@ -187,8 +187,8 @@ func (s *WorldStore) UpdateForeshadow(chapter int, updates []domain.ForeshadowUp
 					//（"1" 与 "new"），4 条伏笔无声蒸发，且没有任何一处报错。
 					if planted := entries[i].PlantedAt; planted != 0 && planted != chapter {
 						return fmt.Errorf(
-							"伏笔 id %q 已被第 %d 章占用（%s）；每条伏笔需要各自唯一且稳定的 id，"+
-								"不要复用 \"new\"/\"1\" 这类占位符——后续章节靠 id 找回它来 advance/resolve: %w",
+							"id phục bút %q đã bị chương %d chiếm (%s); mỗi phục bút cần một id riêng và ổn định, "+
+								"đừng dùng lại placeholder như \"new\"/\"1\" — các chương sau dựa vào id để advance/resolve: %w",
 							u.ID, planted, truncateForError(entries[i].Description), errs.ErrToolArgs)
 					}
 					if entries[i].Description == "" {

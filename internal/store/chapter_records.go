@@ -29,10 +29,10 @@ func (s *ChapterRecordStore) Load(chapter int) (*domain.ChapterRecord, error) {
 		return nil, err
 	}
 	if err := validateChapterRecord(record); err != nil {
-		return nil, fmt.Errorf("读取第 %d 章接纳记录: %w", chapter, err)
+		return nil, fmt.Errorf("Đọc bản ghi tiếp nhận của chương %d: %w", chapter, err)
 	}
 	if record.Chapter != chapter {
-		return nil, fmt.Errorf("读取第 %d 章接纳记录: 记录章节号为 %d", chapter, record.Chapter)
+		return nil, fmt.Errorf("Đọc bản ghi tiếp nhận của chương %d: số chương trong bản ghi là %d", chapter, record.Chapter)
 	}
 	return &record, nil
 }
@@ -104,7 +104,7 @@ func (s *ChapterRecordStore) LoadCompleted(chapters []int) ([]domain.ChapterReco
 			return nil, err
 		}
 		if record == nil {
-			return nil, fmt.Errorf("第 %d 章缺少接纳记录", chapter)
+			return nil, fmt.Errorf("Chương %d thiếu bản ghi tiếp nhận", chapter)
 		}
 		records = append(records, *record)
 	}

@@ -89,7 +89,7 @@ func TestLoadStateReportsCorruptArtifact(t *testing.T) {
 	if err := ws.writeAtomic(fileSegmentation, []byte("{")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadState(ws); err == nil || !strings.Contains(err.Error(), "切分工件") {
+	if _, err := LoadState(ws); err == nil || !strings.Contains(err.Error(), "sản phẩm chia tách") {
 		t.Fatalf("损坏工件不得伪装成尚未切分: %v", err)
 	}
 }
@@ -171,7 +171,7 @@ func TestResumeSummary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Ingest: %v", err)
 	}
-	if got := ResumeSummary(st); !strings.Contains(got, "尚未完成切分") {
+	if got := ResumeSummary(st); !strings.Contains(got, "Chưa chia tách xong") {
 		t.Fatalf("刚建区应提示未完成切分，得 %q", got)
 	}
 	// 切分+确认就绪、分析 0/1 → 提示分析进度。
@@ -184,7 +184,7 @@ func TestResumeSummary(t *testing.T) {
 	if err := writeArtifact(ws, fileConfirmation, Digest(raw), Confirmation{Method: confirmMethodAuto, Chapters: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if got := ResumeSummary(st); !strings.Contains(got, "已分析 0/1 章") {
+	if got := ResumeSummary(st); !strings.Contains(got, "Đã phân tích 0/1 chương") {
 		t.Fatalf("应提示分析进度，得 %q", got)
 	}
 }

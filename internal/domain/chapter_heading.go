@@ -9,6 +9,7 @@ import (
 
 var (
 	// 章号写法按语种三选一：越南语「Chương 12」、中文「第 12 章」、英文「Chapter 12」。
+	// han:keep regex nhận dạng đầu chương zh/vi
 	chapterNumberRe = regexp.MustCompile(`^\s*(?i:(chương|chapter)\s*(\d+)|第\s*(\d+)\s*章)`)
 
 	// 模型给出的首行标题装饰：# 到 ###### 的标题行，或整行 **加粗**。

@@ -57,7 +57,7 @@ func buildLocations(volumes []domain.VolumeOutline) map[int]chapterLocation {
 }
 
 // chapterHeaderRe 匹配带章号的 Markdown 标题首行（# 第N章 / ## 第 12 章 ...）。
-var chapterHeaderRe = regexp.MustCompile(`^#+\s+第.+?章`)
+var chapterHeaderRe = regexp.MustCompile(`^#+\s+(?:第.+?章|(?i:chương)\s*\d+)`) // han:keep tiêu đề chương zh/vi trong chính văn
 
 // atxTitleRe 提取 ATX 标题（# 标题）的文字部分。
 var atxTitleRe = regexp.MustCompile(`^#{1,6}\s+(.+?)\s*$`)
@@ -94,6 +94,7 @@ func isChapterTitleLine(line, title string) bool {
 // 章节顺序由 chapters 决定（调用方已按章号升序去重）。bodies/titleIdx/locations
 // 都按"缺失即降级"处理：标题缺失只输出 "第 N 章"；分层定位缺失就当扁平大纲。
 func renderTXT(
+	lb labels,
 	novelName string,
 	chapters []int,
 	titleIdx chapterTitleIndex,
@@ -103,9 +104,7 @@ func renderTXT(
 	var b strings.Builder
 
 	if name := strings.TrimSpace(novelName); name != "" {
-		b.WriteString("《")
-		b.WriteString(name)
-		b.WriteString("》\n\n")
+		fmt.Fprintf(&b, lb.bookTitleFmt+"\n\n", name)
 	}
 
 	useLayered := len(locations) > 0
@@ -114,16 +113,16 @@ func renderTXT(
 		if useLayered {
 			if loc, ok := locations[ch]; ok && loc.IsFirstOfVolume {
 				b.WriteString("\n═══════════════════════════════════════════\n")
-				fmt.Fprintf(&b, "           第 %d 卷  %s\n", loc.VolumeIdx, strings.TrimSpace(loc.VolumeTitle))
+				fmt.Fprintf(&b, "           "+lb.txtVolumeFmt+"\n", loc.VolumeIdx, strings.TrimSpace(loc.VolumeTitle))
 				b.WriteString("═══════════════════════════════════════════\n\n")
 			}
 		}
 
 		title := strings.TrimSpace(titleIdx[ch])
 		if title != "" {
-			fmt.Fprintf(&b, "第 %d 章  %s\n\n", ch, title)
+			fmt.Fprintf(&b, lb.txtChapterFmt+"\n\n", ch, title)
 		} else {
-			fmt.Fprintf(&b, "第 %d 章\n\n", ch)
+			fmt.Fprintf(&b, lb.chapterFmt+"\n\n", ch)
 		}
 
 		body := stripChapterTitleHeader(strings.TrimSpace(bodies[ch]), title)

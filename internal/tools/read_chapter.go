@@ -20,9 +20,9 @@ func NewReadChapterTool(store *store.Store) *ReadChapterTool {
 
 func (t *ReadChapterTool) Name() string { return "read_chapter" }
 func (t *ReadChapterTool) Description() string {
-	return "读取章节原文。可读终稿、草稿，或提取角色对话片段"
+	return "Đọc nguyên văn chương. Có thể đọc bản chính thức, bản nháp, hoặc trích đoạn thoại của nhân vật"
 }
-func (t *ReadChapterTool) Label() string { return "读取章节" }
+func (t *ReadChapterTool) Label() string { return "Đọc chương" }
 
 // 纯读工具，可被并发调度（editor 审阅时常一次读多章）。
 func (t *ReadChapterTool) ReadOnly(_ json.RawMessage) bool        { return true }
@@ -30,12 +30,12 @@ func (t *ReadChapterTool) ConcurrencySafe(_ json.RawMessage) bool { return true 
 
 func (t *ReadChapterTool) Schema() map[string]any {
 	return schema.Object(
-		schema.Property("chapter", schema.Int("章节号（读单章时必填）")),
-		schema.Property("from", schema.Int("起始章节号（读范围时使用）")),
-		schema.Property("to", schema.Int("结束章节号（读范围时使用）")),
-		schema.Property("source", schema.Enum("来源", "final", "draft")).Required(),
-		schema.Property("character", schema.String("角色名（提取对话片段时使用）")),
-		schema.Property("max_runes", schema.Int("每章最大字符数（范围读取时截取，默认 2000）")),
+		schema.Property("chapter", schema.Int("Số chương (bắt buộc khi đọc một chương)")),
+		schema.Property("from", schema.Int("Số chương bắt đầu (dùng khi đọc theo khoảng)")),
+		schema.Property("to", schema.Int("Số chương kết thúc (dùng khi đọc theo khoảng)")),
+		schema.Property("source", schema.Enum("Nguồn", "final", "draft")).Required(),
+		schema.Property("character", schema.String("Tên nhân vật (dùng khi trích đoạn thoại)")),
+		schema.Property("max_runes", schema.Int("Số ký tự tối đa mỗi chương (cắt khi đọc theo khoảng, mặc định 2000)")),
 	)
 }
 
@@ -60,7 +60,7 @@ func (t *ReadChapterTool) Execute(_ context.Context, args json.RawMessage) (json
 		var warnings []string
 		warn := func(scope string, err error) {
 			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("%s 读取失败: %v", scope, err))
+				warnings = append(warnings, fmt.Sprintf("Đọc %s thất bại: %v", scope, err))
 			}
 		}
 		chars, err := t.store.Characters.Load()
@@ -85,7 +85,7 @@ func (t *ReadChapterTool) Execute(_ context.Context, args json.RawMessage) (json
 			"samples":   samples,
 		}
 		if len(samples) == 0 {
-			result["hint"] = "该角色暂无可用的已提交对话样本"
+			result["hint"] = "Nhân vật này chưa có mẫu thoại đã nộp để dùng"
 		}
 		if len(warnings) > 0 {
 			result["status"] = "partial"
@@ -150,7 +150,7 @@ func (t *ReadChapterTool) Execute(_ context.Context, args json.RawMessage) (json
 			"chapter": a.Chapter,
 			"source":  a.Source,
 			"exists":  false,
-			"hint":    "请求的来源中没有该章节；如需读取另一来源，请明确指定 source",
+			"hint":    "Nguồn được yêu cầu không có chương này; nếu cần đọc nguồn khác hãy chỉ định rõ source",
 		})
 	}
 

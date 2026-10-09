@@ -23,7 +23,7 @@ func TestRejectsPlaceholderForeshadowID(t *testing.T) {
 			t.Errorf("id %q là占位符, phải bị bác", id)
 			continue
 		}
-		if !strings.Contains(err.Error(), "占位符") {
+		if !strings.Contains(err.Error(), "placeholder") {
 			t.Errorf("id %q: thông báo phải giải thích lý do, nhận %v", id, err)
 		}
 	}

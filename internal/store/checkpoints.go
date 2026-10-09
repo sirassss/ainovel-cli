@@ -54,7 +54,7 @@ func (cs *CheckpointStore) Append(scope domain.Scope, step, artifact, digest str
 	cs.io.mu.Lock()
 	defer cs.io.mu.Unlock()
 	if cs.loadErr != nil {
-		return nil, fmt.Errorf("checkpoint store 初始化失败: %w", cs.loadErr)
+		return nil, fmt.Errorf("Khởi tạo checkpoint store thất bại: %w", cs.loadErr)
 	}
 
 	if digest != "" {

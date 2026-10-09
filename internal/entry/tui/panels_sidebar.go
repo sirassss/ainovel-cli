@@ -118,6 +118,7 @@ func renderAgentLine(agent host.AgentSnapshot, width int) string {
 	if agent.Tool != "" {
 		detail = agent.Tool
 	}
+	// han:keep so khớp snapshot cũ của chế độ zh
 	if agent.State == "idle" && (detail == "待命" || detail == "Chờ lệnh") {
 		detail = ""
 	}

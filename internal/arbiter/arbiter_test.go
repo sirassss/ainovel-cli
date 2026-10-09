@@ -473,7 +473,7 @@ func TestDecideNativeFencedOutputIsContractViolation(t *testing.T) {
 		"```json\n{\"planner\":\"architect_short\",\"task\":\"x\",\"reason\":\"y\"}\n```",
 	}}}
 	_, err := DecidePlanStart(t.Context(), m, "sys", "写一部短篇", "")
-	if err == nil || !strings.Contains(err.Error(), "契约违约") {
+	if err == nil || !strings.Contains(err.Error(), "vi phạm hợp đồng") {
 		t.Fatalf("期望契约违约错误, got %v", err)
 	}
 	if m.idx != 1 {
@@ -507,9 +507,9 @@ func TestDecideNativeStopReasonClassification(t *testing.T) {
 		stop    agentcore.StopReason
 		wantErr string
 	}{
-		{"length 截断", `{"planner":`, agentcore.StopReasonLength, "截断"},
-		{"safety 拒答", `无法协助`, agentcore.StopReasonSafety, "拒答"},
-		{"空响应", ``, agentcore.StopReasonStop, "空内容"},
+		{"length 截断", `{"planner":`, agentcore.StopReasonLength, "cắt do giới hạn độ dài"},
+		{"safety 拒答", `无法协助`, agentcore.StopReasonSafety, "từ chối trả lời"},
+		{"空响应", ``, agentcore.StopReasonStop, "nội dung rỗng"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

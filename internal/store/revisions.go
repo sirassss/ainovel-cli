@@ -42,7 +42,7 @@ func (s *Store) InvalidateChapterAggregates(fromChapter int) error {
 	}
 	volumes, err := s.Outline.LoadLayeredOutline()
 	if err != nil {
-		return fmt.Errorf("读取分层大纲: %w", err)
+		return fmt.Errorf("Đọc đại cương phân tầng: %w", err)
 	}
 	chapter := 1
 	arcEnds := make(map[[2]int]int)
@@ -72,11 +72,11 @@ func (s *Store) InvalidateChapterAggregates(fromChapter int) error {
 		}
 	}
 	if style, err := s.World.LoadStyleRules(); err != nil {
-		return fmt.Errorf("读取写作规则: %w", err)
+		return fmt.Errorf("Đọc quy tắc viết: %w", err)
 	} else if style != nil {
 		end, ok := arcEnds[[2]int{style.Volume, style.Arc}]
 		if !ok {
-			return fmt.Errorf("写作规则引用未知弧 V%dA%d", style.Volume, style.Arc)
+			return fmt.Errorf("Quy tắc viết tham chiếu cung không tồn tại V%dA%d", style.Volume, style.Arc)
 		}
 		if end >= fromChapter {
 			if err := s.World.io.RemoveFile("meta/style_rules.json"); err != nil {

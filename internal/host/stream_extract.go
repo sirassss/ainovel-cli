@@ -21,17 +21,17 @@ import (
 var toolDisplays = map[string]toolDisplay{
 	"draft_chapter": {nakedKey: "content"},
 
-	"plan_chapter":        {header: "✻ 规划"},
-	"edit_chapter":        {header: "✻ 打磨"},
-	"commit_chapter":      {header: "✻ 章节提交"},
-	"save_review":         {header: "✻ 审阅"},
-	"save_arc_summary":    {header: "✻ 弧摘要"},
-	"save_volume_summary": {header: "✻ 卷摘要"},
-	"save_foundation":     {header: "✻ 设定"},
-	"revise_outline":      {header: "✻ 修订大纲"},
-	"read_chapter":        {header: "✻ 读章节"},
-	"check_consistency":   {header: "✻ 一致性检查"},
-	"novel_context":       {header: "✻ 查询上下文"},
+	"plan_chapter":        {header: "✻ Quy hoạch"},
+	"edit_chapter":        {header: "✻ Trau chuốt"},
+	"commit_chapter":      {header: "✻ Nộp chương"},
+	"save_review":         {header: "✻ Thẩm duyệt"},
+	"save_arc_summary":    {header: "✻ Tóm tắt cung"},
+	"save_volume_summary": {header: "✻ Tóm tắt tập"},
+	"save_foundation":     {header: "✻ Thiết lập"},
+	"revise_outline":      {header: "✻ Sửa đại cương"},
+	"read_chapter":        {header: "✻ Đọc chương"},
+	"check_consistency":   {header: "✻ Kiểm tra nhất quán"},
+	"novel_context":       {header: "✻ Tra ngữ cảnh"},
 }
 
 type toolDisplay struct {

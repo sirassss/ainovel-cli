@@ -131,7 +131,7 @@ func TestSynthesizeRejectsRangeMismatch(t *testing.T) {
 	if err == nil {
 		t.Fatal("区间起止章与请求不符应拒绝")
 	}
-	if !strings.Contains(err.Error(), "章范围") {
+	if !strings.Contains(err.Error(), "Phạm vi chương") {
 		t.Fatalf("错误应指出区间范围不符，得：%v", err)
 	}
 }

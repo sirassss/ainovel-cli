@@ -186,7 +186,7 @@ func TestNormalize_FeedbackRetryRecovers(t *testing.T) {
 		if text == "这不是 JSON" {
 			sawBad = true
 		}
-		if strings.Contains(text, "JSON Schema") && strings.Contains(text, "错误：") {
+		if strings.Contains(text, "JSON Schema") && strings.Contains(text, "Lỗi: ") {
 			sawHint = true
 		}
 	}
@@ -318,7 +318,7 @@ func TestNormalize_NativeSendsSchemaAndRejectsFences(t *testing.T) {
 	}}}
 	n = NewNormalizer(fenced)
 	_, err = n.Normalize(t.Context(), "startup_prompt", "规则")
-	if err == nil || !strings.Contains(err.Error(), "契约违约") {
+	if err == nil || !strings.Contains(err.Error(), "vi phạm hợp đồng") {
 		t.Fatalf("期望契约违约错误, got %v", err)
 	}
 	if fenced.calls != 1 {

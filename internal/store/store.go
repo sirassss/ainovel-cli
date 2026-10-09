@@ -14,8 +14,9 @@ import (
 
 // Store 是状态管理的组合根，持有所有子存储。
 type Store struct {
-	dir string
-	ios []*IO
+	dir  string
+	lang string
+	ios  []*IO
 
 	Progress       *ProgressStore
 	Book           *BookStore
@@ -87,10 +88,14 @@ func NewStore(dir string) *Store {
 // SetLanguage 设定作品语种（"vi" / "zh"），影响所有派生 Markdown 视图的标签。
 // 启动时设一次即可；未调用则按上游默认走中文。
 func (s *Store) SetLanguage(lang string) {
+	s.lang = lang
 	for _, x := range s.ios {
 		x.SetLanguage(lang)
 	}
 }
+
+// Language trả về ngôn ngữ tác phẩm đã đặt qua SetLanguage ("" nếu chưa đặt).
+func (s *Store) Language() string { return s.lang }
 
 // Dir 返回输出根目录。
 func (s *Store) Dir() string { return s.dir }
@@ -106,7 +111,7 @@ func (s *Store) LoadProjectFormatVersion() (int, error) {
 		return 0, err
 	}
 	if format.Version <= 0 {
-		return 0, fmt.Errorf("项目格式版本无效: %d", format.Version)
+		return 0, fmt.Errorf("Phiên bản định dạng dự án không hợp lệ: %d", format.Version)
 	}
 	return format.Version, nil
 }
@@ -114,7 +119,7 @@ func (s *Store) LoadProjectFormatVersion() (int, error) {
 // SaveProjectFormatVersion 在一次迁移全部完成后原子更新项目格式版本。
 func (s *Store) SaveProjectFormatVersion(version int) error {
 	if version <= 0 {
-		return fmt.Errorf("项目格式版本必须大于 0: %d", version)
+		return fmt.Errorf("Phiên bản định dạng dự án phải lớn hơn 0: %d", version)
 	}
 	return s.Progress.io.WriteJSON(projectFormatPath, projectFormat{Version: version})
 }
@@ -128,7 +133,7 @@ func (s *Store) CheckConsistency() []string {
 	var warnings []string
 	progress, err := s.Progress.Load()
 	if err != nil {
-		return append(warnings, fmt.Sprintf("progress 读取失败: %v", err))
+		return append(warnings, fmt.Sprintf("Đọc progress thất bại: %v", err))
 	}
 	if progress == nil {
 		return warnings
@@ -136,15 +141,15 @@ func (s *Store) CheckConsistency() []string {
 	if n := len(progress.CompletedChapters); n > 0 {
 		lastCh := progress.CompletedChapters[n-1]
 		if text, err := s.Drafts.LoadChapterText(lastCh); err != nil {
-			warnings = append(warnings, fmt.Sprintf("第 %d 章终稿读取失败: %v", lastCh, err))
+			warnings = append(warnings, fmt.Sprintf("Đọc bản chính thức chương %d thất bại: %v", lastCh, err))
 		} else if text == "" {
-			warnings = append(warnings, fmt.Sprintf("progress 标记第 %d 章已完成，但 chapters/%02d.md 不存在或为空", lastCh, lastCh))
+			warnings = append(warnings, fmt.Sprintf("progress đánh dấu chương %d đã hoàn thành, nhưng chapters/%02d.md không tồn tại hoặc rỗng", lastCh, lastCh))
 		}
 	}
 	if progress.Layered && progress.CurrentVolume > 0 && progress.CurrentArc > 0 {
 		volumes, err := s.Outline.LoadLayeredOutline()
 		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("分层大纲读取失败: %v", err))
+			warnings = append(warnings, fmt.Sprintf("Đọc đại cương phân tầng thất bại: %v", err))
 		} else if len(volumes) > 0 {
 			found := false
 			for _, v := range volumes {
@@ -160,7 +165,7 @@ func (s *Store) CheckConsistency() []string {
 				break
 			}
 			if !found {
-				warnings = append(warnings, fmt.Sprintf("progress 当前 V%d A%d 在分层大纲中找不到对应条目", progress.CurrentVolume, progress.CurrentArc))
+				warnings = append(warnings, fmt.Sprintf("V%d A%d hiện tại của progress không có mục tương ứng trong đại cương phân tầng", progress.CurrentVolume, progress.CurrentArc))
 			}
 		}
 	}
@@ -349,10 +354,10 @@ func (s *Store) ReviseOutline(fromChapter int, replacement []domain.OutlineEntry
 		return 0, fmt.Errorf("load progress: %w: %w", errs.ErrStoreRead, err)
 	}
 	if p == nil {
-		return 0, fmt.Errorf("progress 未初始化: %w", errs.ErrToolPrecondition)
+		return 0, fmt.Errorf("progress chưa được khởi tạo: %w", errs.ErrToolPrecondition)
 	}
 	if p.Phase == domain.PhaseComplete {
-		return 0, fmt.Errorf("全书已完结，不允许修改大纲: %w", errs.ErrToolPrecondition)
+		return 0, fmt.Errorf("Cả truyện đã hoàn kết, không cho phép sửa đại cương: %w", errs.ErrToolPrecondition)
 	}
 	protected := p.InProgressChapter
 	if latest := p.LatestCompleted(); latest > protected {
@@ -363,9 +368,9 @@ func (s *Store) ReviseOutline(fromChapter int, replacement []domain.OutlineEntry
 		// 再退到 save_foundation(outline)）全被拒，空转到熔断。错误必须同时说明谁负责
 		// 返工，否则架构师会继续在自己的工具集里找一个并不存在的出口。
 		return 0, fmt.Errorf(
-			"第 %d 章已完成或正在写作；revise_outline 只能修订尚未发生的章节，必须从第 %d 章之后开始。"+
-				"pending_rewrites 中的已写章节不归大纲修订管：返工由 writer 按队列执行；"+
-				"架构师若无未来章节需要改写，请调 resolve_outline_feedback 确认现有规划仍适用后结束: %w",
+			"Chương %d đã hoàn thành hoặc đang viết; revise_outline chỉ sửa được các chương chưa xảy ra, phải bắt đầu sau chương %d."+
+				"Các chương đã viết trong pending_rewrites không thuộc phạm vi sửa đại cương: việc viết lại do writer thực hiện theo hàng đợi; "+
+				"nếu kiến trúc sư không có chương tương lai nào cần viết lại, hãy gọi resolve_outline_feedback xác nhận quy hoạch hiện có vẫn phù hợp rồi kết thúc: %w",
 			fromChapter, protected, errs.ErrToolPrecondition)
 	}
 

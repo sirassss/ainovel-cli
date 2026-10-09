@@ -104,7 +104,7 @@ func TestInterventionDispatchTaskPreservesOriginalAuthority(t *testing.T) {
 	if !strings.Contains(got, original) {
 		t.Fatalf("用户原始干预未被逐字保留: %q", got)
 	}
-	if !strings.Contains(got, "修改授权的唯一来源") {
+	if !strings.Contains(got, "nguồn ủy quyền sửa đổi duy nhất") {
 		t.Fatalf("缺少授权边界说明: %q", got)
 	}
 }
@@ -191,7 +191,7 @@ func testTextMsg(text string) agentcore.Message {
 	}
 }
 
-var chapterRe = regexp.MustCompile(`写第 (\d+) 章`)
+var chapterRe = regexp.MustCompile(`Viết(?: lại)? chương (\d+)`)
 
 // scriptedWriterModel 按对话内已有的 tool 结果数决定下一步,
 // 走完整 plan → draft → check → commit 序列(真实工具,真实落盘)。
@@ -554,7 +554,7 @@ func TestEngine_DeadlockAbortDropsStuckRewrite(t *testing.T) {
 	}
 	var notified bool
 	for _, ev := range *events {
-		if strings.Contains(ev.Summary, "移出返工队列") {
+		if strings.Contains(ev.Summary, "đưa ra khỏi hàng đợi viết lại") {
 			notified = true
 		}
 	}
@@ -735,7 +735,7 @@ func TestEngine_RetriesUnfinishedPlanStart(t *testing.T) {
 		if ev.Category == "DISPATCH" {
 			dispatched = true
 		}
-		if strings.Contains(ev.Summary, "启动裁定已补齐") {
+		if strings.Contains(ev.Summary, "Đã bổ sung tài phán khởi động") {
 			healed = true
 		}
 	}
@@ -777,7 +777,7 @@ func TestEngine_PlanStartRetryFailurePauses(t *testing.T) {
 	}
 	var paused bool
 	for _, ev := range *events {
-		if strings.Contains(ev.Summary, "启动裁定失败") {
+		if strings.Contains(ev.Summary, "Tài phán khởi động thất bại") {
 			paused = true
 		}
 	}

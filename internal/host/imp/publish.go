@@ -25,81 +25,81 @@ func publishFoundation(st *store.Store, f *Foundation) error {
 		return err
 	}
 	if err := st.Book.Save(f.Book); err != nil {
-		return fmt.Errorf("book：%w", err)
+		return fmt.Errorf("book: %w", err)
 	}
 	if _, err := st.Checkpoints.AppendArtifact(domain.GlobalScope(), "book", "meta/book.json"); err != nil {
-		return fmt.Errorf("checkpoint book：%w", err)
+		return fmt.Errorf("checkpoint book: %w", err)
 	}
 	if err := st.RunMeta.SetPlanningTier(f.PlanningTier); err != nil {
-		return fmt.Errorf("planning tier：%w", err)
+		return fmt.Errorf("planning tier: %w", err)
 	}
 	// premise
 	if err := st.Outline.SavePremise(f.Premise); err != nil {
-		return fmt.Errorf("premise：%w", err)
+		return fmt.Errorf("premise: %w", err)
 	}
 	if err := st.Progress.UpdatePhase(domain.PhasePremise); err != nil {
-		return fmt.Errorf("phase premise：%w", err)
+		return fmt.Errorf("phase premise: %w", err)
 	}
 	if _, err := st.Checkpoints.AppendArtifact(domain.GlobalScope(), "premise", "premise.md"); err != nil {
-		return fmt.Errorf("checkpoint premise：%w", err)
+		return fmt.Errorf("checkpoint premise: %w", err)
 	}
 	// characters
 	if err := st.Characters.Save(f.Characters); err != nil {
-		return fmt.Errorf("characters：%w", err)
+		return fmt.Errorf("characters: %w", err)
 	}
 	if _, err := st.Checkpoints.AppendArtifact(domain.GlobalScope(), "characters", "characters.json"); err != nil {
-		return fmt.Errorf("checkpoint characters：%w", err)
+		return fmt.Errorf("checkpoint characters: %w", err)
 	}
 	// world rules
 	if err := st.World.SaveWorldRules(f.WorldRules); err != nil {
-		return fmt.Errorf("world_rules：%w", err)
+		return fmt.Errorf("world_rules: %w", err)
 	}
 	if _, err := st.Checkpoints.AppendArtifact(domain.GlobalScope(), "world_rules", "world_rules.json"); err != nil {
-		return fmt.Errorf("checkpoint world_rules：%w", err)
+		return fmt.Errorf("checkpoint world_rules: %w", err)
 	}
 	// layered outline 是唯一来源，Store 同步重建 flat outline。
 	if err := st.Outline.SaveLayeredOutline(f.Volumes); err != nil {
-		return fmt.Errorf("layered outline：%w", err)
+		return fmt.Errorf("layered outline: %w", err)
 	}
 	// 大纲阶段的进度是引擎重算路由的依据（章节容量/分层/当前卷弧），写入失败会留下不一致的
 	// 已发布状态，必须暴露而非吞掉（RFC §12.2）。
 	if err := st.Progress.UpdatePhase(domain.PhaseOutline); err != nil {
-		return fmt.Errorf("phase outline：%w", err)
+		return fmt.Errorf("phase outline: %w", err)
 	}
 	if err := st.Progress.SetTotalChapters(domain.EstimatedChapterCapacity(f.Volumes)); err != nil {
-		return fmt.Errorf("total chapters：%w", err)
+		return fmt.Errorf("total chapters: %w", err)
 	}
 	if err := st.Progress.SetLayered(true); err != nil {
-		return fmt.Errorf("set layered：%w", err)
+		return fmt.Errorf("set layered: %w", err)
 	}
 	if len(f.Volumes) > 0 && len(f.Volumes[0].Arcs) > 0 {
 		if err := st.Progress.UpdateVolumeArc(f.Volumes[0].Index, f.Volumes[0].Arcs[0].Index); err != nil {
-			return fmt.Errorf("volume arc：%w", err)
+			return fmt.Errorf("volume arc: %w", err)
 		}
 	}
 	if _, err := st.Checkpoints.AppendArtifact(domain.GlobalScope(), "layered_outline", "layered_outline.json"); err != nil {
-		return fmt.Errorf("checkpoint layered outline：%w", err)
+		return fmt.Errorf("checkpoint layered outline: %w", err)
 	}
 	// compass
 	if err := st.Outline.SaveCompass(f.Compass); err != nil {
-		return fmt.Errorf("compass：%w", err)
+		return fmt.Errorf("compass: %w", err)
 	}
 	if _, err := st.Checkpoints.AppendArtifact(domain.GlobalScope(), "compass", "meta/compass.json"); err != nil {
-		return fmt.Errorf("checkpoint compass：%w", err)
+		return fmt.Errorf("checkpoint compass: %w", err)
 	}
 	// 导入 Foundation 的全部正式写入均已成功，可以显式进入 writing。
 	// 不能复用普通创作流程的 FoundationMissing：导入允许 world_rules 为空，
 	// 把“合法空值”当成缺失会令进度永远停在 outline，随后 StartChapter 被阶段门禁拒绝。
 	p, err := st.Progress.Load()
 	if err != nil {
-		return fmt.Errorf("load progress：%w", err)
+		return fmt.Errorf("load progress: %w", err)
 	}
 	if p == nil {
-		return fmt.Errorf("load progress：progress 未初始化")
+		return fmt.Errorf("load progress: progress chưa được khởi tạo")
 	}
 	if p.Phase != domain.PhaseWriting && p.Phase != domain.PhaseComplete {
 		if err := st.Progress.UpdatePhase(domain.PhaseWriting); err != nil {
-			return fmt.Errorf("phase writing：%w", err)
+			return fmt.Errorf("phase writing: %w", err)
 		}
 	}
 	return nil
@@ -114,38 +114,38 @@ func checkFoundationConflicts(st *store.Store, f *Foundation) error {
 	wantBook := f.Book.Normalized()
 	book, err := st.Book.Load()
 	if err != nil {
-		return fmt.Errorf("读取正式 book：%w", err)
+		return fmt.Errorf("Đọc book chính thức: %w", err)
 	}
 	if book != nil && !jsonEqual(book, wantBook) {
-		return fmt.Errorf("正式 book 与导入综合冲突（已存在不同版本），拒绝覆盖")
+		return fmt.Errorf("book chính thức xung đột với bản tổng hợp khi nhập (đã tồn tại phiên bản khác), từ chối ghi đè")
 	}
 	cur, err := st.Outline.LoadPremise()
 	if err != nil {
-		return fmt.Errorf("读取正式 premise：%w", err)
+		return fmt.Errorf("Đọc premise chính thức: %w", err)
 	}
 	if cur != "" && cur != f.Premise {
-		return fmt.Errorf("正式 premise 与导入综合冲突（已存在不同版本），拒绝覆盖")
+		return fmt.Errorf("premise chính thức xung đột với bản tổng hợp khi nhập (đã tồn tại phiên bản khác), từ chối ghi đè")
 	}
 	chars, err := st.Characters.Load()
 	if err != nil {
-		return fmt.Errorf("读取正式 characters：%w", err)
+		return fmt.Errorf("Đọc characters chính thức: %w", err)
 	}
 	if len(chars) > 0 && !jsonEqual(chars, f.Characters) {
-		return fmt.Errorf("正式 characters 与导入综合冲突（已存在不同版本），拒绝覆盖")
+		return fmt.Errorf("characters chính thức xung đột với bản tổng hợp khi nhập (đã tồn tại phiên bản khác), từ chối ghi đè")
 	}
 	rules, err := st.World.LoadWorldRules()
 	if err != nil {
-		return fmt.Errorf("读取正式 world_rules：%w", err)
+		return fmt.Errorf("Đọc world_rules chính thức: %w", err)
 	}
 	if len(rules) > 0 && !jsonEqual(rules, f.WorldRules) {
-		return fmt.Errorf("正式 world_rules 与导入综合冲突（已存在不同版本），拒绝覆盖")
+		return fmt.Errorf("world_rules chính thức xung đột với bản tổng hợp khi nhập (đã tồn tại phiên bản khác), từ chối ghi đè")
 	}
 	layered, err := st.Outline.LoadLayeredOutline()
 	if err != nil {
-		return fmt.Errorf("读取正式 layered_outline：%w", err)
+		return fmt.Errorf("Đọc layered_outline chính thức: %w", err)
 	}
 	if len(layered) > 0 && !jsonEqual(layered, f.Volumes) {
-		return fmt.Errorf("正式 layered_outline 与导入综合冲突（已存在不同版本），拒绝覆盖")
+		return fmt.Errorf("layered_outline chính thức xung đột với bản tổng hợp khi nhập (đã tồn tại phiên bản khác), từ chối ghi đè")
 	}
 	return nil
 }
@@ -161,7 +161,7 @@ func jsonEqual(a, b any) bool {
 func publishChapter(ctx context.Context, st *store.Store, commit ChapterCommitter, chapter int, content string, f ImportedChapterFacts) error {
 	completed, err := st.Progress.IsChapterCompleted(chapter)
 	if err != nil {
-		return fmt.Errorf("load progress ch%d：%w", chapter, err)
+		return fmt.Errorf("load progress ch%d: %w", chapter, err)
 	}
 	if completed {
 		// 崩溃可能落在 MarkChapterComplete 与 ClearPendingCommit 之间：pending_commit 残留
@@ -170,31 +170,31 @@ func publishChapter(ctx context.Context, st *store.Store, commit ChapterCommitte
 		// 需手工删 meta/pending_commit.json 才能解锁。命中残留时仍走工具幂等路径完成清理。
 		pending, err := st.Signals.LoadPendingCommit()
 		if err != nil {
-			return fmt.Errorf("load pending commit ch%d：%w", chapter, err)
+			return fmt.Errorf("load pending commit ch%d: %w", chapter, err)
 		}
 		if pending != nil && pending.Chapter == chapter {
 			raw, err := json.Marshal(commitArgs(chapter, f))
 			if err != nil {
-				return fmt.Errorf("marshal commit ch%d：%w", chapter, err)
+				return fmt.Errorf("marshal commit ch%d: %w", chapter, err)
 			}
 			if _, err := commit.Execute(ctx, raw); err != nil {
-				return fmt.Errorf("commit ch%d：%w", chapter, err)
+				return fmt.Errorf("commit ch%d: %w", chapter, err)
 			}
 		}
 		return nil
 	}
 	if err := st.Drafts.SaveDraft(chapter, content); err != nil {
-		return fmt.Errorf("save draft ch%d：%w", chapter, err)
+		return fmt.Errorf("save draft ch%d: %w", chapter, err)
 	}
 	if err := st.Progress.StartChapter(chapter); err != nil {
-		return fmt.Errorf("start ch%d：%w", chapter, err)
+		return fmt.Errorf("start ch%d: %w", chapter, err)
 	}
 	raw, err := json.Marshal(commitArgs(chapter, f))
 	if err != nil {
-		return fmt.Errorf("marshal commit ch%d：%w", chapter, err)
+		return fmt.Errorf("marshal commit ch%d: %w", chapter, err)
 	}
 	if _, err := commit.Execute(ctx, raw); err != nil {
-		return fmt.Errorf("commit ch%d：%w", chapter, err)
+		return fmt.Errorf("commit ch%d: %w", chapter, err)
 	}
 	return nil
 }
@@ -239,28 +239,28 @@ func isPublished(st *store.Store, expected int) (bool, error) {
 	}
 	book, err := st.Book.Load()
 	if err != nil {
-		return false, fmt.Errorf("读取正式 book: %w", err)
+		return false, fmt.Errorf("Đọc book chính thức: %w", err)
 	}
 	if book == nil {
 		return false, nil
 	}
 	p, err := st.Outline.LoadPremise()
 	if err != nil {
-		return false, fmt.Errorf("读取正式 premise: %w", err)
+		return false, fmt.Errorf("Đọc premise chính thức: %w", err)
 	}
 	if p == "" {
 		return false, nil
 	}
 	o, err := st.Outline.LoadOutline()
 	if err != nil {
-		return false, fmt.Errorf("读取正式 outline: %w", err)
+		return false, fmt.Errorf("Đọc outline chính thức: %w", err)
 	}
 	if len(o) < expected {
 		return false, nil
 	}
 	prog, err := st.Progress.Load()
 	if err != nil {
-		return false, fmt.Errorf("读取正式 progress: %w", err)
+		return false, fmt.Errorf("Đọc progress chính thức: %w", err)
 	}
 	return prog != nil && len(prog.CompletedChapters) >= expected, nil
 }

@@ -25,9 +25,9 @@ func NewSaveVolumeSummaryTool(store *store.Store) *SaveVolumeSummaryTool {
 
 func (t *SaveVolumeSummaryTool) Name() string { return "save_volume_summary" }
 func (t *SaveVolumeSummaryTool) Description() string {
-	return "保存卷级摘要（长篇模式，卷结束时调用）"
+	return "Lưu tóm tắt cấp tập (chế độ truyện dài, gọi khi tập kết thúc)"
 }
-func (t *SaveVolumeSummaryTool) Label() string { return "保存卷摘要" }
+func (t *SaveVolumeSummaryTool) Label() string { return "Lưu tóm tắt tập" }
 
 // 写工具，禁止并发。
 func (t *SaveVolumeSummaryTool) ReadOnly(_ json.RawMessage) bool        { return false }
@@ -35,10 +35,10 @@ func (t *SaveVolumeSummaryTool) ConcurrencySafe(_ json.RawMessage) bool { return
 
 func (t *SaveVolumeSummaryTool) Schema() map[string]any {
 	return schema.Object(
-		schema.Property("volume", schema.Int("卷号")).Required(),
-		schema.Property("title", schema.String("卷标题")).Required(),
-		schema.Property("summary", schema.String("卷摘要（500字以内）")).Required(),
-		schema.Property("key_events", schema.Array("卷内关键事件", schema.String(""))).Required(),
+		schema.Property("volume", schema.Int("Số tập")).Required(),
+		schema.Property("title", schema.String("Tiêu đề tập")).Required(),
+		schema.Property("summary", schema.String("Tóm tắt tập (trong 500 chữ)")).Required(),
+		schema.Property("key_events", schema.Array("Sự kiện then chốt trong tập", schema.String(""))).Required(),
 	)
 }
 
@@ -70,7 +70,7 @@ func (t *SaveVolumeSummaryTool) Execute(_ context.Context, args json.RawMessage)
 	}
 	if existing != nil {
 		if !reflect.DeepEqual(*existing, volSummary) {
-			return nil, fmt.Errorf("卷 %d 摘要已存在且内容不同，拒绝覆盖: %w", a.Volume, errs.ErrToolConflict)
+			return nil, fmt.Errorf("Tóm tắt tập %d đã tồn tại với nội dung khác, từ chối ghi đè: %w", a.Volume, errs.ErrToolConflict)
 		}
 	} else {
 		if err := requireAggregateTarget(t.store, flow.AggregateVolumeSummary, a.Volume, 0, 0); err != nil {

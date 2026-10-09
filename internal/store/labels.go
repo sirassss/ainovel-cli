@@ -29,29 +29,39 @@ type mdLabels struct {
 	hook           string
 	scenes         string
 
-	timeline         string
-	foreshadow       string
-	resolvedAtFmt    string
-	plantedAtFmt     string
-	relationships    string
-	atChapterFmt     string
-	worldRules       string
-	rule             string
-	boundary         string
+	timeline      string
+	foreshadow    string
+	resolvedAtFmt string
+	plantedAtFmt  string
+	relationships string
+	atChapterFmt  string
+	worldRules    string
+	rule          string
+	boundary      string
 }
 
 var labelsZH = mdLabels{
+	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
 	bookTitleFmt: "《%s》", synopsis: "简介", charProfiles: "角色档案", charArc: "角色弧线", traits: "特征",
+	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
 	listSep: "、", openParen: "（", closeParen: "）", colon: "：",
 
+	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
 	outline: "大纲", layeredOutline: "分层大纲",
+	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
 	volumeFmt: "第 %d 卷", arcFmt: "第 %d 弧", chapterFmt: "第 %d 章",
+	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
 	theme: "主题", goal: "目标", pendingArcFmt: "（待展开，预估 %d 章）",
+	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
 	coreEvent: "核心事件", hook: "钩子", scenes: "场景",
 
+	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
 	timeline: "时间线", foreshadow: "伏笔账本",
+	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
 	resolvedAtFmt: "已回收（第 %d 章）", plantedAtFmt: "埋设于第 %d 章，状态：%s",
+	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
 	relationships: "人物关系", atChapterFmt: "（第 %d 章）",
+	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
 	worldRules: "世界观规则", rule: "规则", boundary: "边界",
 }
 

@@ -37,7 +37,7 @@ func rawDir(dir string, kind SourceKind) []RawSource {
 		// 目录不存在是常态，静默跳过；但权限/路径其实是文件这类错误必须留痕——
 		// 否则用户写了规则却完全没生效、零反馈，排查成本极高（见 known_rules_path_stale_readme）。
 		if !os.IsNotExist(err) {
-			slog.Warn("规则目录读取失败，已跳过", "module", "rules", "dir", dir, "err", err)
+			slog.Warn("Đọc thư mục quy tắc thất bại, đã bỏ qua", "module", "rules", "dir", dir, "err", err)
 		}
 		return nil
 	}
@@ -55,7 +55,7 @@ func rawDir(dir string, kind SourceKind) []RawSource {
 		path := filepath.Join(dir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
-			slog.Warn("规则文件读取失败，已跳过", "module", "rules", "file", path, "err", err)
+			slog.Warn("Đọc tệp quy tắc thất bại, đã bỏ qua", "module", "rules", "file", path, "err", err)
 			continue
 		}
 		text := strings.TrimSpace(string(data))

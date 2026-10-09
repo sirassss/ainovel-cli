@@ -25,7 +25,11 @@ func TestApplyChapterHeadingNormalisesRealCases(t *testing.T) {
 
 // Số chương trong tiêu đề phải theo số thật, không theo trí nhớ của model.
 func TestFixChapterNumber(t *testing.T) {
-	cases := []struct{ in string; ch int; want string }{
+	cases := []struct {
+		in   string
+		ch   int
+		want string
+	}{
 		{"Chương 20: Gặp Linh Vân", 2, "Chương 2: Gặp Linh Vân"},
 		{"Chương 7: Linh Thảo Bí Mật", 7, "Chương 7: Linh Thảo Bí Mật"},
 		{"第 20 章 灵草秘密", 2, "第 2 章 灵草秘密"},
