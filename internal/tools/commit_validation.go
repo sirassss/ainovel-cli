@@ -2,6 +2,8 @@ package tools
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/voocel/ainovel-cli/internal/chapterfacts"
 	"github.com/voocel/ainovel-cli/internal/errs"
@@ -37,7 +39,7 @@ func (t *CommitChapterTool) validateCommitArgs(a commitArgs) error {
 				}
 				at, known := plantedAt[update.ID]
 				if !known {
-					return fmt.Errorf("foreshadow_updates[%d] references unknown id %q: %w", i, update.ID, errs.ErrToolPrecondition)
+					return fmt.Errorf("foreshadow_updates[%d] references unknown id %q (%s): %w", i, update.ID, describeKnownForeshadowIDs(plantedAt), errs.ErrToolPrecondition)
 				}
 				if at > a.Chapter {
 					return fmt.Errorf("foreshadow_updates[%d] 伏笔 %q 种植于第 %d 章，不能在第 %d 章推进或回收: %w",
@@ -47,4 +49,23 @@ func (t *CommitChapterTool) validateCommitArgs(a commitArgs) error {
 		}
 	}
 	return nil
+}
+
+const maxListedForeshadowIDs = 20
+
+// describeKnownForeshadowIDs 给模型一个自我纠正的抓手：列出账本里已有的 id。
+func describeKnownForeshadowIDs(plantedAt map[string]int) string {
+	if len(plantedAt) == 0 {
+		return `no foreshadows planted yet; to introduce a new foreshadow use action "plant"`
+	}
+	ids := make([]string, 0, len(plantedAt))
+	for id := range plantedAt {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	list := strings.Join(ids, ", ")
+	if len(ids) > maxListedForeshadowIDs {
+		list = strings.Join(ids[:maxListedForeshadowIDs], ", ") + ", …"
+	}
+	return `known ids: ` + list + `; to introduce a new foreshadow use action "plant"`
 }

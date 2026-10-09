@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -195,5 +196,38 @@ func TestObserverToolErrorUpdatesSingleToolEventWithFullDetail(t *testing.T) {
 	}
 	if len(failed.Summary) >= len(failed.Detail) {
 		t.Fatalf("UI Summary 应短于完整 Detail: summary=%d detail=%d", len(failed.Summary), len(failed.Detail))
+	}
+}
+
+func finishDispatch(aborting bool, runErr error) Event {
+	var events []Event
+	o := testObserver(&events)
+	o.setAborting(aborting)
+	o.dispatchStart("writer", "task", "reason")
+	o.dispatchFinish("writer", runErr)
+	return events[len(events)-1]
+}
+
+func TestObserverDispatchFinishCanceledWhileAbortingIsNotFailure(t *testing.T) {
+	ev := finishDispatch(true, context.Canceled)
+	if ev.Failed || ev.Level != "warn" || ev.Kind != "canceled" {
+		t.Fatalf("hủy khi đang aborting phải là warn/canceled/không failed: %+v", ev)
+	}
+	if strings.Contains(ev.Summary, "lỗi") || strings.Contains(ev.Summary, "错误") {
+		t.Fatalf("summary không được ghi là lỗi: %q", ev.Summary)
+	}
+}
+
+func TestObserverDispatchFinishRealErrorWhileAbortingStillFails(t *testing.T) {
+	ev := finishDispatch(true, errors.New("boom"))
+	if !ev.Failed || ev.Level != "error" {
+		t.Fatalf("lỗi thật khi aborting vẫn phải báo error: %+v", ev)
+	}
+}
+
+func TestObserverDispatchFinishCanceledWithoutAbortingStillFails(t *testing.T) {
+	ev := finishDispatch(false, context.Canceled)
+	if !ev.Failed || ev.Level != "error" {
+		t.Fatalf("hủy ngoài ý định (không aborting) giữ hành vi cũ: %+v", ev)
 	}
 }

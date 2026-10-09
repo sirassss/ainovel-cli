@@ -75,6 +75,49 @@ func TestCommitChapterRejectsUnknownForeshadowReferenceBeforePending(t *testing.
 	}
 }
 
+func commitWithGhostForeshadow(t *testing.T, ledger []domain.ForeshadowEntry) error {
+	t.Helper()
+	s := store.NewStore(t.TempDir())
+	if err := s.Init(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Progress.Init(1); err != nil {
+		t.Fatal(err)
+	}
+	if ledger != nil {
+		if err := s.World.SaveForeshadowLedger(ledger); err != nil {
+			t.Fatal(err)
+		}
+	}
+	args, _ := json.Marshal(map[string]any{
+		"chapter": 1, "title": "第一章", "summary": "推进", "characters": []string{"主角"}, "key_events": []string{"发现线索"},
+		"foreshadow_updates": []map[string]any{{"id": "ghost", "action": "advance"}},
+	})
+	_, err := newTestCommitChapterTool(s).Execute(context.Background(), args)
+	if err == nil {
+		t.Fatal("expected unknown foreshadow rejection")
+	}
+	return err
+}
+
+func TestCommitChapterUnknownForeshadowListsKnownIDs(t *testing.T) {
+	err := commitWithGhostForeshadow(t, []domain.ForeshadowEntry{
+		{ID: "b_id", PlantedAt: 1, Status: "planted"},
+		{ID: "a_id", PlantedAt: 1, Status: "planted"},
+	})
+	msg := err.Error()
+	if !strings.Contains(msg, `unknown id "ghost"`) || !strings.Contains(msg, "known ids: a_id, b_id") {
+		t.Fatalf("lỗi phải liệt kê id đã biết theo thứ tự tăng dần: %v", err)
+	}
+}
+
+func TestCommitChapterUnknownForeshadowEmptyLedger(t *testing.T) {
+	msg := commitWithGhostForeshadow(t, nil).Error()
+	if !strings.Contains(msg, `unknown id "ghost"`) || !strings.Contains(msg, "no foreshadows planted yet") || strings.Contains(msg, "[]") {
+		t.Fatalf("sổ rỗng phải nói rõ chưa có phục bút: %s", msg)
+	}
+}
+
 func TestCommitChapterRejectsSkippedNormalChapter(t *testing.T) {
 	s := store.NewStore(t.TempDir())
 	if err := s.Init(); err != nil {

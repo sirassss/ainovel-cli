@@ -243,7 +243,7 @@ func SkeletonArcs(volumes []VolumeOutline) []string {
 // 这也是结构上的好事：把 20 章塞进一弧，本身就说明弧目标没有收敛。
 const maxArcChapters = 8
 
-// OversizedArc 检查一个弧的规模是否超限，超限返回可直接回给规划师的中文诊断。
+// OversizedArc 检查一个弧的规模是否超限，超限返回可直接回给规划师的诊断。
 // 返回空串表示通过。
 //
 // chapters 取"详细章节数"与"骨架预估章数"的较大者：骨架阶段就写下 estimated=20 的弧，
@@ -252,9 +252,9 @@ func OversizedArc(label string, chapters int) string {
 	if chapters <= maxArcChapters {
 		return ""
 	}
-	return fmt.Sprintf("%s 详细章节 %d 章，超过单弧上限 %d 章。"+
-		"弧末评审需一次读完整弧，过长的弧任何模型都无法审阅（实测 20 章即卡死流水线）。"+
-		"请把它拆成多个各自有独立目标的弧：先用本次调用只展开前 %d 章内的第一个弧，"+
-		"其余留作骨架弧，写到边界时再展开",
+	return fmt.Sprintf("%s có %d chương chi tiết, vượt giới hạn %d chương mỗi cung. "+
+		"Thẩm duyệt cuối cung phải đọc trọn cả cung, cung quá dài thì model nào cũng không thẩm duyệt nổi (thực tế 20 chương đã làm kẹt cả pipeline). "+
+		"Hãy tách thành nhiều cung, mỗi cung có mục tiêu độc lập: lần gọi này chỉ mở rộng cung đầu tiên trong phạm vi %d chương, "+
+		"các cung còn lại để dạng khung xương, tới biên thì mở rộng tiếp",
 		label, chapters, maxArcChapters, maxArcChapters)
 }

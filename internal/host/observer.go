@@ -71,8 +71,8 @@ type observer struct {
 	agentMu sync.Mutex
 
 	// aborting 由 Host 在 Abort()/Close() 入口置位、Start/Resume/Continue 清位。
-	// 置位期间所有 context-cancel 衍生的错误事件被抑制（既是用户期望，也避免与
-	// "用户手动暂停"事件重复）。真实异常（非 cancel）仍照常上报。
+	// 置位期间 emitCallFinish 把 context-cancel 衍生的结束事件降为 warn 且不计失败
+	// （既是用户期望，也避免显示为错误）。真实异常（非 cancel）仍照常上报。
 	aborting atomic.Bool
 
 	streamThinking      bool

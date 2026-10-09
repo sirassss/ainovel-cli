@@ -1,7 +1,9 @@
 package notify
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"encoding/json"
 	"errors"
 	"os"
@@ -138,4 +140,37 @@ func shellQuote(s string) string {
 
 func powerShellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+}
+
+func captureSlog(t *testing.T, level slog.Level) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: level})))
+	t.Cleanup(func() { slog.SetDefault(old) })
+	return &buf
+}
+
+func TestRunSystemLinuxWithoutNotifySendLogsDebug(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("chỉ áp dụng trên linux")
+	}
+	t.Setenv("PATH", t.TempDir())
+
+	buf := captureSlog(t, slog.LevelDebug)
+	if err := runSystem(context.Background(), Notification{Title: "t", Body: "b"}); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "level=DEBUG") || !strings.Contains(out, "module=notify") || strings.IndexFunc(out, func(r rune) bool { return r >= 0x3000 }) >= 0 {
+		t.Fatalf("phải ghi DEBUG, tiếng Việt, module=notify: %q", out)
+	}
+
+	buf = captureSlog(t, slog.LevelInfo)
+	if err := runSystem(context.Background(), Notification{Title: "t", Body: "b"}); err != nil {
+		t.Fatal(err)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("ở mức Info không được ghi gì: %q", buf.String())
+	}
 }

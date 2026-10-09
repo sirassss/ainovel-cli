@@ -157,12 +157,12 @@ func runSystem(ctx context.Context, nt Notification) error {
 		return exec.CommandContext(ctx, "osascript", "-e", script).Run()
 	case "linux":
 		if _, err := exec.LookPath("notify-send"); err != nil {
-			slog.Info("通知降级为日志（无 notify-send）", "module", "notify", "title", nt.Title, "body", nt.Body)
+			slog.Debug("Thông báo hạ xuống log (không có notify-send)", "module", "notify", "title", nt.Title, "body", nt.Body)
 			return nil
 		}
 		return exec.CommandContext(ctx, "notify-send", nt.Title, nt.Body).Run()
 	default:
-		slog.Info("通知降级为日志（平台无 system 通道）", "module", "notify", "title", nt.Title, "body", nt.Body)
+		slog.Debug("Thông báo hạ xuống log (nền tảng không có kênh hệ thống)", "module", "notify", "title", nt.Title, "body", nt.Body)
 		return nil
 	}
 }

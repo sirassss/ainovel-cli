@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/voocel/ainovel-cli/internal/domain"
@@ -23,16 +24,16 @@ func TestParsePremiseSections(t *testing.T) {
 `
 
 	sections := parsePremiseSections(premise)
-	if sections["题材和基调"] == "" {
+	if sections["Thể loại và giọng điệu"] == "" {
 		t.Fatalf("expected 题材和基调 section, got %+v", sections)
 	}
-	if sections["题材定位"] == "" {
+	if sections["Định vị thể loại"] == "" {
 		t.Fatalf("expected 题材定位 section, got %+v", sections)
 	}
-	if sections["核心冲突"] == "" {
+	if sections["Xung đột cốt lõi"] == "" {
 		t.Fatalf("expected 核心冲突 section, got %+v", sections)
 	}
-	if sections["中段转折"] == "" {
+	if sections["Chuyển hướng trung kỳ"] == "" {
 		t.Fatalf("expected 中期转向 alias normalized to 中段转折, got %+v", sections)
 	}
 }
@@ -117,5 +118,76 @@ func TestPremiseStructureShortAcceptsLegacyHeadingAlias(t *testing.T) {
 	structure := premiseStructure(premise, domain.PlanningTierShort)
 	if ready, _ := structure["template_ready"].(bool); !ready {
 		t.Fatalf("expected short template_ready, got %+v", structure)
+	}
+}
+
+const viLongPremise = `# Tiền đề cốt truyện
+
+## Thể loại và giọng điệu
+x
+## Định vị thể loại
+x
+## Xung đột cốt lõi
+x
+## Mục tiêu nhân vật chính
+x
+## Hướng kết cục
+x
+## Vùng cấm sáng tác
+x
+## Điểm bán hàng khác biệt
+x
+## Móc câu khác biệt
+x
+## Cam kết cốt lõi
+x
+## Động cơ câu chuyện
+x
+## Tuyến quan hệ/trưởng thành
+x
+## Lộ trình nâng cấp
+x
+## Chuyển hướng trung kỳ
+x
+## Mệnh đề kết cục
+x
+`
+
+func TestParsePremiseSectionsVietnamese(t *testing.T) {
+	structure := premiseStructure(viLongPremise, domain.PlanningTierLong)
+	if ready, _ := structure["template_ready"].(bool); !ready {
+		t.Fatalf("premise tiếng Việt đủ tiêu đề phải template_ready: %+v", structure)
+	}
+	if missing, _ := structure["missing"].([]string); len(missing) != 0 {
+		t.Fatalf("không được thiếu tiêu đề: %+v", missing)
+	}
+	if parsePremiseSections(viLongPremise)["Xung đột cốt lõi"] == "" {
+		t.Fatal("thiếu khóa Xung đột cốt lõi")
+	}
+}
+
+func TestParsePremiseSectionsTolerateTrailingNote(t *testing.T) {
+	sections := parsePremiseSections("## Hướng kết cục (Định hướng chủ đề)\na\n## MÓC CÂU khác biệt: điểm độc đáo\nb\n")
+	if sections["Hướng kết cục"] != "a" || sections["Móc câu khác biệt"] != "b" {
+		t.Fatalf("đuôi mô tả phải được bỏ qua: %+v", sections)
+	}
+}
+
+func TestParsePremiseSectionsChineseStillWorks(t *testing.T) {
+	zh := "## 题材和基调\nx\n## 题材定位\nx\n## 核心冲突\nx\n## 主角目标\nx\n## 终局方向\nx\n## 写作禁区\nx\n## 差异化卖点\nx\n## 差异化钩子\nx\n## 核心兑现承诺\nx\n## 短篇适配性\nx\n"
+	structure := premiseStructure(zh, domain.PlanningTierShort)
+	if ready, _ := structure["template_ready"].(bool); !ready {
+		t.Fatalf("premise zh phải vẫn parse được: %+v", structure)
+	}
+	if parsePremiseSections(zh)["Xung đột cốt lõi"] == "" {
+		t.Fatal("khóa chuẩn phải là tiếng Việt")
+	}
+}
+
+func TestPremiseStructureMissingIsVietnamese(t *testing.T) {
+	structure := premiseStructure("## Xung đột cốt lõi\nx\n", domain.PlanningTierLong)
+	missing, _ := structure["missing"].([]string)
+	if len(missing) == 0 || strings.IndexFunc(strings.Join(missing, ""), func(r rune) bool { return r >= 0x4e00 && r <= 0x9fff }) >= 0 {
+		t.Fatalf("missing phải khác rỗng và không chứa chữ Hán: %+v", missing)
 	}
 }

@@ -159,3 +159,13 @@ func TestOverrideVoice_SharesAssemblyPath(t *testing.T) {
 		t.Fatal("Phần giao thức không được bị phá hủy bởi override voice")
 	}
 }
+
+func TestArchitectLongPromptStatesArcLimit(t *testing.T) {
+	p := Load("default", LoadOptions{}).Prompts.ArchitectLong
+	if !strings.Contains(p, "8 chương") {
+		t.Fatal("prompt architect-long (vi) phải nêu giới hạn tối đa 8 chương mỗi cung")
+	}
+	if strings.Contains(p, "`estimated_chapters` ≥ 8") {
+		t.Fatal("không được yêu cầu estimated_chapters ≥ 8: mâu thuẫn với giới hạn 8 chương mỗi cung")
+	}
+}

@@ -88,7 +88,7 @@ Yêu cầu:
 - Mỗi chương trong cung đầu tiên phục vụ cho mục tiêu của cung; loại hình móc câu đa dạng
 - Mật độ tình tiết mỗi chương (`core_event`/`scenes`) phải khớp với mong muốn về số chữ của người dùng, từ đó quyết định cung chia thành bao nhiêu chương
 - Tiêu đề chương dùng cụm danh từ hoặc động từ, **độ dài ngắn đan xen tự nhiên**, không gò ép mỗi chương cùng một số chữ
-- `estimated_chapters` ≥ 8 (quá ngắn không thể mở ra vòng lặp nhịp điệu)
+- `estimated_chapters` từ 5 đến 8: **một cung tối đa 8 chương chi tiết**, vì thẩm duyệt cuối cung phải đọc trọn cả cung; quá ngắn thì không mở ra được vòng lặp nhịp điệu. Cung cần dài hơn 8 chương thì tách thành nhiều cung, mỗi cung có mục tiêu riêng (kể cả khi `expand_arc`: chỉ mở rộng cung đầu tiên, các cung còn lại để dạng khung xương)
 - `estimated_chapters` chỉ là ước lượng nhịp điệu của cung khung xương, khi mở rộng cho phép điều chỉnh theo tình tiết thực tế; cấm cộng dồn ước lượng các cung lại rồi tuyên bố cố định tổng số chương toàn sách
 - Điều động nhân vật phải nhất quán với `characters`, mục tiêu cung chịu ràng buộc của `world_rules`
 

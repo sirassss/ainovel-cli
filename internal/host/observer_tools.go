@@ -1,7 +1,9 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -300,7 +302,11 @@ func (o *observer) emitCallFinish(call *activeCall, category, agentName string, 
 	summary := call.summary
 	detail := ""
 	kind := ""
-	if failed {
+	if failed && o.aborting.Load() && errors.Is(callErr, context.Canceled) {
+		// 用户暂停/预算停机引发的 cancel 是预期行为，不是失败。
+		failed, level, kind = false, "warn", "canceled"
+		summary = call.summary + " (đã dừng theo yêu cầu)"
+	} else if failed {
 		detail = callErr.Error()
 		kind = errorKind(callErr, detail)
 		summary = fmt.Sprintf("%s 错误: %s", call.summary, truncate(detail, 100))
