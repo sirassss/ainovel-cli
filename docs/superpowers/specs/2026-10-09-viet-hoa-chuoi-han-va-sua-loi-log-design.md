@@ -13,7 +13,7 @@ Ngày: 2026-10-09 · Trạng thái: chờ duyệt
 - Dịch thẳng tại chỗ, không thêm lớp i18n (YAGNI). `assets/*/zh` và chế độ `language=zh` không đụng tới. Các chuỗi Hán cố tình phục vụ zh (ví dụ regex `第N章`) vào allowlist.
 
 ## Giai đoạn 1 — phạm vi (~1.450 chuỗi)
-Packages: `host` (gồm `imp`, `sim`, `exp`), `tools`, `flow`, `agents` (gồm `guard`, `ctxpack`), `arbiter`, `llmcontract`, `chapterfacts`, `domain`, `userrules`, `rules`, `store`, `notify`, `entry`, `bootstrap`, `logger`.
+Packages: `host` (gồm `imp`, `sim`, `exp`), `tools`, `flow`, `agents` (gồm `guard`, `ctxpack`), `arbiter`, `llmcontract`, `chapterfacts`, `domain`, `userrules`, `rules`, `store`, `notify`, `entry`, `bootstrap`, `logger`, `revision` (gửi LLM nên đưa vào giai đoạn 1).
 Cộng: 3 dòng Hán lẫn trong `assets/prompts/arbiter-intervention.md`, `assets/README.md` (17 dòng), và rà tối nghĩa các prompt `.md` bản vi (thuật ngữ Hán/Anh chèn thẳng như `(最小充分范围 / …)`, câu dịch máy khó hiểu).
 
 Thứ tự theo rủi ro, mỗi lô: sửa chuỗi → sửa test đang khẳng định chữ Hán → `go test`.
@@ -22,24 +22,23 @@ Thứ tự theo rủi ro, mỗi lô: sửa chuỗi → sửa test đang khẳng 
 3. Phần còn lại của giai đoạn 1.
 
 ## Sửa lỗi từ tui.log (TDD: test fail trước)
-| # | Vấn đề | Cách sửa |
+| # | Vấn đề | Kết luận sau khi đọc code |
 |---|---|---|
-| 1 | `save_foundation` thiếu `type` hoặc `type="compass"` | Suy luận `type` từ các trường có mặt khi không mơ hồ; alias `compass → update_compass`; lỗi liệt kê giá trị hợp lệ bằng tiếng Việt |
-| 2 | Cung 10 chương vượt giới hạn 8 | Nêu rõ giới hạn 8 chương/cung trong `assets/prompts/architect-long.md` (vi); lỗi tool bằng tiếng Việt |
-| 3 | `commit_chapter`: id phục bút lạ | Lỗi kèm danh sách id hợp lệ để model tự sửa |
-| 4 | Pause thủ công ghi `ERROR … context canceled`, `failed=true` | Phân loại là hủy có chủ đích: không ERROR, không `failed` |
-| 5 | Cảnh báo "缓存链断裂" | Chỉ dịch |
-| 6 | "通知降级为日志（无 notify-send）" | Dịch, hạ xuống DEBUG |
-
-Việc #1–#3 cần đọc code tool thực tế để xác nhận hành vi trước khi sửa; nếu #1 suy luận `type` không an toàn thì chỉ làm alias + lỗi rõ.
+| 1 | `save_foundation` thiếu `type` hoặc `type="compass"` | **Không đổi code.** Lỗi `InputValidationError` do thư viện `agentcore` sinh trước `Execute`, đã liệt kê giá trị hợp lệ, model tự sửa ở lần gọi kế (18 giây). Suy luận `type` buộc nới schema, làm yếu hướng dẫn cho model. |
+| 2 | Cung 10 chương vượt giới hạn 8 | Thêm giới hạn 8 chương/cung vào `assets/prompts/architect-long.md` (vi, hiện không nhắc); dịch `domain.OversizedArc` |
+| 3 | `commit_chapter`: id phục bút lạ | Lỗi kèm danh sách id phục bút đã biết |
+| 4 | Pause thủ công ghi `ERROR … context canceled`, `failed=true` | Cờ `observer.aborting` được set nhưng **không nơi nào đọc**; `emitCallFinish` phải dùng nó: lỗi hủy khi đang aborting thì không `Failed`, level `warn` |
+| 5 | Cảnh báo "缓存链断裂" (`host/usage.go`) | Chỉ dịch |
+| 6 | "通知降级为日志" (`notify/notify.go`) | Dịch, hạ xuống DEBUG |
+| 7 | **Mới phát hiện:** `tools/premise_structure.go` chỉ nhận tiêu đề premise chữ Hán, trong khi prompt vi bắt model viết `## Xung đột cốt lõi`… Premise tiếng Việt không bao giờ parse được: `premise_sections` rỗng, `template_ready=false`, `missing` trả danh sách chữ Hán cho LLM | Đổi khóa chuẩn sang tiêu đề tiếng Việt (đúng 15 tiêu đề trong prompt), giữ tiêu đề Hán làm alias cho `zh`, chấp nhận hậu tố `(…)`/`:…` mà model hay chép từ prompt |
 
 ## Test
 - Test từng bug ở bảng trên (#1–#4).
-- **Test quét chữ Hán** (`internal/...`): parse AST bằng `go/parser`, duyệt string literal (bỏ comment, bỏ `_test.go`), báo lỗi nếu có chữ Hán ngoài allowlist. Áp cho các package giai đoạn 1; giai đoạn 2 mở rộng danh sách.
+- **Test quét chữ Hán** (`internal/...`): parse AST bằng `go/parser`, duyệt string literal (bỏ comment, bỏ `_test.go`), báo lỗi nếu có chữ Hán hoặc dấu câu CJK/full-width (`，：（）`…) ngoài allowlist. Allowlist là marker `han:keep` trên cùng dòng hoặc dòng ngay trên literal, dùng cho chuỗi là *dữ liệu so khớp* của chế độ zh/dữ liệu cũ. Áp cho các package giai đoạn 1; giai đoạn 2 mở rộng danh sách.
 - Chạy: `docker run --rm -v "$PWD":/src -w /src -e GOWORK=off golang:1.25 go test ./...` (máy chưa cài Go). Baseline hiện tại: toàn bộ pass.
 
 ## Giai đoạn 2 (ngoài phạm vi lần này)
-`diag`, `eval`, `revision`, `version`, `stylestat`, `slog`, comment Go, `docs/*.md`.
+`diag`, `eval`, `version`, `stylestat`, `slog`, comment Go, `docs/*.md`.
 
 ## Rủi ro
 - Merge upstream sẽ xung đột ở các file đã dịch (đã chấp nhận).
