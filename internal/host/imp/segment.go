@@ -496,7 +496,7 @@ func (v chunkValidator) validate(bs []BoundaryDecision) error {
 		// front/back matter 的描述性标题低风险，不核对。
 		if (b.Kind == kindChapter || b.Kind == kindGroup) && !b.Uncertain {
 			if t := squashSpace(b.Title); t != "" && !strings.Contains(squashSpace(v.unitByID[b.UnitID].Text), t) {
-				return fmt.Errorf("Tiêu đề %q của ranh giới %s không tìm thấy trong nguyên văn đơn vị đó: nếu đây là phần tiếp nối chính văn của chương trước thì đừng đặt ranh giới cho nó (do ranh giới trước đó quản, boundaries có thể rỗng); nếu nguồn ở đây thực sự không có dòng tiêu đề mà tiêu đề do bạn tự tóm tắt thì đặt uncertain=true",
+				return fmt.Errorf("Ranh giới %s có tiêu đề %q không tìm thấy trong nguyên văn đơn vị đó: nếu đây là phần tiếp nối chính văn của chương trước thì đừng đặt ranh giới cho nó (do ranh giới trước đó quản, boundaries có thể rỗng); nếu nguồn ở đây thực sự không có dòng tiêu đề mà tiêu đề do bạn tự tóm tắt thì đặt uncertain=true",
 					b.UnitID, snippet(b.Title, 24))
 			}
 		}

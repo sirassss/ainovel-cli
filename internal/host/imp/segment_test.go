@@ -562,3 +562,21 @@ func asTruncated(err error, target **errTruncated) bool {
 	}
 	return ok
 }
+
+func TestChunkValidatorMissingTitleNamesUnitThenTitle(t *testing.T) {
+	units := []SourceUnit{{ID: "L1", Line: 1, StartByte: 0, EndByte: 12, Text: "Nội dung khác"}}
+	v := chunkValidator{
+		projIDs:  map[string]bool{"L1": true},
+		ownedIDs: map[string]bool{"L1": true},
+		unitByID: map[string]SourceUnit{"L1": units[0]},
+	}
+	err := v.validate([]BoundaryDecision{{UnitID: "L1", Kind: kindChapter, Title: "Chương bịa"}})
+	if err == nil {
+		t.Fatal("tiêu đề không có trong nguyên văn phải bị từ chối")
+	}
+	msg := err.Error()
+	iUnit, iTitle := strings.Index(msg, `L1`), strings.Index(msg, `"Chương bịa"`)
+	if iUnit < 0 || iTitle < 0 || !strings.Contains(msg, "Ranh giới L1") || strings.Contains(msg, `Ranh giới "Chương bịa"`) {
+		t.Fatalf("unit id và tiêu đề bị đảo vai: %s", msg)
+	}
+}

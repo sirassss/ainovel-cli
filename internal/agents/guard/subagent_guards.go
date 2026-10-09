@@ -3,6 +3,7 @@ package guard
 import (
 	"context"
 	"log/slog"
+	"regexp"
 	"strings"
 	"sync/atomic"
 
@@ -165,13 +166,11 @@ func NewArchitectStopGuard(st *store.Store, onBlock BlockHook) agentcore.StopGua
 // 所以 save_review 在 build.go 里硬停是安全的：摘要任务里 editor 先复核时本 guard 会
 // 否决该次退出并催促，直到对应摘要落盘。
 func NewEditorStopGuard(st *store.Store, task string, onBlock BlockHook) agentcore.StopGuard {
-	switch {
-	// han:keep khớp văn bản nhiệm vụ của chế độ zh; bản Việt thêm ở điều kiện bên cạnh
-	case strings.Contains(task, "save_volume_summary") || strings.Contains(task, "卷摘要") || strings.Contains(strings.ToLower(task), "tóm tắt tập"):
+	switch summaryTaskKind(task) {
+	case "volume":
 		return newCheckpointDeltaGuard(st, "editor", []string{"volume_summary"},
 			staticBlockMsg("Nhiệm vụ lần này là tạo tóm tắt tập: bạn phải gọi save_volume_summary để lưu rồi mới được kết thúc; save_review (kiểm tra lại) không tính là hoàn thành."), onBlock)
-	// han:keep khớp văn bản nhiệm vụ của chế độ zh; bản Việt thêm ở điều kiện bên cạnh
-	case strings.Contains(task, "save_arc_summary") || strings.Contains(task, "弧摘要") || strings.Contains(strings.ToLower(task), "tóm tắt cung"):
+	case "arc":
 		return newCheckpointDeltaGuard(st, "editor", []string{"arc_summary"},
 			staticBlockMsg("Nhiệm vụ lần này là tạo tóm tắt cung: bạn phải gọi save_arc_summary để lưu rồi mới được kết thúc; save_review (kiểm tra lại) không tính là hoàn thành."), onBlock)
 	default:
@@ -180,4 +179,31 @@ func NewEditorStopGuard(st *store.Store, task string, onBlock BlockHook) agentco
 			[]string{"review", "arc_summary", "volume_summary"},
 			staticBlockMsg("Bạn phải gọi một trong save_review / save_arc_summary / save_volume_summary để lưu kết quả rồi mới được kết thúc."), onBlock)
 	}
+}
+
+// arcSummaryPhraseRe nhận diện nhiệm vụ tóm tắt CUNG bằng ngôn ngữ tự nhiên, kể cả dạng
+// "tóm tắt tập N cung M" (chứa cụm "tóm tắt tập" nhưng là tóm tắt cung).
+var arcSummaryPhraseRe = regexp.MustCompile(`tóm tắt cung|tóm tắt tập\s*\d+\s*cung`)
+
+// summaryTaskKind phân loại nhiệm vụ của editor: "volume", "arc" hoặc "" (không phải tóm tắt).
+// Ưu tiên tên tool vì văn bản nhiệm vụ do flow sinh luôn có; ngôn ngữ tự nhiên chỉ là dự phòng
+// cho nhiệm vụ do Arbiter viết.
+func summaryTaskKind(task string) string {
+	hasVol, hasArc := strings.Contains(task, "save_volume_summary"), strings.Contains(task, "save_arc_summary")
+	switch {
+	case hasVol:
+		return "volume"
+	case hasArc:
+		return "arc"
+	}
+	lower := strings.ToLower(task)
+	// han:keep khớp văn bản nhiệm vụ của chế độ zh
+	if strings.Contains(task, "弧摘要") || arcSummaryPhraseRe.MatchString(lower) {
+		return "arc"
+	}
+	// han:keep khớp văn bản nhiệm vụ của chế độ zh
+	if strings.Contains(task, "卷摘要") || strings.Contains(lower, "tóm tắt tập") {
+		return "volume"
+	}
+	return ""
 }

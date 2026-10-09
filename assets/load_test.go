@@ -2,8 +2,9 @@ package assets
 
 import (
 	"os"
-	"reflect"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -191,6 +192,38 @@ func TestVietnamesePromptsHaveNoHan(t *testing.T) {
 		for k, v := range b.Styles {
 			if hasHan(v) {
 				t.Errorf("style=%s Styles[%s] còn chữ Hán", style, k)
+			}
+		}
+	}
+}
+
+// Bản prompt tiếng Việt từng bị cắt cụt so với bản gốc (thiếu cả các mục hướng dẫn tool như
+// expand_arc, update_compass, chuẩn chấm verdict). Test này chặn tái phát: cùng số tiêu đề mục
+// và mọi định danh (tên tool, tên trường) trong bản zh phải xuất hiện trong bản vi.
+func TestVietnamesePromptsCoverSameSectionsAsZh(t *testing.T) {
+	ident := regexp.MustCompile("`([A-Za-z_][A-Za-z0-9_.\\[\\]]*)`")
+	entries, err := promptsFS.ReadDir("prompts/zh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		zh := mustRead(promptsFS, "prompts/zh/"+e.Name())
+		vi := mustRead(promptsFS, "prompts/"+e.Name())
+		headings := func(s string) int {
+			n := 0
+			for _, l := range strings.Split(s, "\n") {
+				if strings.HasPrefix(l, "#") {
+					n++
+				}
+			}
+			return n
+		}
+		if hz, hv := headings(zh), headings(vi); hz != hv {
+			t.Errorf("%s: bản vi có %d tiêu đề mục, bản zh có %d (bản vi bị cắt hoặc thừa)", e.Name(), hv, hz)
+		}
+		for _, m := range ident.FindAllStringSubmatch(zh, -1) {
+			if !strings.Contains(vi, "`"+m[1]+"`") {
+				t.Errorf("%s: bản vi thiếu định danh `%s` có trong bản zh", e.Name(), m[1])
 			}
 		}
 	}

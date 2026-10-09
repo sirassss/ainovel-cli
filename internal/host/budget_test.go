@@ -173,3 +173,21 @@ func TestBudgetSentinelBlindWarningAfterModelSwitch(t *testing.T) {
 		t.Fatalf("expected blind warning after switch to unpriced model, got %v", r.reports)
 	}
 }
+
+func TestBudgetSentinelWarnMessageKeepsFiguresInOrder(t *testing.T) {
+	r := &budgetRecorder{}
+	s := r.sentinel(bootstrap.BudgetConfig{BookUSD: 10, WarnRatio: 0.8})
+	s.OnCost(8.5)
+	if len(r.reports) != 1 {
+		t.Fatalf("reports = %v", r.reports)
+	}
+	msg := r.reports[0]
+	for _, want := range []string{"đã chi $8.50", "ngân sách $10.00", "80%"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("thông báo thiếu %q: %s", want, msg)
+		}
+	}
+	if strings.Contains(msg, "$80.00") || strings.Contains(msg, "10%") {
+		t.Errorf("số liệu bị đảo vị trí: %s", msg)
+	}
+}

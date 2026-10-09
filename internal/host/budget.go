@@ -79,7 +79,7 @@ func (s *BudgetSentinel) OnCost(total float64) {
 		s.zeroStreak.Store(0)
 	}
 	if total >= s.limit*s.warnRatio && s.state.CompareAndSwap(budgetNormal, budgetWarned) {
-		s.report("warn", fmt.Sprintf("Cảnh báo ngân sách: đã chi $%.2f, đạt %.0f%% của ngân sách $%.2f", total, s.limit, s.warnRatio*100))
+		s.report("warn", fmt.Sprintf("Cảnh báo ngân sách: đã chi $%.2f trên ngân sách $%.2f (đạt ngưỡng cảnh báo %.0f%%)", total, s.limit, s.warnRatio*100))
 	}
 	if total >= s.limit && s.state.CompareAndSwap(budgetWarned, budgetStopPending) {
 		if s.hardStop {

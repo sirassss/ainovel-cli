@@ -366,3 +366,11 @@ func extractReplyPreview(raw string) string {
 	}
 	return strings.TrimSpace(rest)
 }
+
+// coCreatePromptFor chọn system prompt đồng sáng tác theo ngôn ngữ tác phẩm (chỉ "zh" mới dùng bản Hán).
+func coCreatePromptFor(lang string) string {
+	if lang == "zh" {
+		return coCreateSystemPromptZH
+	}
+	return coCreateSystemPrompt
+}

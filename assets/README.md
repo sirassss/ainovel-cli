@@ -22,6 +22,30 @@ Bản mặc định là tiếng Việt, nằm ngay ở thư mục gốc của m�
 
 ## Đảm bảo nhất quán
 
-Đường dẫn phong bì mà prompt tham chiếu (`working_memory.*`, v.v.) phải khớp với `novel_context`. Hình dạng tham số công cụ chỉ được định nghĩa trong Schema của công cụ; prompt chỉ bổ sung ngữ nghĩa nghiệp vụ mà Schema không biểu đạt được, không sao chép lại danh sách tham số JSON hay ví dụ hình dạng.
+**Tên trường trong prompt phải khớp JSON thật.** Prompt hay viết những cụm như `working_memory.chapter_plan`. Cách đọc: `novel_context` trả về một object JSON gồm vài khối lớn (`working_memory`, `episodic_memory`, `foundation_memory`, `planning_memory`, `reference_pack`…); `working_memory.chapter_plan` nghĩa là trường `chapter_plan` nằm bên trong khối `working_memory`. Những tên này phải trùng từng chữ với JSON mà `novel_context` thực sự trả về — đổi tên trường trong code thì phải sửa prompt.
+
+**Tham số tool chỉ định nghĩa ở Schema của tool.** Prompt chỉ bổ sung ngữ nghĩa nghiệp vụ mà Schema không biểu đạt được (khi nào gọi, thứ tự, điều kiện), không sao chép lại danh sách tham số JSON hay ví dụ hình dạng. Nếu có ví dụ lời gọi, tên tool, tên tham số và giá trị enum (như `type="update_compass"`) phải đúng với Schema.
+
+**Bản Việt phải đầy đủ như bản `zh/`.** `assets/load_test.go` kiểm tra mỗi prompt tiếng Việt có cùng số tiêu đề mục và đủ các tên tool/trường (đặt trong dấu ``) như bản `prompts/zh/`. Sửa một bản thì sửa bản kia.
 
 Prompt có thể mô tả cách thực thi của một Worker, nhưng định tuyến toàn cục, chuyển trạng thái và logic khôi phục chỉ lấy mã làm chuẩn. Bước nào xác định được từ sự thật trong Store thì đưa vào Router/Tool; chỉ những phán đoán cần hiểu nội dung tiểu thuyết hoặc ý định người dùng mới để lại cho model.
+
+## Thuật ngữ (cùng một từ cho cùng một khái niệm)
+
+Prompt, mô tả tool và thông báo trong code dùng thống nhất các từ sau. Thêm nội dung mới thì giữ đúng từ, đừng đặt từ đồng nghĩa khác.
+
+| Thuật ngữ tiếng Việt | Định danh trong code / ý nghĩa |
+|---|---|
+| tập (volume), cung (arc), chương | `volume`, `arc`, `chapter`: một tập gồm nhiều cung, một cung gồm nhiều chương |
+| cung khung xương | cung mới có `title`, `goal`, `estimated_chapters`, chưa có chương chi tiết; mở rộng bằng `save_foundation(type="expand_arc")` |
+| đại cương (phẳng / phân tầng) | `outline` (truyện ngắn) / `layered_outline` (truyện dài, tập → cung → chương) |
+| la bàn | `compass` (`ending_direction`, `open_threads`, `estimated_scale`); cập nhật bằng `type="update_compass"` |
+| tập khép lại | tập kết thúc cả truyện, `append_volume` với `"final": true`; viết xong tự hoàn kết |
+| hoàn kết | `complete_book`, `phase=complete` |
+| hợp đồng chương | `chapter_contract` (`required_beats`, `forbidden_moves`, `continuity_checks`…) |
+| phục bút | `foreshadow`: `plant` (gieo) / `advance` (đẩy tiếp) / `resolve` (thu) |
+| hàng đợi viết lại | `PendingRewrites`: các chương chờ viết lại hoặc trau chuốt |
+| thẩm duyệt | `save_review`, vai trò editor; kết luận `verdict` = `accept` / `polish` / `rewrite` |
+| nghiệm thu từng chương | chế độ chương chỉ được viết khi người dùng cho phép (`/next`), tên nội bộ "advance gate" |
+| tài phán (Bộ tài phán) | Arbiter: model phân loại can thiệp / sự cố / khởi động rồi giao việc |
+| sự thật | dữ liệu có cấu trúc đã lưu (facts) lấy từ store, không phải suy đoán của model |

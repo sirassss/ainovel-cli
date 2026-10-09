@@ -257,3 +257,31 @@ func TestBuildStoryStateSummaryUsesDynamicPlanningWording(t *testing.T) {
 		t.Fatalf("动态规划摘要不得暗示固定总章数:\n%s", got)
 	}
 }
+
+func TestCoCreatePromptsFollowLanguage(t *testing.T) {
+	hasHan := func(s string) bool {
+		return strings.IndexFunc(s, func(r rune) bool { return r >= 0x4e00 && r <= 0x9fff }) >= 0
+	}
+	if p := coCreatePromptFor("vi"); hasHan(p) || !strings.Contains(p, "tiếng Việt") {
+		t.Errorf("prompt vi phải bằng tiếng Việt, không chứa chữ Hán")
+	}
+	if p := coCreatePromptFor("zh"); !strings.Contains(p, "中文") || strings.Contains(p, "tiếng Việt") {
+		t.Errorf("prompt zh phải giữ bản tiếng Trung")
+	}
+	if p := coCreatePromptFor(""); hasHan(p) {
+		t.Errorf("chưa đặt ngôn ngữ thì mặc định tiếng Việt")
+	}
+
+	s := store.NewStore(t.TempDir())
+	if err := s.Init(); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLanguage("zh")
+	if p := stageSystemPrompt(s); !strings.Contains(p, "阶段共创") || strings.Contains(p, "tiếng Việt") {
+		t.Errorf("stage prompt zh phải bằng tiếng Trung")
+	}
+	s.SetLanguage("vi")
+	if p := stageSystemPrompt(s); hasHan(p) {
+		t.Errorf("stage prompt vi không được chứa chữ Hán")
+	}
+}

@@ -223,3 +223,30 @@ func TestEditorStopGuard_TaskAware(t *testing.T) {
 		}
 	})
 }
+
+// Nhiệm vụ tóm tắt cung do router sinh có chứa "tóm tắt tập N cung M": guard phải nhận ra đó là
+// tóm tắt CUNG (save_arc_summary), không phải tóm tắt tập.
+func TestEditorStopGuardArcSummaryTaskFromRouterFormat(t *testing.T) {
+	normalStop := agentcore.StopInfo{TurnIndex: 1, Message: agentcore.Message{StopReason: agentcore.StopReasonStop}}
+	arcTask := fmt.Sprintf("Tạo tóm tắt tập %d cung %d, snapshot nhân vật và quy tắc viết (save_arc_summary)", 5, 1)
+	volTask := fmt.Sprintf("Tạo tóm tắt tập %d (save_volume_summary)", 5)
+
+	s := newTestStore(t)
+	arcGuard := NewEditorStopGuard(s, arcTask, nil)
+	if _, err := s.Checkpoints.Append(domain.ArcScope(5, 1), "arc_summary", "summaries/arc-v05a01.json", "d1"); err != nil {
+		t.Fatal(err)
+	}
+	if d := arcGuard(context.Background(), normalStop); !d.Allow {
+		t.Fatalf("task tóm tắt cung đã có arc_summary phải được thả: %q", d.InjectMessage)
+	}
+
+	s2 := newTestStore(t)
+	d := NewEditorStopGuard(s2, volTask, nil)(context.Background(), normalStop)
+	if d.Allow || !strings.Contains(d.InjectMessage, "save_volume_summary") {
+		t.Fatalf("task tóm tắt tập chưa có volume_summary phải bị chặn và nhắc save_volume_summary: %+v", d)
+	}
+	d = NewEditorStopGuard(s2, arcTask, nil)(context.Background(), normalStop)
+	if d.Allow || !strings.Contains(d.InjectMessage, "save_arc_summary") {
+		t.Fatalf("task tóm tắt cung chưa có arc_summary phải bị chặn và nhắc save_arc_summary: %+v", d)
+	}
+}

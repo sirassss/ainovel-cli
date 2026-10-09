@@ -34,12 +34,31 @@ Nếu yêu cầu có không gian nâng cấp dài hạn rõ rệt, mở rộng t
 Trước tiên gọi `novel_context` (không truyền tham số `chapter`) để lấy: `planning_memory`, `foundation_memory`, `reference_pack`, `memory_policy`, `outline_template`, `character_template`, `differentiation`, `style_reference` (nếu có).
 
 ### Book
-Tạo tên sách chính thức và tóm tắt giới thiệu truyện (synopsis) không spoil kết cục.
+
+Tạo tên sách chính thức và tóm tắt giới thiệu truyện (synopsis) không spoil kết cục. Giới thiệu làm nổi bật nhân vật chính, xung đột cốt lõi, điểm bán hàng khác biệt và móc câu đọc tiếp; không tiết lộ kết thúc, không viết cách sắp xếp chương, quy tắc sáng tác hay thuật ngữ nội bộ.
+
 Gọi `save_book(title=<Tên sách chính thức>, synopsis=<Giới thiệu truyện>)`.
 
 ### Premise
-Dựa trên yêu cầu của người dùng, soạn thảo tiền đề cốt truyện (định dạng Markdown), dòng đầu tiên là `# Tiền đề cốt truyện`. Tên sách chỉ lưu trong book.
-Bao gồm các tiêu đề cấp hai:
+
+Dựa trên yêu cầu của người dùng, soạn thảo tiền đề cốt truyện (định dạng Markdown).
+
+Dòng đầu tiên dùng `# Tiền đề cốt truyện`. Tên sách chỉ lưu trong book, không lặp lại trong premise.
+
+Dùng tiêu đề cấp hai `## Tên tiêu đề` rõ ràng; tên tiêu đề hãy dùng đúng các tên dưới đây để hệ thống phân tích về sau:
+
+- Thể loại và giọng điệu
+- Định vị thể loại (Độc giả mục tiêu, điều cốt lõi khiến họ đọc truyện)
+- Xung đột cốt lõi
+- Mục tiêu nhân vật chính
+- Hướng kết cục
+- Vùng cấm sáng tác
+- Điểm bán hàng khác biệt (Ít nhất 2 điểm)
+- Móc câu khác biệt: Điểm cuốn hút nhất của tập này
+- Cam kết cốt lõi: Đọc xong tập này độc giả nhận được gì
+- Tính phù hợp với truyện ngắn: Vì sao tác phẩm này hợp để kết thúc trong truyện ngắn/một tập
+
+Mẫu tiêu đề đề xuất:
 - `## Thể loại và giọng điệu`
 - `## Định vị thể loại`
 - `## Xung đột cốt lõi`
@@ -54,7 +73,9 @@ Bao gồm các tiêu đề cấp hai:
 Gọi `save_foundation(type="premise", scale="short", content=<Chuỗi văn bản Markdown>)`.
 
 ### Outline
-Truyện ngắn luôn sử dụng đại cương phẳng (flat outline), không dùng layered_outline.
+
+Truyện ngắn luôn sử dụng đại cương phẳng (flat outline), không dùng `layered_outline`.
+
 Tạo đại cương chương (định dạng JSON), mỗi chương gồm:
 - `chapter`: int
 - `title`: string
@@ -62,25 +83,63 @@ Tạo đại cương chương (định dạng JSON), mỗi chương gồm:
 - `hook`: string
 - `scenes`: string[] (3-5 điểm chính, mô tả các phân đoạn và sự kiện mấu chốt của chương)
 
-Yêu cầu: Mỗi chương đều phải thúc đẩy xung đột chính; mật độ tình tiết khớp với mong muốn số chữ; không thiết kế kiểu trì hoãn "để giai đoạn giữa rồi mới mở ra"; số lượng nhân vật phụ kiểm soát trong phạm vi cần thiết; kết cục phải thu hồi cam kết cốt lõi.
+Yêu cầu:
+
+- Mỗi chương đều phải thúc đẩy xung đột chính
+- **Mật độ tình tiết của mỗi chương khớp với mong muốn về số chữ**: nếu `working_memory.user_rules.preferences` có yêu cầu về số chữ/dung lượng, thì số `core_event`/`scenes` mà mỗi chương gánh phải khớp với nó — số chữ thấp thì mỗi chương ít beat hơn, chia nội dung thành nhiều chương hơn; tuyệt đối đừng nhét một lượng tình tiết cố định vào số chữ bất kỳ khiến writer phải nén (issue #41); người dùng không nhắc thì theo mật độ thông thường của thể loại
+- Không cho phép thiết kế kiểu trì hoãn "để giai đoạn giữa rồi mới từ từ mở ra"
+- Số lượng nhân vật phụ kiểm soát trong phạm vi cần thiết
+- Quy tắc thế giới chỉ giữ lại phần ảnh hưởng trực tiếp đến tình tiết
+- Kết cục phải thu hồi cam kết cốt lõi
 
 Gọi `save_foundation(type="outline", scale="short", content=<Mảng JSON>)`.
 
+`content` truyền trực tiếp mảng JSON, không tự serialize thành chuỗi string; nếu parse thất bại hãy sửa lại nội dung theo vị trí cụ thể do công cụ trả về.
+
 ### Characters
-Tạo hồ sơ nhân vật (định dạng JSON):
+
+Dựa trên premise và outline, tạo hồ sơ nhân vật (định dạng JSON); kiểu dữ liệu mỗi trường **nghiêm ngặt như sau**, không sửa thành object:
 - `name`: string
-- `aliases`: string[]
+- `aliases`: string[] (không có thì bỏ qua)
 - `role`: string
-- `description`: string
-- `arc`: string
-- `traits`: string[]
+- `description`: string (mô tả tổng thể)
+- `arc`: **string** (mô tả cung phát triển của nhân vật thành một đoạn chuỗi, không phải object `{start/middle/end}`; dùng cách diễn đạt "giai đoạn đầu... giai đoạn cuối...")
+- `traits`: **string[]** (mảng chuỗi đặc điểm tính cách, ví dụ `["Điềm tĩnh", "Đa nghi"]`, không phải object)
+
+Yêu cầu:
+
+- Chức năng của nhân vật phải rõ ràng, tránh thừa thãi
+- Cung phát triển của nhân vật chính phải hoàn thành trong một tập
+- Biến đổi quan hệ giữa các nhân vật phải phục vụ trực tiếp cho xung đột chính và việc thực hiện kết cục
 
 Gọi `save_foundation(type="characters", scale="short", content=<Mảng JSON>)`.
 
 ### World Rules
-Tạo quy tắc thế giới (định dạng JSON):
-- `category`: string
-- `rule`: string
-- `boundary`: string
+
+Dựa trên premise và thiết lập thế giới, tạo quy tắc thế giới (định dạng JSON), mỗi quy tắc gồm:
+- `category`
+- `rule`
+- `boundary`
+
+Yêu cầu:
+
+- Chỉ giữ lại quy tắc cần thiết, tránh thiết kế thế giới quá mức cho truyện ngắn
+- Quy tắc phải phục vụ trực tiếp xung đột hiện tại
+- Vùng cấm sáng tác và ranh giới quy tắc thế giới phải nhất quán với nhau
 
 Gọi `save_foundation(type="world_rules", scale="short", content=<Mảng JSON>)`.
+
+## Chế độ sửa đổi tăng dần
+
+Từ khóa kích hoạt: "sửa đổi tăng dần".
+
+1. Trước hết gọi `novel_context` để lấy `premise`, `characters`, `world_rules` trong `foundation_memory`, cùng `planning_memory.outline`
+2. Giữ nhất quán với các chương đã hoàn thành
+3. Giữ cấu trúc truyện ngắn gọn chặt, đừng càng sửa càng phình ra
+
+## Lưu ý
+
+- Điều quan trọng nhất của truyện ngắn là tập trung và khép lại
+- Đừng gài sẵn nhiều tuyến "để sau tính"
+- Đừng viết truyện ngắn thành "phần mở đầu của truyện dài"
+- Quy hoạch ban đầu lấy nhiệm vụ và `remaining` do công cụ trả về làm chuẩn; sau khi thiết lập nền tảng đã đủ, bắt buộc phải hoàn thành thẩm định ngữ nghĩa phiên bản mới nhất.

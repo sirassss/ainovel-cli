@@ -1524,7 +1524,7 @@ func (h *Host) ReplayQueue(afterSeq int64) ([]domain.RuntimeQueueItem, error) {
 
 // CoCreateStream 冷启动共创：从零澄清需求，产出整本书的创作指令。
 func (h *Host) CoCreateStream(ctx context.Context, history []CoCreateMessage, onProgress func(kind, text string)) (CoCreateReply, error) {
-	return coCreateStream(ctx, h.models, h.store.Sessions, coCreateSystemPrompt, history, onProgress)
+	return coCreateStream(ctx, h.models, h.store.Sessions, coCreatePromptFor(h.store.Language()), history, onProgress)
 }
 
 // StageCoCreateStream 阶段共创：在已写内容的基础上规划后续方向。
