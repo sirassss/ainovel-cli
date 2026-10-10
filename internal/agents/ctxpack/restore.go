@@ -34,13 +34,13 @@ Dùng **đúng định dạng** sau:
 - [Tên nhân vật]: [cảm xúc, động cơ, vị trí hiện tại, thay đổi quan hệ với nhân vật khác]
 (Liệt kê mọi nhân vật hoạt động trong các cảnh gần đây)
 
-## Phục bút và manh mối đang hoạt động
-- [Mô tả phục bút]: [chương gieo] → [thời điểm/cách thu dự kiến]
-(Chỉ liệt kê phục bút chưa thu)
+## Chi tiết gài trước và manh mối đang hoạt động
+- [Mô tả chi tiết gài trước]: [chương gieo] → [thời điểm/cách thu dự kiến]
+(Chỉ liệt kê chi tiết gài trước chưa thu)
 
-## Phản hồi thẩm duyệt và vấn đề chờ sửa
+## Phản hồi đánh giá và vấn đề chờ sửa
 - [Mô tả vấn đề]: [mức nghiêm trọng] [đã sửa chưa]
-(Liệt kê các vấn đề chưa sửa được nêu trong những lần thẩm duyệt gần đây)
+(Liệt kê các vấn đề chưa sửa được nêu trong những lần đánh giá gần đây)
 
 ## Văn phong và nhịp điệu
 - Tông cảm xúc hiện tại: [vd: căng thẳng, ấm áp, ngột ngạt]
@@ -63,8 +63,8 @@ const WriterUpdateSummaryPrompt = `Các tin nhắn ở trên là **hội thoại
 
 Quy tắc cập nhật:
 - Giữ mọi trạng thái nhân vật còn hiệu lực, cập nhật những gì đã thay đổi
-- Phục bút đã thu thì gỡ bỏ, phục bút mới gieo thì thêm vào
-- Vấn đề thẩm duyệt đã sửa thì đánh dấu đã sửa hoặc gỡ bỏ, vấn đề mới thì thêm vào
+- Chi tiết gài trước đã thu thì gỡ bỏ, chi tiết gài trước mới gieo thì thêm vào
+- Vấn đề đánh giá đã sửa thì đánh dấu đã sửa hoặc gỡ bỏ, vấn đề mới thì thêm vào
 - Cập nhật "Tiến độ hiện tại" tới vị trí mới nhất
 - Cập nhật tông cảm xúc trong "Văn phong và nhịp điệu" (nếu có thay đổi)
 - Giữ chính xác tên nhân vật, tên địa điểm và số chương
@@ -73,8 +73,8 @@ Dùng cùng định dạng với bản tóm tắt trước:
 
 ## Tiến độ hiện tại
 ## Trạng thái tức thời của nhân vật
-## Phục bút và manh mối đang hoạt động
-## Phản hồi thẩm duyệt và vấn đề chờ sửa
+## Chi tiết gài trước và manh mối đang hoạt động
+## Phản hồi đánh giá và vấn đề chờ sửa
 ## Văn phong và nhịp điệu
 ## Quyết định then chốt
 ## Bước tiếp theo

@@ -59,7 +59,7 @@ type commitArgs struct {
 
 func (t *CommitChapterTool) Name() string { return "commit_chapter" }
 func (t *CommitChapterTool) Description() string {
-	return "Nộp bản chính thức của chương. Nạp bản nháp, lưu thành bản chính thức, cập nhật dòng thời gian, phục bút, quan hệ, trạng thái nhân vật và tiến độ." +
+	return "Nộp bản chính thức của chương. Nạp bản nháp, lưu thành bản chính thức, cập nhật dòng thời gian, chi tiết gài trước, quan hệ, trạng thái nhân vật và tiến độ." +
 		"Trả về các sự kiện có cấu trúc: next_chapter / review_required / arc_end / volume_end / needs_expansion / book_complete / flow, v.v."
 }
 func (t *CommitChapterTool) Label() string { return "Nộp chương" }
@@ -203,7 +203,7 @@ func (t *CommitChapterTool) Execute(_ context.Context, args json.RawMessage) (js
 		}
 		if b == nil {
 			return nil, fmt.Errorf(
-				"Chương %d nằm ngoài phạm vi đại cương phân tầng: trước khi viết phải expand_arc để mở rộng cung hoặc append_volume để thêm tập; nếu cả truyện đã hoàn kết thì gọi save_foundation type=complete_book: %w",
+				"Chương %d nằm ngoài phạm vi dàn ý phân tầng: trước khi viết phải expand_arc để mở rộng cung hoặc append_volume để thêm tập; nếu cả truyện đã kết thúc thì gọi save_foundation type=complete_book: %w",
 				a.Chapter, errs.ErrToolPrecondition)
 		}
 		boundary = b
@@ -215,7 +215,7 @@ func (t *CommitChapterTool) Execute(_ context.Context, args json.RawMessage) (js
 	if existingPending != nil {
 		content = existingPending.DraftContent
 		if content == "" {
-			return nil, fmt.Errorf("Bản nộp dang dở của chương %d thiếu draft_content, không thể chứng minh chính văn khôi phục khớp với bản nộp gốc: %w",
+			return nil, fmt.Errorf("Bản nộp dang dở của chương %d thiếu draft_content, không thể chứng minh nội dung chương khôi phục khớp với bản nộp gốc: %w",
 				a.Chapter, errs.ErrToolConflict)
 		}
 	} else {
@@ -505,7 +505,7 @@ func (t *CommitChapterTool) validateRewriteDraft(chapter int, title string, prog
 	if progress != nil && progress.Flow == domain.FlowPolishing {
 		mode = "trau chuốt"
 	}
-	return "", fmt.Errorf("Chính văn và tiêu đề chương %d đều không thay đổi, không phát hiện thay đổi %s: %w",
+	return "", fmt.Errorf("Nội dung và tiêu đề chương %d đều không thay đổi, không phát hiện thay đổi %s: %w",
 		chapter, mode, errs.ErrToolPrecondition)
 }
 
@@ -585,7 +585,7 @@ func (t *CommitChapterTool) executeRewriteCommit(a commitArgs, progress *domain.
 			if progress != nil && progress.Flow == domain.FlowPolishing {
 				mode = "trau chuốt"
 			}
-			return nil, fmt.Errorf("Chính văn và tiêu đề chương %d đều không thay đổi, không phát hiện thay đổi %s: %w",
+			return nil, fmt.Errorf("Nội dung và tiêu đề chương %d đều không thay đổi, không phát hiện thay đổi %s: %w",
 				chapter, mode, errs.ErrToolPrecondition)
 		}
 	}
@@ -645,7 +645,7 @@ func (t *CommitChapterTool) executeRewriteCommit(a commitArgs, progress *domain.
 			return nil, fmt.Errorf("rewrite: save chapter record: %w: %w", errs.ErrStoreWrite, err)
 		}
 		if len(recovered) > 0 {
-			slog.Warn("Đã khôi phục từ sổ phục bút các sự kiện gieo mầm bị mất ở phiên bản cũ", "module", "commit", "chapter", chapter, "foreshadows", recovered)
+			slog.Warn("Đã khôi phục từ sổ chi tiết gài trước các sự kiện gieo mầm bị mất ở phiên bản cũ", "module", "commit", "chapter", chapter, "foreshadows", recovered)
 		}
 		if err := revision.NewProjector(t.store).Apply(records); err != nil {
 			return nil, fmt.Errorf("rewrite: rebuild chapter projections: %w: %w", errs.ErrStoreWrite, err)
@@ -797,7 +797,7 @@ func (t *CommitChapterTool) restoreRewritePlants(chapter int, existing []domain.
 			continue
 		}
 		if strings.TrimSpace(entry.ID) == "" || strings.TrimSpace(entry.Description) == "" {
-			return nil, fmt.Errorf("rewrite: sổ phục bút của chương %d thiếu id hoặc description để khôi phục: %w", chapter, errs.ErrToolConflict)
+			return nil, fmt.Errorf("rewrite: sổ chi tiết gài trước của chương %d thiếu id hoặc description để khôi phục: %w", chapter, errs.ErrToolConflict)
 		}
 		planted[entry.ID] = struct{}{}
 		restored = append(restored, domain.ForeshadowUpdate{

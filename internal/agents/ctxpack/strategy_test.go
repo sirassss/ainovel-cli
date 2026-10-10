@@ -61,10 +61,10 @@ func TestStoreSummaryCompactApplyUsesPersistentStoreData(t *testing.T) {
 	if !strings.Contains(summary.Summary, "Kế hoạch chương hiện tại") {
 		t.Fatalf("expected chapter plan in checkpoint, got %q", summary.Summary)
 	}
-	if !strings.Contains(summary.Summary, "Phục bút đang hoạt động") {
+	if !strings.Contains(summary.Summary, "Chi tiết gài trước đang hoạt động") {
 		t.Fatalf("expected foreshadow data in checkpoint, got %q", summary.Summary)
 	}
-	if !strings.Contains(summary.Summary, "Vấn đề thẩm duyệt chờ sửa") {
+	if !strings.Contains(summary.Summary, "Vấn đề đánh giá chờ sửa") {
 		t.Fatalf("expected pending review section in checkpoint, got %q", summary.Summary)
 	}
 	if !strings.Contains(summary.Summary, "仓库线索需要再蓄压一拍") {
@@ -146,7 +146,7 @@ func TestWriterRestorePackRefreshReusesStoreBuilder(t *testing.T) {
 	if !strings.Contains(text, "<post-compact-context>") {
 		t.Fatalf("expected wrapped restore context, got %q", text)
 	}
-	if !strings.Contains(text, "Vấn đề thẩm duyệt chờ sửa") {
+	if !strings.Contains(text, "Vấn đề đánh giá chờ sửa") {
 		t.Fatalf("expected pending review section, got %q", text)
 	}
 	if !strings.Contains(text, "Kế hoạch chương hiện tại") {

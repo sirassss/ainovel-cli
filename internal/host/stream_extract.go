@@ -21,14 +21,14 @@ import (
 var toolDisplays = map[string]toolDisplay{
 	"draft_chapter": {nakedKey: "content"},
 
-	"plan_chapter":        {header: "✻ Quy hoạch"},
+	"plan_chapter":        {header: "✻ Kế hoạch"},
 	"edit_chapter":        {header: "✻ Trau chuốt"},
 	"commit_chapter":      {header: "✻ Nộp chương"},
-	"save_review":         {header: "✻ Thẩm duyệt"},
+	"save_review":         {header: "✻ Đánh giá"},
 	"save_arc_summary":    {header: "✻ Tóm tắt cung"},
 	"save_volume_summary": {header: "✻ Tóm tắt tập"},
 	"save_foundation":     {header: "✻ Thiết lập"},
-	"revise_outline":      {header: "✻ Sửa đại cương"},
+	"revise_outline":      {header: "✻ Sửa dàn ý"},
 	"read_chapter":        {header: "✻ Đọc chương"},
 	"check_consistency":   {header: "✻ Kiểm tra nhất quán"},
 	"novel_context":       {header: "✻ Tra ngữ cảnh"},

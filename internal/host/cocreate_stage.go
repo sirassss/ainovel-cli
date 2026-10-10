@@ -36,10 +36,10 @@ func buildStoryStateSummary(s *store.Store) string {
 			if outlineErr != nil {
 				warn("outline", outlineErr)
 			} else if len(outline) > 0 {
-				fmt.Fprintf(&b, " / hiện đã chi tiết hóa %d chương (phần sau quy hoạch động theo cung)", len(outline))
+				fmt.Fprintf(&b, " / hiện đã chi tiết hóa %d chương (phần sau lập kế hoạch động theo cung)", len(outline))
 			}
 		} else if progress.TotalChapters > 0 {
-			fmt.Fprintf(&b, " / quy hoạch %d chương", progress.TotalChapters)
+			fmt.Fprintf(&b, " / kế hoạch %d chương", progress.TotalChapters)
 		}
 		fmt.Fprintf(&b, ", khoảng %d chữ, chương kế là chương %d\n", progress.TotalWordCount, progress.NextChapter())
 		if progress.Layered && progress.CurrentVolume > 0 {
@@ -103,7 +103,7 @@ func buildStoryStateSummary(s *store.Store) string {
 				break
 			}
 		}
-		fmt.Fprintf(&b, "- Phục bút chưa thu: %s\n", strings.Join(items, "; "))
+		fmt.Fprintf(&b, "- Chi tiết gài trước chưa thu: %s\n", strings.Join(items, "; "))
 	} else {
 		warn("foreshadow", err)
 	}
@@ -127,7 +127,7 @@ func stageSystemPrompt(s *store.Store) string {
 	}
 	prompt := stageCoCreateSystemPrompt
 	if summary := buildStoryStateSummary(s); summary != "" {
-		prompt += "\n\n---\n## Trạng thái truyện hiện tại\n(Dưới đây là tóm tắt khách quan về nội dung đã viết, để bạn tham chiếu khi quy hoạch phần sau, đừng chép nguyên văn vào <draft>)\n" + summary
+		prompt += "\n\n---\n## Trạng thái truyện hiện tại\n(Dưới đây là tóm tắt khách quan về nội dung đã viết, để bạn tham chiếu khi lập kế hoạch phần sau, đừng chép nguyên văn vào <draft>)\n" + summary
 	}
 	return prompt
 }

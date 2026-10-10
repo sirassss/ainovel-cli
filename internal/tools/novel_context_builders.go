@@ -455,7 +455,7 @@ func (t *ContextTool) buildChapterWorkingMemory(envelope *chapterContextEnvelope
 		if volumes, err := t.store.Outline.LoadLayeredOutline(); err == nil {
 			if fv := domain.FinaleVolume(volumes); fv > 0 {
 				if b, boundaryErr := t.store.Outline.CheckArcBoundary(state.chapter); boundaryErr == nil && b != nil && b.Volume == fv {
-					envelope.Working["finale"] = "Tập này là tập khép lại của cả truyện: không mở thêm tuyến dài hay gieo phục bút mới, ưu tiên thu các phục bút đã có, gom các tuyến quan hệ, đẩy câu chuyện về hồi kết theo đại cương."
+					envelope.Working["finale"] = "Tập này là tập cuối của cả truyện: không mở thêm tuyến dài hay gieo chi tiết gài trước mới, ưu tiên thu các chi tiết gài trước đã có, gom các tuyến quan hệ, đẩy câu chuyện về hồi kết theo dàn ý."
 				} else {
 					reads.require("arc_boundary", boundaryErr)
 				}

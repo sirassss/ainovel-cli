@@ -106,7 +106,7 @@ func (t *EditChapterTool) Execute(ctx context.Context, args json.RawMessage) (js
 		return nil, fmt.Errorf("load progress: %w: %w", errs.ErrStoreRead, err)
 	}
 	if progress == nil || !slices.Contains(progress.PendingRewrites, a.Chapter) {
-		return nil, fmt.Errorf("Chương %d đã hoàn thành và không nằm trong hàng đợi PendingRewrites, không thể sửa; cần sửa thì để editor thẩm duyệt và kích hoạt viết lại/trau chuốt trước: %w", a.Chapter, errs.ErrToolPrecondition)
+		return nil, fmt.Errorf("Chương %d đã hoàn thành và không nằm trong hàng đợi PendingRewrites, không thể sửa; cần sửa thì để editor đánh giá và kích hoạt viết lại/trau chuốt trước: %w", a.Chapter, errs.ErrToolPrecondition)
 	}
 	if err := EnsureChapterExpanded(t.store, a.Chapter); err != nil {
 		return nil, err

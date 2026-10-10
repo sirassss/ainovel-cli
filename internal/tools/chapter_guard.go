@@ -38,6 +38,6 @@ func EnsureChapterExpanded(st *store.Store, chapter int) error {
 		return nil
 	}
 	return fmt.Errorf(
-		"Chương %d nằm ngoài phạm vi đại cương phân tầng: trước khi viết phải expand_arc để mở rộng cung hoặc append_volume để thêm tập; nếu cả truyện đã hoàn kết thì gọi save_foundation type=complete_book: %w",
+		"Chương %d nằm ngoài phạm vi dàn ý phân tầng: trước khi viết phải expand_arc để mở rộng cung hoặc append_volume để thêm tập; nếu cả truyện đã kết thúc thì gọi save_foundation type=complete_book: %w",
 		chapter, errs.ErrToolPrecondition)
 }

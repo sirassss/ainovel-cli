@@ -114,7 +114,7 @@ func TestCommitChapterUnknownForeshadowListsKnownIDs(t *testing.T) {
 func TestCommitChapterUnknownForeshadowEmptyLedger(t *testing.T) {
 	msg := commitWithGhostForeshadow(t, nil).Error()
 	if !strings.Contains(msg, `unknown id "ghost"`) || !strings.Contains(msg, "no foreshadows planted yet") || strings.Contains(msg, "[]") {
-		t.Fatalf("sổ rỗng phải nói rõ chưa có phục bút: %s", msg)
+		t.Fatalf("sổ rỗng phải nói rõ chưa có chi tiết gài trước: %s", msg)
 	}
 }
 

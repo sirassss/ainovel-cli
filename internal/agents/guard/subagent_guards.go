@@ -137,9 +137,9 @@ func writerBlockMsg(seen map[string]struct{}) string {
 	_, hasCheck := seen["consistency_check"]
 	switch {
 	case !hasDraft && !hasEdit:
-		return "Cấm kết thúc: lượt này chưa lưu chính văn nào. Hãy hoàn thành chương theo thứ tự plan_chapter → draft_chapter → check_consistency → commit_chapter; chính văn chỉ xuất trong chat là coi như mất, phải lưu và nộp qua công cụ."
+		return "Cấm kết thúc: lượt này chưa lưu nội dung chương nào. Hãy hoàn thành chương theo thứ tự plan_chapter → draft_chapter → check_consistency → commit_chapter; nội dung chương chỉ xuất trong chat là coi như mất, phải lưu và nộp qua công cụ."
 	case !hasCheck:
-		return "Cấm kết thúc: chính văn đã lưu nhưng chưa hoàn tất. Hãy gọi check_consistency để đối chiếu tính nhất quán, rồi gọi commit_chapter để nộp chương. draft_chapter / edit_chapter chỉ lưu bản nháp, chưa tính là hoàn thành."
+		return "Cấm kết thúc: nội dung chương đã lưu nhưng chưa hoàn tất. Hãy gọi check_consistency để đối chiếu tính nhất quán, rồi gọi commit_chapter để nộp chương. draft_chapter / edit_chapter chỉ lưu bản nháp, chưa tính là hoàn thành."
 	default:
 		return "Cấm kết thúc: chương này chỉ còn thiếu bước nộp commit_chapter. Hãy gọi commit_chapter ngay; nếu nó trả về lỗi thì xử lý theo thông báo lỗi (kiểm tra số chương, bổ sung thao tác tiên quyết theo gợi ý) rồi nộp lại, không được kết thúc khi chưa nộp."
 	}

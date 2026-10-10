@@ -24,7 +24,7 @@ Các cung truyện dưới đây phù hợp với tiểu thuyết dài thể lo�
 2-3 chương tích lũy mâu thuẫn/chọn phe → 3-5 chương ám chiến mưu tính → 3-5 chương xung đột trực diện → 2-3 chương thanh toán + tái định hình cục diện
 - Không phải đối lập đơn giản giữa chính và tà, mỗi bên đều có lập trường hợp lý
 - Vai trò của nhân vật chính trong đó phải có sự chuyển biến (quan sát → bị cuốn vào → bị buộc phải chọn → chủ đạo)
-- Kết cục phải thay đổi bản đồ thế lực, gieo phục bút cho các tập tiếp theo
+- Kết cục phải thay đổi bản đồ thế lực, gieo chi tiết gài trước cho các tập tiếp theo
 
 ### Cung Truyện Vượt Kiếp/Đại Chiến (8-12 chương)
 2-3 chương thế trận trước chiến/chuẩn bị cuối → 4-6 chương chiến đấu đa tuyến (kể chuyện chéo các chiến trường khác nhau) → 1-2 chương bước ngoặt quyết định + cái giá phải trả
@@ -33,6 +33,6 @@ Các cung truyện dưới đây phù hợp với tiểu thuyết dài thể lo�
 - Thế giới sau chiến tranh xảy ra thay đổi không thể đảo ngược
 
 ### Cung Truyện Thường Ngày/Chuyển Tiếp (5-8 chương)
-Tu luyện thường ngày / giao tiếp xã hội của nhân vật / xây dựng thế lực / bố trí phục bút / phát triển cảm xúc nhân vật
+Tu luyện thường ngày / giao tiếp xã hội của nhân vật / xây dựng thế lực / bố trí chi tiết gài trước / phát triển cảm xúc nhân vật
 - Không phải để độn chữ, mỗi chương ít nhất phải đẩy một nhánh phụ tiến lên
 - Tích lũy đà cho cung truyện cao trào tiếp theo; xây dựng kết nối cảm xúc trước rồi mới phá vỡ thì mới tạo được sức tác động

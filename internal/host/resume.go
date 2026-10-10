@@ -149,7 +149,7 @@ func resumeLabel(store *storepkg.Store) (string, error) {
 func describeResume(store *storepkg.Store, progress *domain.Progress) (string, error) {
 	switch progress.Phase {
 	case domain.PhasePremise, domain.PhaseOutline:
-		return fmt.Sprintf("Khôi phục: giai đoạn quy hoạch (%s)", progress.Phase), nil
+		return fmt.Sprintf("Khôi phục: giai đoạn lập kế hoạch (%s)", progress.Phase), nil
 	case domain.PhaseWriting:
 		// 优先级与 Router 的决策优先级对齐，让 label 与即将派发的指令一致。
 		pending, err := store.Signals.LoadPendingCommit()
@@ -167,7 +167,7 @@ func describeResume(store *storepkg.Store, progress *domain.Progress) (string, e
 			return fmt.Sprintf("Khôi phục %s: %d chương chờ xử lý", verb, len(progress.PendingRewrites)), nil
 		}
 		if progress.Flow == domain.FlowReviewing {
-			return "Khôi phục: thẩm duyệt bị gián đoạn", nil
+			return "Khôi phục: đánh giá bị gián đoạn", nil
 		}
 		if progress.InProgressChapter > 0 {
 			return fmt.Sprintf("Khôi phục: chương %d đang tiến hành", progress.InProgressChapter), nil
@@ -201,7 +201,7 @@ func describeArcEndLabel(store *storepkg.Store, progress *domain.Progress) (stri
 	vol, arc := boundary.Volume, boundary.Arc
 	hasArcReview, err := store.World.HasArcReview(lastCh)
 	if err != nil {
-		return "", fmt.Errorf("Đọc thẩm duyệt cung: %w", err)
+		return "", fmt.Errorf("Đọc đánh giá cung: %w", err)
 	}
 	hasArcSummary, err := store.Summaries.HasArcSummary(vol, arc)
 	if err != nil {
@@ -216,7 +216,7 @@ func describeArcEndLabel(store *storepkg.Store, progress *domain.Progress) (stri
 	}
 	switch {
 	case !hasArcReview:
-		return fmt.Sprintf("Khôi phục: thẩm duyệt cuối cung đang chờ (V%d A%d)", vol, arc), nil
+		return fmt.Sprintf("Khôi phục: đánh giá cuối cung đang chờ (V%d A%d)", vol, arc), nil
 	case !hasArcSummary:
 		return fmt.Sprintf("Khôi phục: tóm tắt cung chờ tạo (V%d A%d)", vol, arc), nil
 	case boundary.IsVolumeEnd && !hasVolumeSummary:

@@ -162,7 +162,7 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 				// 终局一票否决会浪费切分阶段的全部模型调用；标题行并入前段（文本一字不丢），
 				// 记入 Notes 由确认预览呈现，人工不认可可用 --guide 裁定（RFC §8.4 的停点正为此存在）。
 				seg.Notes = append(seg.Notes,
-					fmt.Sprintf("Tiêu đề chương %q không có chính văn (byte %d..%d), đã gộp vào đoạn trước (thường gặp ở chương bị khóa/chương giữ chỗ trả phí)", title, start, end))
+					fmt.Sprintf("Tiêu đề chương %q không có nội dung chương (byte %d..%d), đã gộp vào đoạn trước (thường gặp ở chương bị khóa/chương giữ chỗ trả phí)", title, start, end))
 				if !absorb(end) {
 					seg.Matter = append(seg.Matter, MatterSpan{Kind: kindFrontMatter, Title: title, Start: start, End: end})
 				}
@@ -496,7 +496,7 @@ func (v chunkValidator) validate(bs []BoundaryDecision) error {
 		// front/back matter 的描述性标题低风险，不核对。
 		if (b.Kind == kindChapter || b.Kind == kindGroup) && !b.Uncertain {
 			if t := squashSpace(b.Title); t != "" && !strings.Contains(squashSpace(v.unitByID[b.UnitID].Text), t) {
-				return fmt.Errorf("Ranh giới %s có tiêu đề %q không tìm thấy trong nguyên văn đơn vị đó: nếu đây là phần tiếp nối chính văn của chương trước thì đừng đặt ranh giới cho nó (do ranh giới trước đó quản, boundaries có thể rỗng); nếu nguồn ở đây thực sự không có dòng tiêu đề mà tiêu đề do bạn tự tóm tắt thì đặt uncertain=true",
+				return fmt.Errorf("Ranh giới %s có tiêu đề %q không tìm thấy trong nguyên văn đơn vị đó: nếu đây là phần tiếp nối nội dung của chương trước thì đừng đặt ranh giới cho nó (do ranh giới trước đó quản, boundaries có thể rỗng); nếu nguồn ở đây thực sự không có dòng tiêu đề mà tiêu đề do bạn tự tóm tắt thì đặt uncertain=true",
 					b.UnitID, snippet(b.Title, 24))
 			}
 		}

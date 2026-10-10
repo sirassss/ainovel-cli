@@ -16,7 +16,7 @@
 
 - Nhịp truyện theo kiểu sóng: căng thẳng → thư giãn → càng căng thẳng hơn
 - Việc tiết lộ thông tin phải có chừng mực — mỗi lần chỉ cung cấp cho độc giả lượng thông tin "vừa đủ để thiếu"
-- Cuối chương bắt buộc phải có điểm móc gây hồi hộp, cấm kết thúc bằng "cảnh yên bình"
+- Cuối chương bắt buộc phải có hook gây hồi hộp, cấm kết thúc bằng "cảnh yên bình"
 
 ## Tính Chặt Chẽ Logic
 

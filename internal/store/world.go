@@ -187,7 +187,7 @@ func (s *WorldStore) UpdateForeshadow(chapter int, updates []domain.ForeshadowUp
 					//（"1" 与 "new"），4 条伏笔无声蒸发，且没有任何一处报错。
 					if planted := entries[i].PlantedAt; planted != 0 && planted != chapter {
 						return fmt.Errorf(
-							"id phục bút %q đã bị chương %d chiếm (%s); mỗi phục bút cần một id riêng và ổn định, "+
+							"id chi tiết gài trước %q đã bị chương %d chiếm (%s); mỗi chi tiết gài trước cần một id riêng và ổn định, "+
 								"đừng dùng lại placeholder như \"new\"/\"1\" — các chương sau dựa vào id để advance/resolve: %w",
 							u.ID, planted, truncateForError(entries[i].Description), errs.ErrToolArgs)
 					}

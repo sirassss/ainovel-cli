@@ -3,7 +3,7 @@
 ## Nhân Vật Chính
 
 ### [Tên nhân vật thứ nhất]
-- **Biệt danh/Danh hiệu**: (ví dụ: "thiếu niên phế vật", "anh Viêm", "chiến thần bất diệt", v.v. — các cách gọi có thể xuất hiện trong chính văn)
+- **Biệt danh/Danh hiệu**: (ví dụ: "thiếu niên phế vật", "anh Viêm", "chiến thần bất diệt", v.v. — các cách gọi có thể xuất hiện trong nội dung chương)
 - **Tuổi/Nghề nghiệp**:
 - **Ngoại hình**:
 - **Tính cách cốt lõi**:

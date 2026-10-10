@@ -38,7 +38,7 @@ type Prompts struct {
 	SimulationMerge  string
 	RevisionAnalyze  string
 
-	// Arbiter tài phán (LLM-as-function, không bọc simulation guidance)
+	// Arbiter phân xử (LLM-as-function, không bọc simulation guidance)
 	ArbiterPlanStart    string
 	ArbiterIntervention string
 	ArbiterFailure      string
@@ -270,7 +270,7 @@ const simulationGuidanceVI = `## Hồ sơ mô phỏng văn phong (Simulation Pro
 
 Khi trong planning_memory hoặc working_memory của novel_context xuất hiện simulation_profile, bắt buộc phải xem đó là ràng buộc định hướng mô phỏng của tác phẩm hiện tại. {{role}} cần đọc kỹ các trường style, lexicon, plot_design, hook_design, pacing_density, reader_engagement và role_guidance.
 
-Nguyên tắc sử dụng: Học hỏi cấu trúc, nhịp điệu, móc câu, cách giải phóng thông tin và thủ pháp cuốn hút độc giả; tuyệt đối không sao chép câu văn nguyên văn, tên nhân vật, địa danh, thiết lập độc quyền hay phân đoạn cố định. Nếu simulation_profile xung đột với yêu cầu rõ ràng của người dùng, ưu tiên tuân thủ yêu cầu của người dùng.`
+Nguyên tắc sử dụng: Học hỏi cấu trúc, nhịp điệu, hook, cách giải phóng thông tin và thủ pháp cuốn hút độc giả; tuyệt đối không sao chép câu văn nguyên văn, tên nhân vật, địa danh, thiết lập độc quyền hay phân đoạn cố định. Nếu simulation_profile xung đột với yêu cầu rõ ràng của người dùng, ưu tiên tuân thủ yêu cầu của người dùng.`
 
 // han:keep hướng dẫn mô phỏng văn phong bản zh (simulationGuidanceZH)
 const simulationGuidanceZH = `## 仿写画像

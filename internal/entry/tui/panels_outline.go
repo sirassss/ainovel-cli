@@ -141,11 +141,11 @@ func truncateWidth(s string, maxW int) string {
 func renderDetailContent(snap host.UISnapshot, contentW int) string {
 	var b strings.Builder
 
-	// Đại cương
+	// Dàn ý
 	if len(snap.Outline) > 0 {
-		outlineHeader := ":: Đại Cương"
+		outlineHeader := ":: Dàn ý"
 		if snap.Layered {
-			outlineHeader = fmt.Sprintf(":: Đại Cương (%s · Quy hoạch động)", snap.CurrentVolumeArc)
+			outlineHeader = fmt.Sprintf(":: Dàn ý (%s · Kế hoạch động)", snap.CurrentVolumeArc)
 		}
 		b.WriteString(panelTitleStyle.Render(outlineHeader))
 		b.WriteString("\n")
@@ -222,7 +222,7 @@ func renderDetailContent(snap host.UISnapshot, contentW int) string {
 	}
 
 	if snap.LastReviewSummary != "" {
-		b.WriteString(cardTitleStyle.Render("~ Thẩm Duyệt Mới Nhất ~"))
+		b.WriteString(cardTitleStyle.Render("~ Đánh giá Mới Nhất ~"))
 		b.WriteString("\n")
 		writeWrapped(&b, snap.LastReviewSummary, contentW, cardContentStyle)
 		b.WriteString("\n")

@@ -1,8 +1,8 @@
-# Kỹ Thuật Thiết Lập Điểm Móc
+# Kỹ thuật thiết lập hook
 
-Điểm móc là yếu tố then chốt giữ chân độc giả tiếp tục đọc. Mỗi chương phải kết thúc bằng một điểm móc hiệu quả.
+Hook là yếu tố then chốt giữ chân độc giả tiếp tục đọc. Mỗi chương phải kết thúc bằng một hook hiệu quả.
 
-## Mười Loại Điểm Móc Kinh Điển
+## Mười Loại Hook Kinh Điển
 
 ### 1. Tiết Lộ Bất Ngờ
 
@@ -126,11 +126,11 @@ Một câu nói bề ngoài bình thường nhưng ẩn chứa điều sâu xa h
 
 ---
 
-## Kết Nối Điểm Móc Giữa Các Chương
+## Kết Nối Hook Giữa Các Chương
 
-### Phục Bút và Hô Ứng
+### Chi Tiết Gài Trước Và Hô Ứng
 
-**Kỹ thuật phục bút:**
+**Kỹ thuật chi tiết gài trước:**
 - Chôn giấu chi tiết nhỏ không bắt mắt từ sớm
 - Để độc giả bỏ qua tầm quan trọng của nó
 - Khi tiết lộ sau tạo hiệu ứng "thì ra là vậy"
@@ -140,9 +140,9 @@ Một câu nói bề ngoài bình thường nhưng ẩn chứa điều sâu xa h
 - Đối thoại lặp lại (ngữ cảnh khác, ý nghĩa mới)
 - Vật thể quay trở lại (vật quan trọng xuất hiện lần nữa)
 
-### Leo Thang Điểm Móc
+### Leo Thang Hook
 
-**Nguyên tắc tiến dần:** Điểm móc sau phải mạnh hơn hoặc sâu hơn điểm móc trước
+**Nguyên tắc tiến dần:** Hook sau phải mạnh hơn hoặc sâu hơn hook trước
 
 ```
 Chương 1: Ai đã lấy trộm tài liệu?
@@ -151,21 +151,21 @@ Chương 3: Đồng nghiệp là điệp viên nằm vùng
 Chương 4: Điệp viên biết danh tính bí mật của nhân vật chính
 ```
 
-### Đa Tuyến Điểm Móc
+### Đa Tuyến Hook
 
-**Duy trì nhiều tuyến điểm móc đồng thời:**
-- Điểm móc tuyến chính (bí ẩn cốt lõi)
-- Điểm móc nhân vật (danh tính thật của ai đó)
-- Điểm móc quan hệ (điều gì xảy ra giữa A và B)
-- Điểm móc thời gian (đếm ngược/hạn chót)
+**Duy trì nhiều tuyến hook đồng thời:**
+- Hook tuyến chính (bí ẩn cốt lõi)
+- Hook nhân vật (danh tính thật của ai đó)
+- Hook quan hệ (điều gì xảy ra giữa A và B)
+- Hook thời gian (đếm ngược/hạn chót)
 
 ---
 
-## Điều Cấm Kỵ Khi Thiết Lập Điểm Móc
+## Điều Cấm Kỵ Khi Thiết Lập Hook
 
 ### Tránh:
 
-1. **Điểm móc giả** - Tạo căng thẳng nhưng kết quả chỉ là hiểu lầm
+1. **Hook giả** - Tạo căng thẳng nhưng kết quả chỉ là hiểu lầm
    > Sai: Anh nghe thấy tiếng bước chân... hóa ra là con mèo
    > Đúng: Anh nghe thấy tiếng bước chân... nhưng người đang đuổi theo anh đã chết rồi
 
@@ -174,22 +174,22 @@ Chương 4: Điệp viên biết danh tính bí mật của nhân vật chính
    > Đúng: Cô nhớ lại bài tự vệ cha đã dạy (đã đề cập ở chương 5)
 
 3. **Để trắng quá nhiều** - Để lại quá nhiều câu hỏi chưa có lời giải
-   > Nguyên tắc: Mỗi chương phải giải đáp ít nhất một điểm móc cũ, rồi mới đưa ra điểm móc mới
+   > Nguyên tắc: Mỗi chương phải giải đáp ít nhất một hook cũ, rồi mới đưa ra hook mới
 
-4. **Điểm móc rủi ro thấp** - Sự kiện kết chương không đủ quan trọng
+4. **Hook rủi ro thấp** - Sự kiện kết chương không đủ quan trọng
    > Sai: Anh không biết tối nay ăn gì
    > Đúng: Bữa tối của anh đã bị ai đó bỏ độc
 
 ---
 
-## Cấp Độ Cường Độ Điểm Móc
+## Cấp Độ Cường Độ Hook
 
 | Cấp độ | Loại | Phản ứng độc giả | Vị trí áp dụng |
 |--------|------|-----------------|----------------|
-| 1 | Điểm móc tò mò | "Điều này thú vị đấy" | Chương giữa |
-| 2 | Điểm móc lo lắng | "Tiếp theo sẽ ra sao" | Chương giữa |
-| 3 | Điểm móc cấp bách | "Anh phải hành động ngay" | Chương cao trào |
-| 4 | Điểm móc sinh tồn | "Anh có sống sót không" | Cao trào/Trước kết |
-| 5 | Điểm móc tối thượng | "Tất cả rốt cuộc có ý nghĩa gì" | Kết thúc toàn bộ truyện |
+| 1 | Hook tò mò | "Điều này thú vị đấy" | Chương giữa |
+| 2 | Hook lo lắng | "Tiếp theo sẽ ra sao" | Chương giữa |
+| 3 | Hook cấp bách | "Anh phải hành động ngay" | Chương cao trào |
+| 4 | Hook sinh tồn | "Anh có sống sót không" | Cao trào/Trước kết |
+| 5 | Hook tối thượng | "Tất cả rốt cuộc có ý nghĩa gì" | Kết thúc toàn bộ truyện |
 
-**Gợi ý leo thang:** Cường độ điểm móc trong cung truyện nên tăng dần về tổng thể, nhưng có thể dao động
+**Gợi ý leo thang:** Cường độ hook trong cung truyện nên tăng dần về tổng thể, nhưng có thể dao động

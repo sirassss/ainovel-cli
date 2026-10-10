@@ -38,7 +38,7 @@ Các cung truyện dưới đây phù hợp với tiểu thuyết mạng dài k�
 - Mỗi thế lực có lợi ích và lý lẽ riêng, không chia chính-tà đơn giản
 - Sức mạnh cá nhân của nhân vật chính không giải quyết được vấn đề cấu trúc — đây là chỗ giữ chất phàm nhân lưu
 - Gia đình/hậu phương phải chịu áp lực từ lựa chọn của nhân vật chính
-- Kết cung phải đổi bản đồ thế lực và gieo phục bút cho tập sau
+- Kết cung phải đổi bản đồ thế lực và gieo chi tiết gài trước cho tập sau
 
 ### Cung Truyện Đột Phá Cảnh Giới Lớn (6-10 chương)
 2-3 chương tích lũy tới ngưỡng + chuẩn bị tài nguyên → 1-2 chương ngoại lực cản trở hoặc cơ duyên → 2-3 chương đột phá (xen kẽ nguy cơ bị phát hiện) → 1-2 chương nghiệm chứng sức mạnh mới
@@ -48,7 +48,7 @@ Các cung truyện dưới đây phù hợp với tiểu thuyết mạng dài k�
 - Ghi rõ mốc cảnh giới theo đúng tên trong world_rules
 
 ### Cung Truyện Thường Ngày / Hậu Phương (4-7 chương)
-Gia đình, tiền bạc, thân phận, quan hệ võ quán, bố trí phục bút, tích đà cho cao trào sau
+Gia đình, tiền bạc, thân phận, quan hệ võ quán, bố trí chi tiết gài trước, tích đà cho cao trào sau
 - Không phải để độn chữ: mỗi chương ít nhất đẩy một nhánh phụ hoặc siết một món nợ cảm xúc
 - Là nơi trả nợ ân tình gia đình đã gieo từ cung đầu
 - Xây kết nối cảm xúc trước, rồi mới phá — sức tác động đến từ thứ tự đó

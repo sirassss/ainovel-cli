@@ -3,8 +3,8 @@ package domain
 import "strings"
 import "testing"
 
-// Tái hiện đại cương thật đã sinh ra truyện "viết lại rồi thêm một tí":
-// 11/12 chương dùng chung một móc câu.
+// Tái hiện dàn ý thật đã sinh ra truyện "viết lại rồi thêm một tí":
+// 11/12 chương dùng chung một hook.
 func TestStalledOutlineCatchesRepeatedHook(t *testing.T) {
 	same := "Một tu sĩ trẻ xuất hiện với lời mời gia nhập tông phái"
 	var entries []OutlineEntry
@@ -28,11 +28,11 @@ func TestStalledOutlineAcceptsHealthyOutline(t *testing.T) {
 		{Chapter: 3, CoreEvent: "Bị đuổi khỏi thôn", Hook: "Hắn mang theo một hạt giống không rõ nguồn"},
 	}
 	if got := StalledOutline(entries); got != "" {
-		t.Fatalf("đại cương lành mạnh không được báo lỗi, nhận %q", got)
+		t.Fatalf("dàn ý lành mạnh không được báo lỗi, nhận %q", got)
 	}
 }
 
-// Tái hiện sự cố thật: Tập 1 còn hai cung khung xương (38 chương) mà sách
+// Tái hiện sự cố thật: Tập 1 còn hai cung phác thảo (38 chương) mà sách
 // vẫn được tuyên bố hoàn thành sau 15 chương của Tập 2.
 func TestSkeletonArcsSeesUnexpandedVolume(t *testing.T) {
 	volumes := []VolumeOutline{
@@ -46,7 +46,7 @@ func TestSkeletonArcsSeesUnexpandedVolume(t *testing.T) {
 	}
 	got := SkeletonArcs(volumes)
 	if len(got) != 2 {
-		t.Fatalf("phải thấy 2 cung khung xương, nhận %d: %v", len(got), got)
+		t.Fatalf("phải thấy 2 cung phác thảo, nhận %d: %v", len(got), got)
 	}
 	if !strings.Contains(got[0], "Nguyên Bản Dược Lâm") {
 		t.Fatalf("phải nêu tên cung, nhận %q", got[0])

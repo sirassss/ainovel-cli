@@ -18,7 +18,7 @@ var sourceReportContract = llmcontract.Contract{
 		schema.Property("style_observations", textList("Quan sát về góc nhìn kể, cấu trúc câu và kết cấu miêu tả")).Required(),
 		schema.Property("common_words", textList("Nhóm từ tần suất cao, hình ảnh và từ chuyển cảnh")).Required(),
 		schema.Property("plot_patterns", textList("Mô thức đẩy cốt truyện, bước ngoặt và leo thang xung đột")).Required(),
-		schema.Property("hook_patterns", textList("Mô thức mở đầu, cuối chương và móc câu chênh lệch thông tin")).Required(),
+		schema.Property("hook_patterns", textList("Mô thức mở đầu, cuối chương và hook chênh lệch thông tin")).Required(),
 		schema.Property("pacing_notes", textList("Mật độ cảnh và nhịp giải phóng thông tin")).Required(),
 		schema.Property("reader_appeal", textList("Phương pháp giữ độc giả đọc tiếp")).Required(),
 		schema.Property("reusable_techniques", textList("Thủ pháp cấu trúc có thể học hỏi")).Required(),
@@ -52,10 +52,10 @@ var synthesisContract = llmcontract.Contract{
 			schema.Property("payoff_patterns", textList("Cách thu hồi và đáp ứng")).Required(),
 		)).Required(),
 		schema.Property("hook_design", schema.Object(
-			schema.Property("hook_types", textList("Loại móc câu")).Required(),
-			schema.Property("placement", textList("Vị trí móc câu")).Required(),
+			schema.Property("hook_types", textList("Loại hook")).Required(),
+			schema.Property("placement", textList("Vị trí hook")).Required(),
 			schema.Property("cliffhanger_patterns", textList("Cách dừng hồi hộp")).Required(),
-			schema.Property("payoff_rules", textList("Quy tắc đáp ứng móc câu")).Required(),
+			schema.Property("payoff_rules", textList("Quy tắc đáp ứng hook")).Required(),
 		)).Required(),
 		schema.Property("pacing_density", schema.Object(
 			schema.Property("scene_density", textList("Mật độ thông tin mỗi cảnh")).Required(),

@@ -46,7 +46,7 @@ func chapterFactsSchema() map[string]any {
 	worldEvidence := schema.Object(
 		schema.Property("chapter", schema.Int("Chương chứa bằng chứng")).Required(),
 		schema.Property("category", nullableString("Loại sự thật thế giới; không phân loại được thì là null")).Required(),
-		schema.Property("fact", schema.String("Sự thật thế giới được chính văn tiết lộ rõ ràng")).Required(),
+		schema.Property("fact", schema.String("Sự thật thế giới được nội dung chương tiết lộ rõ ràng")).Required(),
 	)
 	timelineEvent := schema.Object(
 		schema.Property("chapter", schema.Int("Số chương")).Required(),
@@ -55,9 +55,9 @@ func chapterFactsSchema() map[string]any {
 		schema.Property("characters", stringList("Nhân vật liên quan")).Required(),
 	)
 	foreshadow := schema.Object(
-		schema.Property("id", schema.String("Dùng lại ID phục bút trong ledger")).Required(),
-		schema.Property("action", schema.Enum("Hành động phục bút", "plant", "advance", "resolve")).Required(),
-		schema.Property("description", nullableString("Mô tả phục bút khi plant; các trường hợp khác có thể là null")).Required(),
+		schema.Property("id", schema.String("Dùng lại ID chi tiết gài trước trong ledger")).Required(),
+		schema.Property("action", schema.Enum("Hành động chi tiết gài trước", "plant", "advance", "resolve")).Required(),
+		schema.Property("description", nullableString("Mô tả chi tiết gài trước khi plant; các trường hợp khác có thể là null")).Required(),
 	)
 	relationship := schema.Object(
 		schema.Property("character_a", schema.String("Nhân vật A")).Required(),
@@ -71,7 +71,7 @@ func chapterFactsSchema() map[string]any {
 		schema.Property("field", schema.String("Thuộc tính thay đổi")).Required(),
 		schema.Property("old_value", nullableString("Trạng thái trước thay đổi; lần xuất hiện đầu tiên thì là null")).Required(),
 		schema.Property("new_value", schema.String("Trạng thái sau thay đổi")).Required(),
-		schema.Property("reason", nullableString("Nguyên nhân thay đổi; chính văn không nói rõ thì là null")).Required(),
+		schema.Property("reason", nullableString("Nguyên nhân thay đổi; nội dung chương không nói rõ thì là null")).Required(),
 	)
 	return schema.Object(
 		schema.Property("chapter", schema.Int("Số chương")).Required(),
@@ -79,16 +79,16 @@ func chapterFactsSchema() map[string]any {
 		schema.Property("summary", schema.String("Tóm lược chương")).Required(),
 		schema.Property("key_events", stringList("Sự kiện then chốt")).Required(),
 		schema.Property("core_event", schema.String("Việc quan trọng nhất của chương")).Required(),
-		schema.Property("hook", nullableString("Móc câu cuối chương; không có thì là null")).Required(),
+		schema.Property("hook", nullableString("Hook cuối chương; không có thì là null")).Required(),
 		schema.Property("scenes", stringList("Chuỗi cảnh")).Required(),
 		schema.Property("characters", stringList("Nhân vật xuất hiện")).Required(),
 		schema.Property("character_evidence", schema.Array("Bằng chứng nhân vật", characterEvidence)).Required(),
 		schema.Property("world_evidence", schema.Array("Bằng chứng sự thật thế giới", worldEvidence)).Required(),
 		schema.Property("timeline_events", schema.Array("Sự kiện dòng thời gian", timelineEvent)).Required(),
-		schema.Property("foreshadow_updates", schema.Array("Phục bút tăng thêm", foreshadow)).Required(),
+		schema.Property("foreshadow_updates", schema.Array("Chi tiết gài trước tăng thêm", foreshadow)).Required(),
 		schema.Property("relationship_changes", schema.Array("Biến đổi quan hệ", relationship)).Required(),
 		schema.Property("state_changes", schema.Array("Biến đổi trạng thái", stateChange)).Required(),
-		schema.Property("hook_type", schema.Enum("Loại móc câu cuối chương", domain.HookTypes()...)).Required(),
+		schema.Property("hook_type", schema.Enum("Loại hook cuối chương", domain.HookTypes()...)).Required(),
 		schema.Property("dominant_strand", schema.Enum("Tuyến truyện chủ đạo", domain.DominantStrands()...)).Required(),
 	)
 }
@@ -111,7 +111,7 @@ var synthesisContract = llmcontract.Contract{
 	Name:        "import_book_synthesis",
 	Description: "Tổng hợp sự thật toàn sách và đưa ra phạm vi tập/cung liên tục, đầy đủ",
 	Schema: schema.Object(
-		schema.Property("title", nullableString("Tên sách chính thức trong chính văn; không xác nhận được thì là null")).Required(),
+		schema.Property("title", nullableString("Tên sách chính thức trong nội dung chương; không xác nhận được thì là null")).Required(),
 		schema.Property("synopsis", schema.String("Lời giới thiệu truyện dành cho độc giả, không tiết lộ nội dung")).Required(),
 		schema.Property("premise", schema.String("Mô tả tiền đề truyện bằng Markdown")).Required(),
 		schema.Property("characters", schema.Array("Nhân vật chính", schema.Object(
@@ -123,7 +123,7 @@ var synthesisContract = llmcontract.Contract{
 			schema.Property("traits", stringList("Đặc điểm nhân vật")).Required(),
 			schema.Property("tier", nullableString("Cấp bậc nhân vật; không phán đoán được thì là null")).Required(),
 		))).Required(),
-		schema.Property("world_rules", schema.Array("Quy tắc thế giới do chính văn xác lập", schema.Object(
+		schema.Property("world_rules", schema.Array("Quy tắc thế giới do nội dung chương xác lập", schema.Object(
 			schema.Property("category", schema.String("Loại quy tắc")).Required(),
 			schema.Property("rule", schema.String("Mô tả quy tắc")).Required(),
 			schema.Property("boundary", schema.String("Ranh giới không được vi phạm")).Required(),
@@ -144,8 +144,8 @@ var synthesisContract = llmcontract.Contract{
 			schema.Property("estimated_scale", nullableString("Quy mô ước chừng; không phán đoán được thì là null")).Required(),
 			schema.Property("last_updated", llmcontract.Nullable(schema.Int("Số chương mới nhất làm căn cứ; không cần điền thì là null"))).Required(),
 		)).Required(),
-		schema.Property("planning_tier", schema.Enum("Cấp quy hoạch", "short", "mid", "long")).Required(),
-		schema.Property("story_status", schema.Enum("Truyện đã hoàn kết hay chưa", storyOpen, storyClosed, storyUncertain)).Required(),
+		schema.Property("planning_tier", schema.Enum("Cấp lập kế hoạch", "short", "mid", "long")).Required(),
+		schema.Property("story_status", schema.Enum("Truyện đã kết thúc hay chưa", storyOpen, storyClosed, storyUncertain)).Required(),
 		schema.Property("status_reason", nullableString("Lý do phán đoán trạng thái")).Required(),
 	),
 }

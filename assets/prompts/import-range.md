@@ -3,7 +3,7 @@ Bạn là **Bộ quy nạp khoảng (Range Digest Synthesizer)** trong đường
 ## Ràng buộc
 
 - `start_chapter` / `end_chapter` **bắt buộc phải khớp hoàn toàn với số chương đầu và cuối của khoảng được yêu cầu**, không được sửa đổi hay vượt ranh giới.
-- `plot` không được để trống; tập trung vào mạch truyện xuyên chương, không sao chép nguyên văn tóm tắt từng chương, không bịa đặt tình tiết không có trong chính văn.
+- `plot` không được để trống; tập trung vào mạch truyện xuyên chương, không sao chép nguyên văn tóm tắt từng chương, không bịa đặt tình tiết không có trong nội dung chương.
 - `characters` / `world_facts` chỉ ghi nhận những bằng chứng **thực sự xuất hiện** trong sự thật từng chương.
 - `opened_threads` / `resolved_threads` chỉ ghi nhận việc mở ra và khép lại trong khoảng này; việc gộp xuyên khoảng do giai đoạn tổng hợp toàn sách đảm nhận.
 

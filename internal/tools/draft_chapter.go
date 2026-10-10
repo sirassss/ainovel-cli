@@ -25,7 +25,7 @@ func NewDraftChapterTool(store *store.Store) *DraftChapterTool {
 
 func (t *DraftChapterTool) Name() string { return "draft_chapter" }
 func (t *DraftChapterTool) Description() string {
-	return "Ghi chính văn của chương. mode=write ghi đè cả chương, mode=append nối vào bản nháp hiện có (viết tiếp/sửa)"
+	return "Ghi nội dung của chương. mode=write ghi đè cả chương, mode=append nối vào bản nháp hiện có (viết tiếp/sửa)"
 }
 func (t *DraftChapterTool) Label() string { return "Ghi chương" }
 
@@ -39,7 +39,7 @@ func (t *DraftChapterTool) Schema() map[string]any {
 	// 默认"行为现在需要模型显式传 mode="write"，Execute 的 default 分支不变。
 	return schema.Object(
 		schema.Property("chapter", schema.Int("Số chương")).Required(),
-		schema.Property("content", schema.String("Chính văn chương")).Required(),
+		schema.Property("content", schema.String("Nội dung chương")).Required(),
 		schema.Property("mode", schema.Enum("Chế độ ghi", "write", "append")).Required(),
 	)
 }

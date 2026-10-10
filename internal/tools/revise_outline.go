@@ -22,10 +22,10 @@ func NewReviseOutlineTool(store *store.Store) *ReviseOutlineTool {
 }
 
 func (t *ReviseOutlineTool) Name() string  { return "revise_outline" }
-func (t *ReviseOutlineTool) Label() string { return "Sửa đại cương" }
+func (t *ReviseOutlineTool) Label() string { return "Sửa dàn ý" }
 func (t *ReviseOutlineTool) Description() string {
-	return "Sửa phần đại cương chưa xảy ra. Từ from_chapter, dùng replacement thay trọn kế hoạch phía sau:" +
-		"Đại cương phẳng thay phần đuôi của cả truyện, đại cương phân tầng thay phần đuôi của cung chứa chương đó; chương đã hoàn thành hoặc đang viết không được dời." +
+	return "Sửa phần dàn ý chưa xảy ra. Từ from_chapter, dùng replacement thay trọn kế hoạch phía sau:" +
+		"Dàn ý phẳng thay phần đuôi của cả truyện, dàn ý phân tầng thay phần đuôi của cung chứa chương đó; chương đã hoàn thành hoặc đang viết không được dời." +
 		"Các chương phía sau cần giữ lại phải được đưa hết vào replacement."
 }
 
@@ -37,7 +37,7 @@ func (t *ReviseOutlineTool) Schema() map[string]any {
 	entry := schema.Object(
 		schema.Property("title", schema.String("Tiêu đề chương")).Required(),
 		schema.Property("core_event", schema.String("Sự kiện cốt lõi của chương")).Required(),
-		schema.Property("hook", schema.String("Móc câu cuối chương")).Required(),
+		schema.Property("hook", schema.String("Hook cuối chương")).Required(),
 		schema.Property("scenes", schema.Array("Các cảnh dự kiến; không có thì là mảng rỗng", schema.String(""))).Required(),
 	)
 	return schema.Object(

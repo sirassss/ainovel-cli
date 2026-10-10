@@ -239,7 +239,7 @@ func New(cfg bootstrap.Config, bundle assets.Bundle, options ...NewOption) (*Hos
 	h.gate = NewChapterAdvanceGate(store,
 		func(reason string) {
 			h.abortWithEvent(reason, "info")
-			h.notifier.Send(notify.Notification{Kind: notify.KindAdvanceGate, Level: "info", Title: "ainovel: Chờ nghiệm thu", Body: reason})
+			h.notifier.Send(notify.Notification{Kind: notify.KindAdvanceGate, Level: "info", Title: "ainovel: Chờ duyệt", Body: reason})
 		},
 		func(level, summary string) {
 			h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Summary: summary, Level: level})
@@ -386,7 +386,7 @@ func (h *Host) StartPrepared(rawRequirement string) error {
 
 	// 启动裁定:失败显式报错中止(启动期用户在场,报错优于猜测)。
 	start := time.Now()
-	decision, derr := runObservedDecision(h.observer, "Tài phán khởi động", func() (arbiter.PlanStartDecision, error) {
+	decision, derr := runObservedDecision(h.observer, "Phân xử khởi động", func() (arbiter.PlanStartDecision, error) {
 		return arbiter.DecidePlanStart(h.runCtx, h.arbiterModel(),
 			h.bundle.Prompts.ArbiterPlanStart, rawRequirement, h.cfg.Style)
 	})
@@ -401,15 +401,15 @@ func (h *Host) StartPrepared(rawRequirement string) error {
 	}
 	var recErr error
 	if rec, recErr = h.store.Decisions.Append(rec); recErr != nil {
-		slog.Warn("Lưu kiểm toán tài phán khởi động thất bại", "module", "host", "err", recErr)
+		slog.Warn("Lưu bản ghi kiểm toán khởi động thất bại", "module", "host", "err", recErr)
 	}
 	if derr != nil {
-		return fmt.Errorf("Tài phán khởi động thất bại: %w", derr)
+		return fmt.Errorf("Phân xử khởi động thất bại: %w", derr)
 	}
 	if err := h.store.RunMeta.SetPlanStart(domain.PlanStartRecord{
 		RawPrompt: rawRequirement, Planner: decision.Planner, PlannerTask: decision.Task, DecisionID: rec.ID,
 	}); err != nil {
-		return fmt.Errorf("Ghi nhận tài phán khởi động: %w", err)
+		return fmt.Errorf("Ghi nhận phân xử khởi động: %w", err)
 	}
 
 	h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM",
@@ -512,7 +512,7 @@ func (h *Host) Reopen(direction string) error {
 	if err := h.store.Progress.ReopenContinue(); err != nil {
 		return err
 	}
-	reopenEvent := Event{Time: time.Now(), Category: "SYSTEM", Summary: "Đã mở lại cuốn sách ở trạng thái sáng tác (người dùng hủy phán quyết hoàn kết)", Level: "info"}
+	reopenEvent := Event{Time: time.Now(), Category: "SYSTEM", Summary: "Đã mở lại cuốn sách ở trạng thái sáng tác (người dùng hủy phán quyết kết thúc truyện)", Level: "info"}
 	if d := strings.TrimSpace(direction); d != "" {
 		reopenEvent.Detail = reopenEvent.Summary + "\nHướng viết tiếp: " + d
 	}
@@ -606,7 +606,7 @@ func (h *Host) doIntervention(text string, restart bool) error {
 	// 崩溃保护:裁定前先持久化(PendingSteer),成功应用或已当面回显失败后原子清除
 	// (ClearHandledSteer 同时复位 FlowSteering)。裁定期间崩溃 → 下次 Resume 重放。
 	if err := h.store.RunMeta.SetPendingSteer(text); err != nil {
-		wrapped := fmt.Errorf("Lưu bền can thiệp thất bại, đã dừng tài phán: %w", err)
+		wrapped := fmt.Errorf("Lưu bền can thiệp thất bại, đã dừng phân xử: %w", err)
 		h.emitEvent(Event{Time: time.Now(), Category: "ERROR", Agent: "arbiter",
 			Summary: wrapped.Error(), Detail: wrapped.Error(), Level: "error"})
 		return wrapped
@@ -628,7 +628,7 @@ func (h *Host) doIntervention(text string, restart bool) error {
 	facts.Running = h.engine.isRunning()
 
 	start := time.Now()
-	decision, derr := runObservedDecision(h.observer, "Tài phán can thiệp của người dùng", func() (arbiter.InterventionDecision, error) {
+	decision, derr := runObservedDecision(h.observer, "Phân xử can thiệp của người dùng", func() (arbiter.InterventionDecision, error) {
 		return arbiter.DecideIntervention(h.runCtx, h.arbiterModel(),
 			h.bundle.Prompts.ArbiterIntervention, facts, text)
 	})
@@ -649,7 +649,7 @@ func (h *Host) doIntervention(text string, restart bool) error {
 		rec.Error = derr.Error()
 	}
 	if _, err := h.store.Decisions.Append(rec); err != nil {
-		wrapped := fmt.Errorf("Lưu kiểm toán tài phán can thiệp thất bại, từ chối thực hiện hành động: %w", err)
+		wrapped := fmt.Errorf("Lưu bản ghi kiểm toán can thiệp thất bại, từ chối thực hiện hành động: %w", err)
 		h.emitEvent(Event{Time: time.Now(), Category: "ERROR", Agent: "arbiter",
 			Summary: wrapped.Error(), Detail: wrapped.Error(), Level: "error"})
 		return wrapped
@@ -666,7 +666,7 @@ func (h *Host) doIntervention(text string, restart bool) error {
 		return derr
 	}
 
-	h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Summary: "Tài phán: " + decision.Reason, Level: "info"})
+	h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Summary: "Phân xử: " + decision.Reason, Level: "info"})
 	if decision.Answer != "" {
 		h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Summary: decision.Answer, Level: "info"})
 	}
@@ -732,7 +732,7 @@ func newInterventionFailureEvent(err error) Event {
 		Time:     time.Now(),
 		Category: "ERROR",
 		Agent:    "arbiter",
-		Summary:  "Tài phán can thiệp thất bại: " + detail + " (chưa thay đổi gì)",
+		Summary:  "Phân xử can thiệp thất bại: " + detail + " (chưa thay đổi gì)",
 		Detail:   detail,
 		Kind:     errorKind(err, detail),
 		Level:    "error",
@@ -789,7 +789,7 @@ func (h *Host) SetAdvanceMode(mode domain.ChapterAdvanceMode) error {
 	}
 	label := "tự động tiến chương"
 	if mode == domain.ChapterAdvanceReview {
-		label = "nghiệm thu từng chương"
+		label = "duyệt từng chương"
 	}
 	summary := "Chế độ tiến chương đã chuyển sang " + label
 	h.mu.Lock()
@@ -830,7 +830,7 @@ func (h *Host) AdvanceOneChapter() error {
 		return fmt.Errorf("RunMeta chưa được khởi tạo")
 	}
 	if meta.AdvanceMode != domain.ChapterAdvanceReview {
-		return fmt.Errorf("/next chỉ dùng cho chế độ nghiệm thu từng chương, hãy chạy /review on trước")
+		return fmt.Errorf("/next chỉ dùng cho chế độ duyệt từng chương, hãy chạy /review on trước")
 	}
 	if meta.AdvanceHold != nil {
 		return fmt.Errorf("Vẫn còn ý định tạm dừng một lần đang chờ xử lý (%s), hãy khôi phục hoặc hoàn tất can thiệp hiện tại trước", meta.AdvanceHold.Reason)
@@ -857,7 +857,7 @@ func (h *Host) AdvanceOneChapter() error {
 		return err
 	}
 	h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM",
-		Summary: fmt.Sprintf("Đã cho phép chương %d; sau khi nộp chương này sẽ hoàn tất thẩm duyệt cần thiết và bảo trì cấu trúc cung/tập, rồi lại chờ cho phép", target), Level: "info"})
+		Summary: fmt.Sprintf("Đã cho phép chương %d; sau khi nộp chương này sẽ hoàn tất đánh giá cần thiết và bảo trì cấu trúc cung/tập, rồi lại chờ cho phép", target), Level: "info"})
 	h.refreshWriterRestore()
 	if !h.startEngine(nil) {
 		// 许可按章节号持久化且同目标幂等，调用方稍后重试不会重复授权。
@@ -1537,7 +1537,7 @@ func (h *Host) StageCoCreateStream(ctx context.Context, history []CoCreateMessag
 // 只贴 [阶段规划] 事实标记 + 中性陈述，不写死"怎么落地"——具体路由（compass / architect /
 // user_rules）交给 arbiter-intervention.md 的「阶段规划」判据，避免与 prompt 形成第二真相源、
 // 也不堵死风格类要求走 user_rules（守"分类裁定归 LLM"）。Continue 再叠加 [用户干预] 前缀。
-const stagePlanPrefix = "[Quy hoạch giai đoạn] Tôi đã tạm dừng sáng tác và cùng trợ lý đồng sáng tác chỉnh lý hướng đi tiếp theo dưới đây, hãy tài phán cách thực hiện theo phân loại can thiệp của bạn, rồi tiếp tục sáng tác. Hướng đi tiếp theo như sau:\n\n"
+const stagePlanPrefix = "[Kế hoạch giai đoạn] Tôi đã tạm dừng sáng tác và cùng trợ lý đồng sáng tác chỉnh lý hướng đi tiếp theo dưới đây, hãy phân xử cách thực hiện theo phân loại can thiệp của bạn, rồi tiếp tục sáng tác. Hướng đi tiếp theo như sau:\n\n"
 
 // PauseForCoCreate 进入阶段共创：置共创占用标记，运行中则一并暂停 Engine。
 // 返回 false 表示无法进入（全书已完成或已在共创中），调用方忽略即可。
@@ -1672,7 +1672,7 @@ func (h *Host) requireCleanChapters() error {
 		return fmt.Errorf("Kiểm tra sửa đổi chương từ bên ngoài: %w", err)
 	}
 	if len(chapters) > 0 {
-		return fmt.Errorf("Phát hiện chính văn chương đã bị sửa từ bên ngoài: %v; hãy chạy /sync trước", chapters)
+		return fmt.Errorf("Phát hiện nội dung chương đã bị sửa từ bên ngoài: %v; hãy chạy /sync trước", chapters)
 	}
 	return nil
 }
@@ -1964,7 +1964,7 @@ func (h *Host) continueAfterImport(opts imp.Options) bool {
 	}
 	if meta.AdvanceMode != domain.ChapterAdvanceAuto {
 		h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "info",
-			Summary: "Nhập truyện hoàn tất; hiện ở chế độ nghiệm thu từng chương, nhập tiếp tục hoặc /next để nối tiếp viết"})
+			Summary: "Nhập truyện hoàn tất; hiện ở chế độ duyệt từng chương, nhập tiếp tục hoặc /next để nối tiếp viết"})
 		return false
 	}
 	h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "info", Summary: "Nhập truyện hoàn tất, tự động nối tiếp viết"})

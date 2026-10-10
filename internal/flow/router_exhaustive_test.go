@@ -106,9 +106,9 @@ func classify(t *testing.T, inst *Instruction) expectKind {
 		}
 	case "editor":
 		switch {
-		case contains(inst.Task, "Thẩm duyệt cấp cung"):
+		case contains(inst.Task, "Đánh giá cấp cung"):
 			return expectArcReview
-		case contains(inst.Task, "Thẩm duyệt toàn cục"):
+		case contains(inst.Task, "Đánh giá toàn cục"):
 			return expectGlobalReview
 		case contains(inst.Task, "save_arc_summary"):
 			return expectArcSummary

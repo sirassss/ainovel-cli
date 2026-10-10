@@ -17,7 +17,7 @@
 - 🌐 **Tùy chọn Ngôn ngữ sáng tác truyện**: Hỗ trợ viết truyện bằng **Tiếng Việt (mặc định)** hoặc **Tiếng Trung nguyên bản** qua trường `"language": "vi"` hoặc `"language": "zh"` trong cấu hình.
 - 🦙 **Tích hợp sẵn Ollama Local**: Hỗ trợ chạy 100% offline, miễn phí không tốn tiền API với các model mã nguồn mở chạy trên GPU nội bộ (Qwen 2.5 / 3.5, Llama, v.v.).
 - ✍️ **Bộ Prompt song ngữ & Văn phong chống AI sáo rỗng**: 14 prompt hệ thống được tinh chỉnh kỹ lưỡng, kèm file quy chuẩn văn phong tiểu thuyết Tiếng Việt (`assets/voice.md`) giúp hành văn sống động, gãy gọn, có chiều sâu, bài trừ các mẫu câu sáo rỗng của AI.
-- 🚀 **Đồng bộ toàn diện Upstream mới nhất**: Sở hữu đầy đủ kiến trúc Đa Agent (`Coordinator` → `Architect` → `Writer` → `Editor` → `Arbiter`), Prompt Caching 3 tầng, quy hoạch cuộn 2 tầng (Rolling planning), điểm phục hồi step-level, và toàn bộ 14 lệnh slash commands.
+- 🚀 **Đồng bộ toàn diện Upstream mới nhất**: Sở hữu đầy đủ kiến trúc Đa Agent (`Coordinator` → `Architect` → `Writer` → `Editor` → `Arbiter`), Prompt Caching 3 tầng, kế hoạch cuộn 2 tầng (Rolling planning), điểm phục hồi step-level, và toàn bộ 14 lệnh slash commands.
 
 ---
 
@@ -43,7 +43,7 @@
    - [Xuất truyện hoàn chỉnh (`/export` TXT/EPUB)](#xuất-truyện-hoàn-chỉnh-export-txtepub)
 8. [Kiến Trúc Kỹ Thuật & Nguyên Lý Hoạt Động](#8-kiến-trúc-kỹ-thuật--nguyên-lý-hoạt-động)
    - [Kiến trúc Đa Agent](#kiến-trúc-đa-agent)
-   - [Quy hoạch cuộn 2 tầng (Rolling Planning)](#quy-hoạch-cuộn-2-tầng-rolling-planning)
+   - [Kế hoạch cuộn 2 tầng (Rolling Planning)](#kế-hoạch-cuộn-2-tầng-rolling-planning)
    - [Quản lý & Nén ngữ cảnh 4 cấp](#quản-lý--nén-ngữ-cảnh-4-cấp)
    - [Đánh giá chất lượng 7 chiều của Editor](#đánh-giá-chất-lượng-7-chiều-của-editor)
    - [Khôi phục điểm ngắt (Step-level Recovery)](#khôi-phục-điểm-ngắt-step-level-recovery)
@@ -244,8 +244,8 @@ Khi đang ở trong giao diện TUI, bạn có thể gõ `/` để mở bảng c
 | `/model` | Chuyển đổi Model hoặc mức độ suy luận (reasoning/thinking) |
 | `/config` | Quản lý cấu hình Provider, Model ID, API Key, Base URL, Context Window |
 | `/diag` | Xem báo cáo chẩn đoán toàn diện về sức khỏe, tiến độ và chất lượng truyện |
-| `/review [on\|off]` | Bật/tắt chế độ nghiệm thu từng chương (dừng lại sau mỗi chương để bạn duyệt) |
-| `/next` | Phê duyệt cho phép viết chương tiếp theo (khi ở chế độ nghiệm thu) |
+| `/review [on\|off]` | Bật/tắt chế độ duyệt từng chương (dừng lại sau mỗi chương để bạn duyệt) |
+| `/next` | Phê duyệt cho phép viết chương tiếp theo (khi ở chế độ duyệt) |
 | `/start <tệp>` | Đọc tệp dàn ý / ý tưởng bên ngoài để bắt đầu truyện mới |
 | `/import <tệp>` | Nhập tiểu thuyết từ bên ngoài vào để AI phân tích và viết tiếp |
 | `/reopen <hướng>` | Viết tiếp tập mới sau khi tác phẩm đã hoàn thành |
@@ -317,14 +317,14 @@ novels/<tên-truyện>/output/novel/
 Gõ `/diag` trong TUI để hệ thống tự động kiểm tra toàn bộ truyện theo 4 chiều:
 - **Tiến trình**: Phát hiện vòng lặp viết lại, kẹt lệnh can thiệp, nhảy số chương.
 - **Chất lượng**: Theo dõi điểm số đánh giá, tỷ lệ tuân thủ cốt truyện, độ dài chương bất thường.
-- **Quy hoạch**: Kiểm tra các nút thắt/phục bút bị bỏ quên, dàn ý cạn kiệt, thiếu tóm tắt.
+- **Kế hoạch**: Kiểm tra các nút thắt/chi tiết gài trước bị bỏ quên, dàn ý cạn kiệt, thiếu tóm tắt.
 - **Ngữ cảnh**: Nhân vật bị mất tích, đứt gãy dòng thời gian.
 
 ### Mô phỏng văn phong (`/simulate`)
 Đặt các file văn mẫu (truyện của tác giả bạn yêu thích) vào thư mục `simulate/` rồi gõ `/simulate`. AI sẽ phân tích nhịp điệu, cách dùng từ, cấu trúc câu và tạo hồ sơ mô phỏng để áp dụng vào truyện của bạn.
 
 ### Đồng bộ sửa đổi thủ công (`/sync`)
-Nếu bạn mở file `chapters/05.md` ra chỉnh sửa câu chữ trực tiếp, gõ `/sync` trong TUI. Hệ thống sẽ quét qua SHA-256, tự động cập nhật lại tóm tắt, trạng thái nhân vật và phục bút mà không làm hỏng tiến trình sáng tác.
+Nếu bạn mở file `chapters/05.md` ra chỉnh sửa câu chữ trực tiếp, gõ `/sync` trong TUI. Hệ thống sẽ quét qua SHA-256, tự động cập nhật lại tóm tắt, trạng thái nhân vật và chi tiết gài trước mà không làm hỏng tiến trình sáng tác.
 
 ### Nhập truyện bên ngoài (`/import`)
 Gõ `/import ./truyen_cu.txt`. Hệ thống sẽ:
@@ -374,7 +374,7 @@ Gõ `/export` trong TUI hoặc chỉ định tham số:
 
 ---
 
-### Quy hoạch cuộn 2 tầng (Rolling Planning)
+### Kế hoạch cuộn 2 tầng (Rolling Planning)
 
 Khác với các công cụ AI thông thường lên dàn ý cứng một lần cho cả trăm chương khiến câu chuyện càng về sau càng rỗng và loãng, `ainovel-cli` áp dụng cơ chế **La bàn (Compass) + Tầm nhìn cuộn**:
 - Ban đầu chỉ dựng khung 2 Tập (Volume) và dàn ý chi tiết cho Cung đầu tiên (Arc 1).
@@ -388,7 +388,7 @@ Khác với các công cụ AI thông thường lên dàn ý cứng một lần 
 1. **ToolResultMicrocompact**: Dọn dẹp kết quả trung gian của các lệnh tool cũ.
 2. **LightTrim**: Cắt tỉa các đoạn text dài không còn cần thiết.
 3. **StoreSummaryCompact**: Thay thế tin nhắn cũ bằng bản tóm tắt đã lưu trong Store (0 tốn LLM token).
-4. **FullSummary**: Dùng prompt chuyên dụng tóm tắt ngữ cảnh tự sự (giữ vững trạng thái nhân vật, manh mối phục bút).
+4. **FullSummary**: Dùng prompt chuyên dụng tóm tắt ngữ cảnh tự sự (giữ vững trạng thái nhân vật, manh mối chi tiết gài trước).
 
 ---
 
@@ -399,8 +399,8 @@ Sau mỗi chương, Editor sẽ thẩm định nghiêm ngặt theo 7 tiêu chí 
 2. **Hành vi & Tính cách nhân vật (Character Behavior)**
 3. **Nhịp điệu cốt truyện (Pacing)**
 4. **Tính mạch lạc & Chuyển cảnh (Narrative Flow)**
-5. **Gài gắm phục bút (Foreshadowing)**
-6. **Móc câu giữ chân người đọc cuối chương (Hooks)**
+5. **Chi tiết gài trước (Foreshadowing)**
+6. **Hook giữ chân người đọc cuối chương (Hooks)**
 7. **Chất lượng thẩm mỹ văn chương (Aesthetic Quality)**: Chi tiết miêu tả, thủ pháp nghệ thuật, sự khác biệt trong lời thoại, chất lượng từ ngữ, sức truyền cảm.
 
 ---
@@ -436,7 +436,7 @@ output/novel/
     ├── book.json       # Metadata tác phẩm
     ├── compass.json    # La bàn định hướng dài hạn
     ├── progress.json   # Trạng thái tiến độ hiện tại
-    ├── foreshadow.json# Sổ tay quản lý phục bút
+    ├── foreshadow.json# Sổ tay quản lý chi tiết gài trước
     └── checkpoints.jsonl # Checkpoint khôi phục từng bước
 ```
 

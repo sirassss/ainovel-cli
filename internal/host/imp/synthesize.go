@@ -255,7 +255,7 @@ func rangeInputDigest(facts []ImportedChapterFacts) string {
 }
 
 func synthesizeBook(ctx context.Context, m callModel, systemPrompt, payload string, n, maxTokens int, prof callProfile) (*BookSynthesis, error) {
-	prof.step(0, 0, "Tạo tổng hợp toàn sách (thông tin tác phẩm/premise/characters/cấu trúc đại cương)...")
+	prof.step(0, 0, "Tạo tổng hợp toàn sách (thông tin tác phẩm/premise/characters/cấu trúc dàn ý)...")
 	s, err := callStructured[BookSynthesis](ctx, m, synthesisContract, systemPrompt, buildBookPayload(payload, n), maxTokens, prof, func(s *BookSynthesis) error {
 		return validateSynthesis(s, n)
 	})

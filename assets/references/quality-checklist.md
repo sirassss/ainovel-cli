@@ -134,23 +134,23 @@ Dùng danh sách kiểm tra chất lượng này trước khi bàn giao chương
 
 ---
 
-## Kiểm Tra Điểm Móc
+## Kiểm Tra Hook
 
-- [ ] **Kết thúc có điểm móc**
+- [ ] **Kết thúc có hook**
   - Dùng ít nhất một kỹ thuật tạo hồi hộp
   - Khiến người đọc muốn xem chương tiếp theo
 
-- [ ] **Mức độ điểm móc phù hợp**
+- [ ] **Mức độ hook phù hợp**
   - Khớp với vị trí trong câu chuyện
-  - Chương cao trào cần điểm móc mạnh hơn
+  - Chương cao trào cần hook mạnh hơn
 
-- [ ] **Không phải điểm móc giả tạo**
+- [ ] **Không phải hook giả tạo**
   - Không phải hiểu lầm máy móc
   - Không phải "đột nhiên" vô nghĩa
 
 - [ ] **Tạo nền cho chương tiếp theo**
   - Thiết lập xung đột cho chương kế
-  - Đặt phục bút
+  - Đặt chi tiết gài trước
 
 ---
 
@@ -212,10 +212,10 @@ Kiểm tra và sửa các mẫu sau:
 ## Kiểm Tra Tính Nhất Quán
 
 - [ ] **Nhất quán với phần trước**
-  - Điểm móc của chương trước được phản hồi
+  - Hook của chương trước được phản hồi
   - Thông tin đã biết nhất quán
 
-- [ ] **Phục bút có kết nối**
+- [ ] **Chi tiết gài trước có kết nối**
   - Các gợi ý được đặt sớm có tiến triển
   - Hoặc sắp được tiết lộ
 
@@ -274,7 +274,7 @@ Tự chấm điểm trước khi bàn giao (mỗi mục 1–10 điểm):
 | Đẩy cốt truyện | /10 | Chương có thúc đẩy tuyến chính? |
 | Xây dựng nhân vật | /10 | Hành vi nhất quán và có chiều sâu? |
 | Chất lượng đối thoại | /10 | Đối thoại tự nhiên và thúc đẩy cốt truyện? |
-| Thiết lập điểm móc | /10 | Điểm móc cuối chương khiến người đọc muốn đọc tiếp? |
+| Thiết lập hook | /10 | Hook cuối chương khiến người đọc muốn đọc tiếp? |
 | Kiểm soát nhịp điệu | /10 | Căng — thả hợp lý? |
 | Thể hiện chứ không kể | /10 | Dùng hành động / đối thoại thay vì phát biểu? |
 | Chất lượng ngôn ngữ | /10 | Không có chống văn phong AI, dùng từ chính xác? |

@@ -39,13 +39,13 @@ func decide[T any](ctx context.Context, model agentcore.ChatModel, contract llmc
 		Agent:        "arbiter",
 		Hooks: llmcontract.Hooks{
 			Resolved: func(res llmcontract.Resolution) {
-				slog.Debug("Chọn giao thức tài phán", "module", "arbiter",
+				slog.Debug("Chọn giao thức phân xử", "module", "arbiter",
 					"contract", contract.Name, "structured_mode", res.Mode,
 					"capability_source", res.Source, "provider", res.Provider,
 					"model", res.Model, "schema_fingerprint", contract.Fingerprint())
 			},
 			Correction: func(ev llmcontract.Correction) {
-				slog.Warn("Tự phục hồi đầu ra tài phán", "module", "arbiter", "attempt", ev.Attempt,
+				slog.Warn("Tự phục hồi đầu ra phân xử", "module", "arbiter", "attempt", ev.Attempt,
 					"layer", ev.Layer, "structured_mode", ev.Mode, "err", ev.Err)
 			},
 		},

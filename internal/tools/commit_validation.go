@@ -42,7 +42,7 @@ func (t *CommitChapterTool) validateCommitArgs(a commitArgs) error {
 					return fmt.Errorf("foreshadow_updates[%d] references unknown id %q (%s): %w", i, update.ID, describeKnownForeshadowIDs(plantedAt), errs.ErrToolPrecondition)
 				}
 				if at > a.Chapter {
-					return fmt.Errorf("foreshadow_updates[%d] phục bút %q được gieo ở chương %d, không thể advance hoặc resolve ở chương %d: %w",
+					return fmt.Errorf("foreshadow_updates[%d] chi tiết gài trước %q được gieo ở chương %d, không thể advance hoặc resolve ở chương %d: %w",
 						i, update.ID, at, a.Chapter, errs.ErrToolPrecondition)
 				}
 			}

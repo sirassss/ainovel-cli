@@ -151,7 +151,7 @@ func Route(s State) *Instruction {
 			task += fmt.Sprintf(
 				". Chương này chưa có chapter_contract: hãy gọi plan_chapter(chapter=%d) để nêu rõ mục tiêu viết lại"+
 					"(goal phải trả lời \"sửa thành như thế nào\", không phải nhắc lại \"sai ở đâu\"; "+
-					"nếu cần bổ sung payoff_points / continuity_checks / hook_goal), rồi dựa vào đó viết lại chính văn", ch)
+					"nếu cần bổ sung payoff_points / continuity_checks / hook_goal), rồi dựa vào đó viết lại nội dung chương", ch)
 		}
 		return &Instruction{
 			Agent:   "writer",
@@ -179,10 +179,10 @@ func Route(s State) *Instruction {
 			return &Instruction{
 				Agent: "editor",
 				Task: fmt.Sprintf(
-					"Thẩm duyệt tập %d cung %d (chương %d-%d): gọi novel_context(chapter=%d), save_review dùng scope=arc, chapter=%d",
+					"Đánh giá tập %d cung %d (chương %d-%d): gọi novel_context(chapter=%d), save_review dùng scope=arc, chapter=%d",
 					refresh.Volume, refresh.Arc, refresh.StartChapter, refresh.EndChapter, refresh.EndChapter, refresh.EndChapter,
 				),
-				Reason: "Thiếu thẩm duyệt cấp cung",
+				Reason: "Thiếu đánh giá cấp cung",
 			}
 		case AggregateArcSummary:
 			return &Instruction{
@@ -199,8 +199,8 @@ func Route(s State) *Instruction {
 		case AggregateGlobalReview:
 			return &Instruction{
 				Agent:  "editor",
-				Task:   fmt.Sprintf("Thẩm duyệt %d chương đầu: gọi novel_context(chapter=%d), save_review dùng scope=global, chapter=%d", refresh.EndChapter, refresh.EndChapter, refresh.EndChapter),
-				Reason: "Thiếu thẩm duyệt toàn cục",
+				Task:   fmt.Sprintf("Đánh giá %d chương đầu: gọi novel_context(chapter=%d), save_review dùng scope=global, chapter=%d", refresh.EndChapter, refresh.EndChapter, refresh.EndChapter),
+				Reason: "Thiếu đánh giá toàn cục",
 			}
 		}
 	}
@@ -208,8 +208,8 @@ func Route(s State) *Instruction {
 	if s.ImmediateFeedbackCount > 0 {
 		return &Instruction{
 			Agent:  plannerForTier(s.PlanningTier),
-			Task:   "Chỉ xử lý writer_feedback là phần sửa đổi bên ngoài trong novel_context: đối chiếu cốt truyện đã xảy ra với kế hoạch phía sau; cần điều chỉnh thì gọi revise_outline hoặc công cụ cấu trúc tương ứng, không cần thì gọi resolve_outline_feedback; không được xử lý foundation_status hay quy hoạch khác; lưu xong thì kết thúc bằng một câu",
-			Reason: fmt.Sprintf("Có %d sửa đổi bên ngoài chưa được lan truyền sang quy hoạch phía sau", s.ImmediateFeedbackCount),
+			Task:   "Chỉ xử lý writer_feedback là phần sửa đổi bên ngoài trong novel_context: đối chiếu cốt truyện đã xảy ra với kế hoạch phía sau; cần điều chỉnh thì gọi revise_outline hoặc công cụ cấu trúc tương ứng, không cần thì gọi resolve_outline_feedback; không được xử lý foundation_status hay kế hoạch khác; lưu xong thì kết thúc bằng một câu",
+			Reason: fmt.Sprintf("Có %d sửa đổi bên ngoài chưa được lan truyền sang kế hoạch phía sau", s.ImmediateFeedbackCount),
 		}
 	}
 
@@ -221,10 +221,10 @@ func Route(s State) *Instruction {
 			return &Instruction{
 				Agent: "editor",
 				Task: fmt.Sprintf(
-					"Thẩm duyệt cấp cung cho tập %d cung %d (chương %d-%d): gọi novel_context(chapter=%d), save_review dùng scope=arc, chapter=%d; issues[].chapters chỉ được nằm trong khoảng này",
+					"Đánh giá cấp cung cho tập %d cung %d (chương %d-%d): gọi novel_context(chapter=%d), save_review dùng scope=arc, chapter=%d; issues[].chapters chỉ được nằm trong khoảng này",
 					b.Volume, b.Arc, b.StartChapter, b.EndChapter, b.EndChapter, b.EndChapter,
 				),
-				Reason: "Thẩm duyệt cuối cung chưa hoàn tất",
+				Reason: "Đánh giá cuối cung chưa hoàn tất",
 			}
 		case !s.HasArcSummary:
 			return &Instruction{
@@ -242,13 +242,13 @@ func Route(s State) *Instruction {
 			return &Instruction{
 				Agent:  "architect_long",
 				Task:   fmt.Sprintf("Mở rộng tập %d cung %d (save_foundation type=expand_arc)", b.NextVolume, b.NextArc),
-				Reason: "Khung xương cung kế tiếp chờ mở rộng",
+				Reason: "Cung phác thảo kế tiếp chờ mở rộng",
 			}
 		case b.NeedsNewVolume:
 			return &Instruction{
 				Agent:  "architect_long",
-				Task:   "Tạo tập kế tiếp: sau khi đánh giá theo danh sách kiểm tra hoàn kết, gọi save_foundation — truyện tiếp tục → type=append_volume; truyện gần đến đích → type=append_volume và JSON tập có \"final\": true ở cấp cao nhất (tập khép lại, thu toàn bộ tuyến, viết xong tự hoàn kết); mọi điều kiện hoàn kết hiện đã thỏa → type=complete_book. Cả ba lựa chọn đều phải kèm tham số reason ghi rõ lý do phán định",
-				Reason: "Cuối tập cần quyết định thêm tập mới, tập khép lại hay kết thúc cả truyện",
+				Task:   "Tạo tập kế tiếp: sau khi đánh giá theo danh sách kiểm tra kết thúc truyện, gọi save_foundation — truyện tiếp tục → type=append_volume; truyện gần đến đích → type=append_volume và JSON tập có \"final\": true ở cấp cao nhất (tập cuối, thu toàn bộ tuyến, viết xong tự kết thúc truyện); mọi điều kiện kết thúc truyện hiện đã thỏa → type=complete_book. Cả ba lựa chọn đều phải kèm tham số reason ghi rõ lý do phán định",
+				Reason: "Cuối tập cần quyết định thêm tập mới, tập cuối hay kết thúc cả truyện",
 			}
 		}
 	}
@@ -260,7 +260,7 @@ func Route(s State) *Instruction {
 		if due, reason := domain.ShouldReview(len(p.CompletedChapters)); due && !s.HasGlobalReview {
 			return &Instruction{
 				Agent:  "editor",
-				Task:   fmt.Sprintf("Thẩm duyệt toàn cục %d chương đầu (save_review scope=global, chapter=%d)", s.LastCompleted, s.LastCompleted),
+				Task:   fmt.Sprintf("Đánh giá toàn cục %d chương đầu (save_review scope=global, chapter=%d)", s.LastCompleted, s.LastCompleted),
 				Reason: reason,
 			}
 		}
@@ -276,10 +276,10 @@ func Route(s State) *Instruction {
 		return &Instruction{
 			Agent: plannerForTier(s.PlanningTier),
 			Task: fmt.Sprintf(
-				"Đại cương phẳng đã viết xong (đã hoàn thành %d/%d chương): nếu truyện đã khép lại, gọi save_foundation(type=complete_book); nếu cần viết tiếp, dùng revise_outline nối kế hoạch từ chương %d",
+				"Dàn ý phẳng đã viết xong (đã hoàn thành %d/%d chương): nếu truyện đã khép lại, gọi save_foundation(type=complete_book); nếu cần viết tiếp, dùng revise_outline nối kế hoạch từ chương %d",
 				len(p.CompletedChapters), p.TotalChapters, next,
 			),
-			Reason: "Đại cương phẳng đã cạn, cần quyết định hoàn kết hay nối tiếp",
+			Reason: "Dàn ý phẳng đã cạn, cần quyết định kết thúc truyện hay nối tiếp",
 		}
 	}
 

@@ -1,6 +1,6 @@
-# Mẫu Lập Kế Hoạch Đề Cương
+# Mẫu lập kế hoạch dàn ý
 
-Mẫu này không nhằm ép tất cả tác phẩm vào một độ dài cố định, mà giúp xác định cấp độ tác phẩm trước, rồi mới chọn độ chi tiết của đề cương.
+Mẫu này không nhằm ép tất cả tác phẩm vào một độ dài cố định, mà giúp xác định cấp độ tác phẩm trước, rồi mới chọn độ chi tiết của dàn ý.
 
 ## Bước 1: Xác định cấp độ độ dài tác phẩm
 
@@ -14,15 +14,15 @@ Mẫu này không nhằm ép tất cả tác phẩm vào một độ dài cố �
 
 - Phù hợp: có nâng cấp theo giai đoạn, nhiều tuyến phụ, quan hệ nhân vật thay đổi
 - Độ dài tham khảo: 25-60 chương
-- Định dạng đề xuất: `outline` dạng phẳng hoặc phân lớp nhẹ
+- Định dạng đề xuất: `outline` dạng phẳng hoặc phân tầng nhẹ
 
 ### Truyện dài kỳ / Kiểu web novel
 
 - Phù hợp: thể loại tự nhiên có không gian nâng cấp liên tục, căng thẳng quan hệ dài hạn, nhiều mục tiêu giai đoạn, thế giới có thể mở rộng, bí ẩn dài hạn hoặc tuyến tăng trưởng dài hạn
 - Độ dài tham khảo: 80-200+ chương
-- Định dạng đề xuất: `layered_outline` phân lớp
+- Định dạng đề xuất: `layered_outline` phân tầng
 
-## Bước 2: Xác định có cần dùng đề cương phân lớp không
+## Bước 2: Xác định có cần dùng dàn ý phân tầng không
 
 Chỉ cần thỏa mãn bất kỳ 2 điều kiện dưới đây là ưu tiên dùng `layered_outline`:
 
@@ -41,7 +41,7 @@ Thứ tự lập kế hoạch truyện dài đề xuất là:
 2. Động lực truyện dài hạn
 3. Chủ đề và nâng cấp cấp tập
 4. Mục tiêu cung truyện và bước ngoặt giai đoạn
-5. Sự kiện và điểm móc cấp chương
+5. Sự kiện và hook cấp chương
 
 Những sai lầm thường gặp:
 
@@ -50,7 +50,7 @@ Những sai lầm thường gặp:
 - Chỉ nâng cấp tuyến chính, không nâng cấp tuyến quan hệ
 - Giai đoạn đầu đã tiêu hết mọi bí mật lớn, giữa và cuối truyện chỉ có thể lặp lại công thức
 
-## Mẫu Đề Cương Phẳng (Truyện ngắn / vừa)
+## Mẫu dàn ý phẳng (Truyện ngắn / vừa)
 
 ```json
 [
@@ -63,15 +63,15 @@ Những sai lầm thường gặp:
     "turn": "Phát hiện/phản đòn khiến kế hoạch phải đổi",
     "payoff": "Lời hứa cũ được trả trong chương",
     "consequence": "Tình thế mới không thể quay về như đầu chương",
-    "hook": "Điểm móc cuối chương",
+    "hook": "Hook cuối chương",
     "scenes": ["Mục tiêu → lực cản → lựa chọn → tình thế đổi", "Nấc áp lực tiếp theo sinh từ cảnh trước"]
   }
 ]
 ```
 
-## Mẫu Đề Cương Phân Lớp (Truyện dài - Cuộn mở hai lớp tập-cung)
+## Mẫu dàn ý phân tầng (truyện dài - cuộn mở hai tầng tập-cung)
 
-Lập kế hoạch ban đầu dùng cuộn hai lớp: 2 tập đầu có khung cung truyện, các tập còn lại là tập khung; cung đầu tiên có chương chi tiết.
+Lập kế hoạch ban đầu dùng cuộn hai tầng: 2 tập đầu có khung cung truyện, các tập còn lại là tập khung; cung đầu tiên có chương chi tiết.
 
 ```json
 [
@@ -85,7 +85,7 @@ Lập kế hoạch ban đầu dùng cuộn hai lớp: 2 tập đầu có khung c
         "title": "Cung thứ nhất (đã mở rộng)",
         "goal": "Mục tiêu cục bộ, lực cản và bước ngoặt",
         "chapters": [
-          {"chapter": 1, "title": "Tiêu đề chương", "core_event": "Sự kiện cốt lõi", "conflict": "Lực cản trực tiếp", "stakes": "Cái giá", "turn": "Bước ngoặt", "payoff": "Lời hứa được trả", "consequence": "Tình thế mới", "hook": "Điểm móc sinh từ hậu quả", "scenes": ["Mục tiêu → lực cản → lựa chọn → tình thế đổi", "Áp lực tăng từ hệ quả cảnh trước"]}
+          {"chapter": 1, "title": "Tiêu đề chương", "core_event": "Sự kiện cốt lõi", "conflict": "Lực cản trực tiếp", "stakes": "Cái giá", "turn": "Bước ngoặt", "payoff": "Lời hứa được trả", "consequence": "Tình thế mới", "hook": "Hook sinh từ hậu quả", "scenes": ["Mục tiêu → lực cản → lựa chọn → tình thế đổi", "Áp lực tăng từ hệ quả cảnh trước"]}
         ]
       },
       {
@@ -142,7 +142,7 @@ Mỗi cung truyện đều cần trả lời:
 
 - Mỗi chương phải phục vụ mục tiêu của cung truyện chứa nó
 - Mỗi chương phải chứa một sự kiện đẩy truyện tiến không thể xóa bỏ
-- Điểm móc cần đa dạng, không nên chỉ dựa vào một kiểu "phát hiện bí mật"
+- Hook cần đa dạng, không nên chỉ dựa vào một kiểu "phát hiện bí mật"
 - Các chương đầu truyện không được chỉ "giới thiệu thế giới", mà phải đồng thời thúc đẩy nhân vật và xung đột
 - Mỗi chương có mục tiêu tức thời, cái giá, ít nhất hai nấc áp lực, một bước ngoặt đổi quyết định và một hậu quả còn hiệu lực
 - Mỗi chương trả ít nhất một lời hứa cũ trước khi mở câu hỏi mới; không tích lũy bí ẩn vô hạn để giả tạo lực kéo

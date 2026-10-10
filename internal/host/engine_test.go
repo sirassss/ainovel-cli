@@ -735,7 +735,7 @@ func TestEngine_RetriesUnfinishedPlanStart(t *testing.T) {
 		if ev.Category == "DISPATCH" {
 			dispatched = true
 		}
-		if strings.Contains(ev.Summary, "Đã bổ sung tài phán khởi động") {
+		if strings.Contains(ev.Summary, "Đã bổ sung phân xử khởi động") {
 			healed = true
 		}
 	}
@@ -777,7 +777,7 @@ func TestEngine_PlanStartRetryFailurePauses(t *testing.T) {
 	}
 	var paused bool
 	for _, ev := range *events {
-		if strings.Contains(ev.Summary, "Tài phán khởi động thất bại") {
+		if strings.Contains(ev.Summary, "Phân xử khởi động thất bại") {
 			paused = true
 		}
 	}

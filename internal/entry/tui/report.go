@@ -118,7 +118,7 @@ func renderReportText(report diag.Report, width int, exportPath string, exportEr
 	}
 	b.WriteString("\n")
 
-	b.WriteString(mutedStyle.Render("Thẩm duyệt: "))
+	b.WriteString(mutedStyle.Render("Đánh giá: "))
 	b.WriteString(fmt.Sprintf("%d lần", st.ReviewCount))
 	if st.RewriteCount > 0 {
 		b.WriteString(mutedStyle.Render("  Viết lại: "))
@@ -131,7 +131,7 @@ func renderReportText(report diag.Report, width int, exportPath string, exportEr
 	b.WriteString("\n")
 
 	if st.ForeshadowOpen > 0 || st.ForeshadowStale > 0 {
-		b.WriteString(mutedStyle.Render("Phục bút: "))
+		b.WriteString(mutedStyle.Render("Chi tiết gài trước: "))
 		b.WriteString(fmt.Sprintf("Đang mở %d", st.ForeshadowOpen))
 		if st.ForeshadowStale > 0 {
 			b.WriteString(lipgloss.NewStyle().Foreground(colorReview).Render(fmt.Sprintf(" Đình trệ %d", st.ForeshadowStale)))
@@ -139,7 +139,7 @@ func renderReportText(report diag.Report, width int, exportPath string, exportEr
 		b.WriteString("\n")
 	}
 	if st.PlanningTier != "" {
-		b.WriteString(mutedStyle.Render("Quy hoạch: "))
+		b.WriteString(mutedStyle.Render("Kế hoạch: "))
 		b.WriteString(st.PlanningTier)
 		b.WriteString("\n")
 	}
@@ -197,7 +197,7 @@ func renderReportLoadingText(width int, startedAt time.Time) string {
 	b.WriteString("\n\n")
 	b.WriteString(hintStyle.Render("Thời gian bắt đầu: " + formatReportTime(startedAt)))
 	b.WriteString("\n\n")
-	b.WriteString(bodyStyle.Render(wrapText("Đang đọc các sản phẩm trong thư mục output và phân tích quy trình, chất lượng, đại cương và ngữ cảnh...", width)))
+	b.WriteString(bodyStyle.Render(wrapText("Đang đọc các sản phẩm trong thư mục output và phân tích quy trình, chất lượng, dàn ý và ngữ cảnh...", width)))
 	b.WriteString("\n\n")
 	b.WriteString(hintStyle.Render("Có thể nhấn Esc để đóng bảng, phân tích vẫn tiếp tục chạy ngầm."))
 	return b.String()

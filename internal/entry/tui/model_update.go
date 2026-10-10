@@ -573,7 +573,7 @@ func (m Model) handleRuntimeMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		} else if msg.checkOnly {
 			summary := "Không phát hiện chương nào bị chỉnh sửa từ bên ngoài"
 			if len(msg.chapters) > 0 {
-				summary = fmt.Sprintf("Phát hiện chính văn chương đã bị chỉnh sửa từ bên ngoài: %v; Chạy /sync để tiếp nhận", msg.chapters)
+				summary = fmt.Sprintf("Phát hiện nội dung chương đã bị chỉnh sửa từ bên ngoài: %v; Chạy /sync để tiếp nhận", msg.chapters)
 			}
 			m.applyEvent(host.Event{Time: time.Now(), Category: "SYSTEM", Summary: summary, Level: "info"})
 		} else {

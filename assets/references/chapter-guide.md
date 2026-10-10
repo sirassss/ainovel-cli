@@ -8,7 +8,7 @@ Trước khi chọn kỹ thuật mở đầu hay chia tỷ lệ độ dài, khó
 
 ```text
 Áp lực mở đầu → mục tiêu tức thời + cái giá → lực cản tăng → bước ngoặt đổi kế hoạch
-→ lựa chọn có đánh đổi → hồi đáp một lời hứa cũ → hậu quả sinh điểm móc mới
+→ lựa chọn có đánh đổi → hồi đáp một lời hứa cũ → hậu quả sinh hook mới
 ```
 
 Đây là quan hệ nhân quả, không phải tám ô phải viết thành tám cảnh. Một cảnh có thể làm nhiều việc. Tuy nhiên, nếu chương không có lựa chọn làm đổi tình thế và không để lại hậu quả, thêm mô tả, độc thoại hay hành động cũng chỉ làm bản thảo dài hơn chứ không sâu hơn.
@@ -135,7 +135,7 @@ Bắt đầu từ một khoảnh khắc then chốt trong tương lai, rồi k�
 
 ## Cấu Trúc Chương Tiêu Chuẩn
 
-### 1. Điểm Móc Mở Đầu (20% Đầu) ⚠️ Quan Trọng Nhất
+### 1. Hook Mở Đầu (20% Đầu) ⚠️ Quan Trọng Nhất
 
 **Phải bao gồm:**
 - ✅ Xung đột/khủng hoảng tức thì
@@ -169,7 +169,7 @@ Nội dung cốt lõi của chương — phải đẩy cốt truyện tiến lê
 - **Đỉnh điểm cảm xúc**: Khám phá lớn, phản bội, thú nhận, hy sinh
 - **Đỉnh điểm tâm lý**: Bước ngoặt nội tâm của nhân vật chính
 
-### 4. Điểm Móc Kết Chương (5-10% Cuối)
+### 4. Hook Kết Chương (5-10% Cuối)
 
 Để lại bầu không khí hồi hộp, khiến độc giả muốn đọc chương tiếp theo. Xem chi tiết tại [hook-techniques.md](hook-techniques.md)
 
@@ -260,8 +260,8 @@ Tự kiểm tra sau khi viết mỗi chương:
 - [ ] Có xung đột hoặc bước ngoặt không?
 - [ ] Đối thoại có đẩy cốt truyện hoặc tiết lộ nhân vật không?
 - [ ] Có cho thấy thay vì kể lể thông tin then chốt không?
-- [ ] Phần kết có để lại điểm móc hồi hộp không?
-- [ ] Có phục bút cho chương tiếp theo không?
+- [ ] Phần kết có để lại hook hồi hộp không?
+- [ ] Có chi tiết gài trước cho chương tiếp theo không?
 
 ### Câu Hỏi Tự Kiểm Tra Phần Mở Đầu
 Nếu có bất kỳ câu hỏi nào về phần mở đầu trả lời "không", phải viết lại:

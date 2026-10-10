@@ -103,7 +103,7 @@ Mỗi cung truyện nên tuân theo vòng nhịp điệu "phủ nền → tích 
 - **Cung truyện đối kháng thi đấu** (12-20 chương): 2-3 chương chuẩn bị/tình báo trước thi → 6-10 chương nhiều vòng đối đầu (xen kẽ tương tác nhân vật và bất ngờ) → 2-3 chương quyết thắng+thưởng phạt. Phù hợp với: đại hội thi võ, đấu thầu thương mại, tranh luận tòa án, vòng tuyển chọn, v.v.
 - **Cung truyện khám phá phát hiện** (15-25 chương): 2-3 chương thu thập tình báo+lập đội → 8-15 chương đi sâu từng lớp (mỗi lớp thách thức mới) → 2-3 chương phát hiện cuối cùng+thu hoạch. Phù hợp với: phiêu lưu bí cảnh, điều tra sự thật, giải mê tìm kho báu, thâm nhập địch hậu, v.v.
 - **Cung truyện ân oán xung đột** (8-12 chương): 2-3 chương tích lũy mâu thuẫn → 1-2 chương xung đột bùng nổ → 3-5 chương nhiều bên tranh đoạt → 1-2 chương giải quyết+hậu quả. Phù hợp với: đối đầu thù địch, đấu tranh phe phái, rắc rối tình cảm, tranh giành quyền lực, v.v.
-- **Cung truyện chuyển tiếp thường nhật** (5-8 chương): Phát triển nhân vật/giao tiếp xã hội/bố cục phục bút/nghỉ ngơi, tích lũy thế cho cung truyện cao trào tiếp theo
+- **Cung truyện chuyển tiếp thường nhật** (5-8 chương): Phát triển nhân vật/giao tiếp xã hội/bố cục chi tiết gài trước/nghỉ ngơi, tích lũy thế cho cung truyện cao trào tiếp theo
 
 Nguyên tắc then chốt:
 - Mỗi bước ngoặt lớn không phải chuyện của một chương, mà là đỉnh điểm của cả cung truyện

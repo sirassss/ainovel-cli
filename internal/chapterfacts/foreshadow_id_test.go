@@ -7,7 +7,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/domain"
 )
 
-// Tái hiện sự cố thật: model đặt mọi phục bút mới là "new", nên từ lần thứ hai
+// Tái hiện sự cố thật: model đặt mọi chi tiết gài trước mới là "new", nên từ lần thứ hai
 // trở đi chúng đâm vào bản ghi cũ và bị nuốt lặng — 22 chương gieo 6 lần, vào sổ 2.
 func TestRejectsPlaceholderForeshadowID(t *testing.T) {
 	for _, id := range []string{"new", "New", " none ", "TBD", "-", "n/a", "auto"} {

@@ -29,9 +29,9 @@ func (t *ReopenBookTool) Name() string  { return "reopen_book" }
 func (t *ReopenBookTool) Label() string { return "Mở lại để viết lại" }
 
 func (t *ReopenBookTool) Description() string {
-	return "Mở lại cả truyện đã hoàn kết (phase=complete) sang trạng thái viết lại, dùng khi người dùng sau khi hoàn kết yêu cầu viết lại/trau chuốt vài chương." +
-		"chapters là các số chương đã hoàn thành cần viết lại; sau khi gọi, các chương này vào hàng đợi viết lại, Host sẽ lần lượt giao writer viết lại từng chương, sửa xong hết sẽ tự động hoàn kết lại." +
-		"Chỉ dùng khi cả truyện đã hoàn kết và người dùng yêu cầu rõ ràng sửa chương đã viết; người dùng muốn thêm tình tiết/kéo dài dung lượng không thuộc viết lại, đừng dùng công cụ này."
+	return "Mở lại cả truyện đã kết thúc (phase=complete) sang trạng thái viết lại, dùng khi người dùng sau khi kết thúc truyện yêu cầu viết lại/trau chuốt vài chương." +
+		"chapters là các số chương đã hoàn thành cần viết lại; sau khi gọi, các chương này vào hàng đợi viết lại, Host sẽ lần lượt giao writer viết lại từng chương, sửa xong hết sẽ lại tự động kết thúc truyện." +
+		"Chỉ dùng khi cả truyện đã kết thúc và người dùng yêu cầu rõ ràng sửa chương đã viết; người dùng muốn thêm tình tiết/kéo dài dung lượng không thuộc viết lại, đừng dùng công cụ này."
 }
 
 // 写工具，禁止并发。
@@ -93,6 +93,6 @@ func (t *ReopenBookTool) Execute(_ context.Context, args json.RawMessage) (json.
 		"reopened":         true,
 		"phase":            string(domain.PhaseWriting),
 		"pending_rewrites": a.Chapters,
-		"next_step":        "Đã mở lại và đưa các chương mục tiêu vào hàng đợi. Hãy chờ Host chỉ thị giao writer viết lại từng chương; sửa xong hết sẽ tự động hoàn kết lại.",
+		"next_step":        "Đã mở lại và đưa các chương mục tiêu vào hàng đợi. Hãy chờ Host chỉ thị giao writer viết lại từng chương; sửa xong hết sẽ lại tự động kết thúc truyện.",
 	})
 }

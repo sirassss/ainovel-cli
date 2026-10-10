@@ -27,11 +27,11 @@ func NewSaveReviewTool(store *store.Store) *SaveReviewTool {
 
 func (t *SaveReviewTool) Name() string { return "save_review" }
 func (t *SaveReviewTool) Description() string {
-	return "Lưu kết quả thẩm duyệt và cập nhật trạng thái luồng. verdict là một trong accept/polish/rewrite." +
+	return "Lưu kết quả đánh giá và cập nhật trạng thái luồng. verdict là một trong accept/polish/rewrite." +
 		"Editor đưa ra verdict dựa trên ngữ cảnh đầy đủ, công cụ chỉ kiểm tra sự thật và cập nhật Progress một cách nguyên tử." +
 		"Trả về các sự thật có cấu trúc: verdict / affected_chapters / next_flow / next_chapter"
 }
-func (t *SaveReviewTool) Label() string { return "Lưu thẩm duyệt" }
+func (t *SaveReviewTool) Label() string { return "Lưu đánh giá" }
 
 // 写工具（同时更新 reviews/ 与 Progress 的 PendingRewrites/Flow），禁止并发。
 func (t *SaveReviewTool) ReadOnly(_ json.RawMessage) bool        { return false }
@@ -40,29 +40,29 @@ func (t *SaveReviewTool) StrictSchema() bool                     { return true }
 
 func (t *SaveReviewTool) Schema() map[string]any {
 	issueSchema := schema.Object(
-		schema.Property("type", schema.String("Chiều vấn đề; có thể dùng các chiều cơ bản trong gợi ý thẩm duyệt, hoặc viết chiều cụ thể chính xác hơn")).Required(),
+		schema.Property("type", schema.String("Chiều vấn đề; có thể dùng các chiều cơ bản trong gợi ý đánh giá, hoặc viết chiều cụ thể chính xác hơn")).Required(),
 		schema.Property("severity", schema.Enum("Mức nghiêm trọng", "critical", "error", "warning")).Required(),
 		schema.Property("description", schema.String("Mô tả vấn đề")).Required(),
 		schema.Property("evidence", schema.String("Bằng chứng: đoạn nguyên văn, tình tiết cụ thể hoặc dữ liệu trạng thái")).Required(),
 		schema.Property("suggestion", llmcontract.Nullable(schema.String("Gợi ý sửa; không cần gợi ý thì là null"))).Required(),
-		schema.Property("chapters", schema.Array("Chương nơi bằng chứng của vấn đề thực sự nằm; thẩm duyệt cung phải nằm trong khoảng nhiệm vụ đã cho", schema.Int("Số chương"))).Required(),
+		schema.Property("chapters", schema.Array("Chương nơi bằng chứng của vấn đề thực sự nằm; đánh giá cung phải nằm trong khoảng nhiệm vụ đã cho", schema.Int("Số chương"))).Required(),
 		schema.Property("requires_change", schema.Bool("Vấn đề này có nên kích hoạt viết lại ngay các chương đã liệt kê hay không, do Editor quyết định dựa trên trải nghiệm đọc tổng thể")).Required(),
 	)
 	dimensionSchema := schema.Object(
-		schema.Property("dimension", schema.String("Chiều đánh giá; do nhiệm vụ thẩm duyệt hiện tại và rubric quyết định")).Required(),
+		schema.Property("dimension", schema.String("Chiều đánh giá; do nhiệm vụ đánh giá hiện tại và rubric quyết định")).Required(),
 		schema.Property("score", schema.Int("Điểm (0-100)")).Required(),
 		schema.Property("comment", schema.String("Kết luận ngắn gọn và bằng chứng của chiều đó; mỗi chiều đều bắt buộc")).Required(),
 	)
 	return schema.Object(
-		schema.Property("chapter", schema.Int("Số chương được thẩm duyệt (thẩm duyệt toàn cục điền số chương mới nhất)")).Required(),
-		schema.Property("scope", schema.Enum("Phạm vi thẩm duyệt", "chapter", "global", "arc")).Required(),
+		schema.Property("chapter", schema.Int("Số chương được đánh giá (đánh giá toàn cục điền số chương mới nhất)")).Required(),
+		schema.Property("scope", schema.Enum("Phạm vi đánh giá", "chapter", "global", "arc")).Required(),
 		schema.Property("dimensions", schema.Array("Điểm theo từng chiều; rubric cơ bản do prompt của Editor cung cấp, có thể bổ sung chiều cụ thể hơn theo nhiệm vụ", dimensionSchema)).Required(),
 		schema.Property("issues", schema.Array("Các vấn đề đã phát hiện", issueSchema)).Required(),
-		schema.Property("contract_status", llmcontract.Nullable(schema.Enum("Mức hoàn thành hợp đồng chương; không áp dụng thì là null", "met", "partial", "missed"))).Required(),
+		schema.Property("contract_status", llmcontract.Nullable(schema.Enum("Mức hoàn thành yêu cầu chương; không áp dụng thì là null", "met", "partial", "missed"))).Required(),
 		schema.Property("contract_misses", schema.Array("Các mục contract chưa hoàn thành hoặc bị vi phạm; không có thì là mảng rỗng", schema.String(""))).Required(),
 		schema.Property("contract_notes", llmcontract.Nullable(schema.String("Giải thích ngắn gọn về việc thực hiện contract; không có thì là null"))).Required(),
-		schema.Property("verdict", schema.Enum("Kết luận thẩm duyệt", "accept", "polish", "rewrite")).Required(),
-		schema.Property("summary", schema.String("Tổng kết thẩm duyệt")).Required(),
+		schema.Property("verdict", schema.Enum("Kết luận đánh giá", "accept", "polish", "rewrite")).Required(),
+		schema.Property("summary", schema.String("Tổng kết đánh giá")).Required(),
 	)
 }
 
@@ -114,7 +114,7 @@ func (t *SaveReviewTool) Execute(_ context.Context, args json.RawMessage) (json.
 	}
 	if existing != nil {
 		if !reflect.DeepEqual(*existing, r) {
-			return nil, fmt.Errorf("Thẩm duyệt tổng hợp của chương %d đã tồn tại với nội dung khác, từ chối ghi đè: %w", r.Chapter, errs.ErrToolConflict)
+			return nil, fmt.Errorf("Đánh giá tổng hợp của chương %d đã tồn tại với nội dung khác, từ chối ghi đè: %w", r.Chapter, errs.ErrToolConflict)
 		}
 		return t.finishReview(r, progress, scope, artifact)
 	}

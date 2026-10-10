@@ -149,7 +149,7 @@ func (s *Store) CheckConsistency() []string {
 	if progress.Layered && progress.CurrentVolume > 0 && progress.CurrentArc > 0 {
 		volumes, err := s.Outline.LoadLayeredOutline()
 		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("Đọc đại cương phân tầng thất bại: %v", err))
+			warnings = append(warnings, fmt.Sprintf("Đọc dàn ý phân tầng thất bại: %v", err))
 		} else if len(volumes) > 0 {
 			found := false
 			for _, v := range volumes {
@@ -165,7 +165,7 @@ func (s *Store) CheckConsistency() []string {
 				break
 			}
 			if !found {
-				warnings = append(warnings, fmt.Sprintf("V%d A%d hiện tại của progress không có mục tương ứng trong đại cương phân tầng", progress.CurrentVolume, progress.CurrentArc))
+				warnings = append(warnings, fmt.Sprintf("V%d A%d hiện tại của progress không có mục tương ứng trong dàn ý phân tầng", progress.CurrentVolume, progress.CurrentArc))
 			}
 		}
 	}
@@ -357,7 +357,7 @@ func (s *Store) ReviseOutline(fromChapter int, replacement []domain.OutlineEntry
 		return 0, fmt.Errorf("progress chưa được khởi tạo: %w", errs.ErrToolPrecondition)
 	}
 	if p.Phase == domain.PhaseComplete {
-		return 0, fmt.Errorf("Cả truyện đã hoàn kết, không cho phép sửa đại cương: %w", errs.ErrToolPrecondition)
+		return 0, fmt.Errorf("Cả truyện đã kết thúc, không cho phép sửa dàn ý: %w", errs.ErrToolPrecondition)
 	}
 	protected := p.InProgressChapter
 	if latest := p.LatestCompleted(); latest > protected {
@@ -369,8 +369,8 @@ func (s *Store) ReviseOutline(fromChapter int, replacement []domain.OutlineEntry
 		// 返工，否则架构师会继续在自己的工具集里找一个并不存在的出口。
 		return 0, fmt.Errorf(
 			"Chương %d đã hoàn thành hoặc đang viết; revise_outline chỉ sửa được các chương chưa xảy ra, phải bắt đầu sau chương %d."+
-				"Các chương đã viết trong pending_rewrites không thuộc phạm vi sửa đại cương: việc viết lại do writer thực hiện theo hàng đợi; "+
-				"nếu kiến trúc sư không có chương tương lai nào cần viết lại, hãy gọi resolve_outline_feedback xác nhận quy hoạch hiện có vẫn phù hợp rồi kết thúc: %w",
+				"Các chương đã viết trong pending_rewrites không thuộc phạm vi sửa dàn ý: việc viết lại do writer thực hiện theo hàng đợi; "+
+				"nếu kiến trúc sư không có chương tương lai nào cần viết lại, hãy gọi resolve_outline_feedback xác nhận kế hoạch hiện có vẫn phù hợp rồi kết thúc: %w",
 			fromChapter, protected, errs.ErrToolPrecondition)
 	}
 

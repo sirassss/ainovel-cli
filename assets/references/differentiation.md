@@ -57,7 +57,7 @@ Càng nhiều tín hiệu xuất hiện, càng chứng tỏ tác phẩm đang tr
 - Mở màn sư môn/tông phái/học viện/gia tộc/vụ án phổ biến nhất
 - Động cơ phản diện phổ biến nhất
 - Nhịp nâng cấp theo giai đoạn phổ biến nhất
-- Điểm móc kiểu "phát hiện bí mật" phổ biến nhất xuất hiện lặp đi lặp lại
+- Hook kiểu "phát hiện bí mật" phổ biến nhất xuất hiện lặp đi lặp lại
 
 ## Khi lập kế hoạch phải chủ động đặt giới hạn cho bản thân
 

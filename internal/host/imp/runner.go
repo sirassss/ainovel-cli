@@ -377,7 +377,7 @@ func (r *runner) run(ctx context.Context) {
 		case ActionPublish:
 			err = r.publish(ctx)
 		case ActionDone:
-			r.emit(StageDone, 0, 0, "Nhập truyện hoàn tất, chờ nghiệm thu rồi viết tiếp", nil)
+			r.emit(StageDone, 0, 0, "Nhập truyện hoàn tất, chờ duyệt rồi viết tiếp", nil)
 			return
 		default:
 			err = fmt.Errorf("Hành động không xác định %q", act)
@@ -727,6 +727,6 @@ func (r *runner) setCompletionHold() error {
 	}
 	return r.deps.Store.RunMeta.SetAdvanceHold(domain.AdvanceHold{
 		After:  domain.AdvanceHoldAtBoundary,
-		Reason: "Nhập tiểu thuyết ngoài hoàn tất, chờ nghiệm thu rồi viết tiếp",
+		Reason: "Nhập tiểu thuyết ngoài hoàn tất, chờ duyệt rồi viết tiếp",
 	})
 }

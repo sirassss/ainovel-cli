@@ -26,7 +26,7 @@ func renderStateContent(snap host.UISnapshot, contentW int) string {
 	overview.WriteString(renderField("Giai đoạn", snapshotPhaseLabel(snap.Phase)))
 	overview.WriteString(renderField("Quy trình", snapshotFlowLabel(snap.Flow)))
 	if snap.AdvanceMode == "review" {
-		advance := "Nghiệm thu từng chương"
+		advance := "Duyệt từng chương"
 		if snap.AdvancePermitChapter > 0 {
 			advance = fmt.Sprintf("Đã duyệt chương %d", snap.AdvancePermitChapter)
 		}
@@ -87,7 +87,7 @@ func renderStateContent(snap host.UISnapshot, contentW int) string {
 			renderHighlightField("Chờ xử lý", truncate(snap.PendingSteer, contentW-10)), contentW))
 	}
 	if snap.HasAdvanceHold {
-		sections = append(sections, renderSidebarSection("Nghiệm Thu",
+		sections = append(sections, renderSidebarSection("Duyệt",
 			renderHighlightField("Tạm dừng", truncate(snap.AdvanceHoldReason, contentW-10)), contentW))
 	}
 
@@ -195,7 +195,7 @@ func inProgressDisplay(snap host.UISnapshot) (label string, chapter int) {
 			}
 			ch = snap.PendingRewrites[0]
 		}
-		return "Đang gọt giũa", ch
+		return "Đang trau chuốt", ch
 	case "rewriting":
 		if ch <= 0 || !slices.Contains(snap.PendingRewrites, ch) {
 			if len(snap.PendingRewrites) == 0 {
@@ -226,7 +226,7 @@ func snapshotHeadline(snap host.UISnapshot) string {
 		return "Đang chờ xử lý viết lại/sửa đổi"
 	}
 	if snap.AdvanceMode == "review" && !snap.IsRunning && snap.Phase == "writing" {
-		return "Nghiệm thu từng chương: Chờ duyệt chương tiếp theo"
+		return "Duyệt từng chương: Chờ duyệt chương tiếp theo"
 	}
 	return ""
 }
@@ -236,7 +236,7 @@ func snapshotPhaseLabel(phase string) string {
 	case "premise":
 		return "Tiền đề"
 	case "outline":
-		return "Đại cương"
+		return "Dàn ý"
 	case "writing":
 		return "Sáng tác"
 	case "complete":
@@ -273,11 +273,11 @@ func snapshotFlowLabel(flow string) string {
 	case "writing":
 		return "Sáng tác"
 	case "reviewing":
-		return "Thẩm duyệt"
+		return "Đánh giá"
 	case "rewriting":
 		return "Viết lại"
 	case "polishing":
-		return "Gọt giũa"
+		return "Trau chuốt"
 	case "steering":
 		return "Can thiệp"
 	default:
@@ -633,19 +633,19 @@ func taskStatusColor(status string) lipgloss.AdaptiveColor {
 func taskKindLabel(kind string) string {
 	switch kind {
 	case "foundation_plan":
-		return "Quy hoạch nền tảng"
+		return "Lập kế hoạch nền tảng"
 	case "chapter_write":
 		return "Sáng tác chương"
 	case "chapter_review":
-		return "Thẩm duyệt chương"
+		return "Đánh giá chương"
 	case "chapter_rewrite":
 		return "Viết lại chương"
 	case "chapter_polish":
-		return "Gọt giũa chương"
+		return "Trau chuốt chương"
 	case "arc_expand":
 		return "Mở rộng cung truyện"
 	case "volume_append":
-		return "Quy hoạch tập tiếp theo"
+		return "Lập kế hoạch tập tiếp theo"
 	case "steer_apply":
 		return "Xử lý can thiệp"
 	default:

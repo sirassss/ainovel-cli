@@ -61,7 +61,7 @@ func (p *Projector) Apply(records []domain.ChapterRecord) error {
 		return fmt.Errorf("Dựng lại dòng thời gian: %w", err)
 	}
 	if err := p.store.World.SaveForeshadowLedger(ledger); err != nil {
-		return fmt.Errorf("Dựng lại sổ phục bút: %w", err)
+		return fmt.Errorf("Dựng lại sổ chi tiết gài trước: %w", err)
 	}
 	if err := p.store.World.SaveRelationships(relationships); err != nil {
 		return fmt.Errorf("Dựng lại quan hệ nhân vật: %w", err)
@@ -107,7 +107,7 @@ func projectWorld(records []domain.ChapterRecord) ([]domain.TimelineEvent, []dom
 			switch update.Action {
 			case "plant":
 				if strings.TrimSpace(update.ID) == "" || strings.TrimSpace(update.Description) == "" {
-					return nil, nil, nil, nil, fmt.Errorf("Phục bút plant của chương %d thiếu id hoặc description", chapter)
+					return nil, nil, nil, nil, fmt.Errorf("Chi tiết gài trước plant của chương %d thiếu id hoặc description", chapter)
 				}
 				if exists {
 					if ledger[idx].Description == "" {
@@ -119,17 +119,17 @@ func projectWorld(records []domain.ChapterRecord) ([]domain.TimelineEvent, []dom
 				ledger = append(ledger, domain.ForeshadowEntry{ID: update.ID, Description: update.Description, PlantedAt: chapter, Status: "planted"})
 			case "advance":
 				if !exists {
-					return nil, nil, nil, nil, fmt.Errorf("Chương %d đẩy tiếp phục bút không xác định %q", chapter, update.ID)
+					return nil, nil, nil, nil, fmt.Errorf("Chương %d đẩy tiếp chi tiết gài trước không xác định %q", chapter, update.ID)
 				}
 				ledger[idx].Status = "advanced"
 			case "resolve":
 				if !exists {
-					return nil, nil, nil, nil, fmt.Errorf("Chương %d thu phục bút không xác định %q", chapter, update.ID)
+					return nil, nil, nil, nil, fmt.Errorf("Chương %d thu chi tiết gài trước không xác định %q", chapter, update.ID)
 				}
 				ledger[idx].Status = "resolved"
 				ledger[idx].ResolvedAt = chapter
 			default:
-				return nil, nil, nil, nil, fmt.Errorf("Thao tác phục bút của chương %d không hợp lệ: %q", chapter, update.Action)
+				return nil, nil, nil, nil, fmt.Errorf("Thao tác chi tiết gài trước của chương %d không hợp lệ: %q", chapter, update.Action)
 			}
 		}
 	}

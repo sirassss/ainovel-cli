@@ -383,13 +383,13 @@ func (s *OutlineStore) reviseFlatTailUnlocked(fromChapter int, replacement []dom
 		return nil, fmt.Errorf("load outline: %w: %w", errs.ErrStoreRead, err)
 	}
 	if fromChapter > len(outline)+1 {
-		return nil, fmt.Errorf("from_chapter=%d vượt quá cuối đại cương %d: %w",
+		return nil, fmt.Errorf("from_chapter=%d vượt quá cuối dàn ý %d: %w",
 			fromChapter, len(outline), errs.ErrToolPrecondition)
 	}
 	updated := append([]domain.OutlineEntry(nil), outline[:fromChapter-1]...)
 	updated = append(updated, replacement...)
 	if len(updated) == 0 {
-		return nil, fmt.Errorf("Đại cương sau khi sửa không được để trống: %w", errs.ErrToolPrecondition)
+		return nil, fmt.Errorf("Dàn ý sau khi sửa không được để trống: %w", errs.ErrToolPrecondition)
 	}
 	for i := range updated {
 		updated[i].Chapter = i + 1
@@ -443,7 +443,7 @@ func reviseLayeredTail(volumes []domain.VolumeOutline, fromChapter int, replacem
 		local = len(volumes[lastVolume].Arcs[lastArc].Chapters)
 	}
 	if targetVolume < 0 {
-		return fmt.Errorf("from_chapter=%d nằm ngoài phạm vi đại cương đã mở rộng", fromChapter)
+		return fmt.Errorf("from_chapter=%d nằm ngoài phạm vi dàn ý đã mở rộng", fromChapter)
 	}
 
 	arc := &volumes[targetVolume].Arcs[targetArc]

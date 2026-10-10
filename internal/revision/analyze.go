@@ -29,7 +29,7 @@ func revisionAnalysisSchema() map[string]any {
 	facts := schema.Object(chapterfacts.Properties(false)...)
 	impact := schema.Object(
 		schema.Property("deviation", schema.String("Thay đổi của tình tiết đã xảy ra so với kế hoạch hiện có")).Required(),
-		schema.Property("suggestion", schema.String("Gợi ý điều chỉnh đại cương chưa hoàn thành")).Required(),
+		schema.Property("suggestion", schema.String("Gợi ý điều chỉnh dàn ý chưa hoàn thành")).Required(),
 	)
 	return schema.Object(
 		schema.Property("change_summary", schema.String("Tóm lược sửa đổi")).Required(),

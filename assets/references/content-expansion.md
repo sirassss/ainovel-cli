@@ -40,7 +40,7 @@ Huy động năm giác quan để miêu tả:
 Đan xen vào cốt truyện chính:
 - Mục tiêu riêng của nhân vật phụ va vào mục tiêu chương
 - Sự phát triển của tuyến ngầm
-- Phục bút được gieo trồng
+- Chi tiết gài trước được gieo trồng
 - Sự thay đổi tinh tế trong mối quan hệ nhân vật
 
 ## 6. Phóng Đại Khoảnh Khắc Đổi Thế

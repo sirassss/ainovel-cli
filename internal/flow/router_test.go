@@ -157,7 +157,7 @@ func TestRoute_ArcEndNeedsReview(t *testing.T) {
 	if got == nil || got.Agent != "editor" {
 		t.Fatalf("expected editor for arc review, got %+v", got)
 	}
-	if got.Reason != "Thẩm duyệt cuối cung chưa hoàn tất" {
+	if got.Reason != "Đánh giá cuối cung chưa hoàn tất" {
 		t.Errorf("reason mismatch: %q", got.Reason)
 	}
 	if !strings.Contains(got.Task, "chương 11-22") || !strings.Contains(got.Task, "chapter=22") {
@@ -223,7 +223,7 @@ func TestRoute_NeedsArcExpansion(t *testing.T) {
 	if got == nil || got.Agent != "architect_long" {
 		t.Fatalf("expected architect_long for expansion, got %+v", got)
 	}
-	if got.Reason != "Khung xương cung kế tiếp chờ mở rộng" {
+	if got.Reason != "Cung phác thảo kế tiếp chờ mở rộng" {
 		t.Errorf("reason mismatch: %q", got.Reason)
 	}
 }
@@ -245,7 +245,7 @@ func TestRoute_NeedsNewVolume(t *testing.T) {
 		HasVolumeSummary: true,
 	}
 	got := Route(s)
-	if got == nil || got.Agent != "architect_long" || got.Reason != "Cuối tập cần quyết định thêm tập mới, tập khép lại hay kết thúc cả truyện" {
+	if got == nil || got.Agent != "architect_long" || got.Reason != "Cuối tập cần quyết định thêm tập mới, tập cuối hay kết thúc cả truyện" {
 		t.Fatalf("expected append_volume/complete_book dispatch, got %+v", got)
 	}
 }

@@ -99,7 +99,7 @@ func newCoCreateState(initial string) *cocreateState {
 	}
 }
 
-const stageCoCreateOpener = "Tôi muốn tạm dừng một chút để cùng bạn quy hoạch hướng đi tiếp theo."
+const stageCoCreateOpener = "Tôi muốn tạm dừng một chút để cùng bạn lập kế hoạch hướng đi tiếp theo."
 const stageCoCreateSystemLine = "Đã tạm dừng sáng tác để vào chế độ Đồng sáng tác giai đoạn — AI sẽ kết hợp tiến độ hiện tại để cùng bạn định hướng cốt truyện."
 
 func newStageCoCreateState() *cocreateState {
@@ -352,9 +352,9 @@ func renderCoCreateModal(width, height int, state *cocreateState, errMsg, inputV
 		contentH = 10
 	}
 
-	titleText, subtitleText := "Đồng Sáng Tác Quy Hoạch", "Trao đổi làm rõ nhu cầu trước khi bắt đầu viết truyện"
+	titleText, subtitleText := "Đồng Sáng Tác Kế hoạch", "Trao đổi làm rõ nhu cầu trước khi bắt đầu viết truyện"
 	if state.stage {
-		titleText, subtitleText = "Đồng Sáng Tác Giai Đoạn", "Quy hoạch các bước tiếp theo trước khi tiếp tục sáng tác"
+		titleText, subtitleText = "Đồng Sáng Tác Giai Đoạn", "Lập kế hoạch các bước tiếp theo trước khi tiếp tục sáng tác"
 	}
 	headerStyle := lipgloss.NewStyle().Width(boxW).AlignHorizontal(lipgloss.Center)
 	title := headerStyle.Foreground(colorMuted).Bold(true).Render(titleText)

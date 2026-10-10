@@ -154,7 +154,7 @@ func renderWelcome(width, height int, errMsg string, mode startupMode, importHin
 		Render(strings.Repeat("~", divW))
 
 	features := []struct{ icon, label, desc string }{
-		{">>", "Đa Agent cộng tác", "Architect quy hoạch / Writer sáng tác / Editor thẩm duyệt"},
+		{">>", "Đa Agent cộng tác", "Architect lập kế hoạch / Writer sáng tác / Editor đánh giá"},
 		{"::", "Khôi phục điểm dừng", "Tự động tiếp tục từ tiến độ trước sau khi gián đoạn"},
 		{"<>", "Can thiệp thời gian thực", "Tùy chỉnh hướng cốt truyện bất cứ lúc nào khi đang viết"},
 		{"##", "Phân tầng truyện dài", "Hỗ trợ cấu trúc phân tầng Tập - Cung - Chương chuyên nghiệp"},
@@ -213,7 +213,7 @@ func renderWelcome(width, height int, errMsg string, mode startupMode, importHin
 			Render("! " + importHint))
 	} else {
 		b.WriteString(lipgloss.NewStyle().Foreground(colorDim).
-			Render("Đã có thiết lập/đại cương? /start <đường-dẫn> · Đã có bản thảo truyện? /import <đường-dẫn>"))
+			Render("Đã có thiết lập/dàn ý? /start <đường-dẫn> · Đã có bản thảo truyện? /import <đường-dẫn>"))
 	}
 	b.WriteString("\n\n")
 	b.WriteString(lipgloss.NewStyle().Foreground(colorDim).Italic(true).

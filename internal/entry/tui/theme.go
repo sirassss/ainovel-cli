@@ -60,7 +60,7 @@ var statusDisplay = map[string]struct {
 }{
 	"READY":    {"○", "Sẵn sàng"},
 	"RUNNING":  {"", "Đang chạy"},
-	"REVIEW":   {"◆", "Thẩm duyệt"},
+	"REVIEW":   {"◆", "Đánh giá"},
 	"REWRITE":  {"◆", "Viết lại"},
 	"COMPLETE": {"●", "Hoàn tất"},
 	"PAUSED":   {"⏸", "Tạm dừng"},

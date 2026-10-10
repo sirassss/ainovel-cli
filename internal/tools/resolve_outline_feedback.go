@@ -21,10 +21,10 @@ func NewResolveOutlineFeedbackTool(store *store.Store) *ResolveOutlineFeedbackTo
 
 func (t *ResolveOutlineFeedbackTool) Name() string { return "resolve_outline_feedback" }
 func (t *ResolveOutlineFeedbackTool) Label() string {
-	return "Xác nhận đại cương không cần điều chỉnh"
+	return "Xác nhận dàn ý không cần điều chỉnh"
 }
 func (t *ResolveOutlineFeedbackTool) Description() string {
-	return "Xác nhận đã thẩm tra toàn bộ writer_feedback và kế hoạch phía sau hiện có vẫn phù hợp. Chỉ gọi khi không cần sửa đại cương; cần sửa thì dùng revise_outline hoặc công cụ cấu trúc."
+	return "Xác nhận đã thẩm tra toàn bộ writer_feedback và kế hoạch phía sau hiện có vẫn phù hợp. Chỉ gọi khi không cần sửa dàn ý; cần sửa thì dùng revise_outline hoặc công cụ cấu trúc."
 }
 func (t *ResolveOutlineFeedbackTool) ReadOnly(json.RawMessage) bool        { return false }
 func (t *ResolveOutlineFeedbackTool) ConcurrencySafe(json.RawMessage) bool { return false }
@@ -49,7 +49,7 @@ func (t *ResolveOutlineFeedbackTool) Execute(_ context.Context, args json.RawMes
 		return nil, fmt.Errorf("load outline feedback: %w: %w", errs.ErrStoreRead, err)
 	}
 	if len(feedback) == 0 {
-		return nil, fmt.Errorf("Không có phản hồi đại cương nào cần xử lý: %w", errs.ErrToolPrecondition)
+		return nil, fmt.Errorf("Không có phản hồi dàn ý nào cần xử lý: %w", errs.ErrToolPrecondition)
 	}
 	if err := t.store.Outline.SaveOutlineFeedbackResolution(input.Reason, len(feedback)); err != nil {
 		return nil, fmt.Errorf("save outline feedback resolution: %w: %w", errs.ErrStoreWrite, err)

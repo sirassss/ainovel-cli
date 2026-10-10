@@ -85,7 +85,7 @@ func MigrateLegacyBaseline(st *store.Store) error {
 			return fmt.Errorf("Đọc bản nháp lịch sử của chương %d: %w", chapter, err)
 		}
 		if strings.TrimSpace(draft) == "" {
-			return fmt.Errorf("Chương %d thiếu bản nháp lịch sử, không thể xác nhận chính văn đã tiếp nhận", chapter)
+			return fmt.Errorf("Chương %d thiếu bản nháp lịch sử, không thể xác nhận nội dung chương đã tiếp nhận", chapter)
 		}
 		if err := verifyLegacySummary(st, chapter, commit.facts); err != nil {
 			return err

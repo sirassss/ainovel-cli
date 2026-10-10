@@ -16,7 +16,7 @@ import (
 
 // Flip to false once the matching cleanup task has landed, so the gate is enforced.
 var (
-	termsPending     = true
+	termsPending     = false
 	titleCasePending = true
 )
 
@@ -25,7 +25,7 @@ var (
 var legacyTerms = []string{
 	"đại cương", "phục bút", "thẩm duyệt", "chính văn", "hoàn kết", "tài phán", "quy hoạch",
 	"tập khép", "nghiệm thu", "khung xương", "hợp đồng chương", "điểm móc", "móc câu",
-	"sảng điểm", "gọt giũa",
+	"sảng điểm", "gọt giũa", "đề cương",
 }
 
 // awkwardPhrases are known bad machine-translation artifacts.
@@ -33,7 +33,12 @@ var awkwardPhrases = []string{
 	"bản thảo nội dung chương", "bản lập kế hoạch", "việc lập kế hoạch lập kế hoạch", "nội dung chương chương",
 }
 
-const caseOKMarker = "case:ok"
+const (
+	caseOKMarker = "case:ok"
+	// termKeepMarker on the literal's line (or the line above) exempts a deliberate legacy term,
+	// e.g. an alias kept so already-saved data still parses.
+	termKeepMarker = "term:keep"
+)
 
 // keyNames are keyboard key names that stay capitalized in TUI hints.
 var keyNames = map[string]bool{"Enter": true, "Esc": true, "Tab": true, "Ctrl": true, "Shift": true, "PgUp": true, "PgDn": true}
@@ -123,8 +128,18 @@ func scanTerms(path string) ([]string, error) {
 		}
 		return termHits(path, string(b), 1), nil
 	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(b), "\n")
 	var out []string
-	err := stringLits(path, func(s string, line int) { out = append(out, termHits(path, s, line)...) })
+	err = stringLits(path, func(s string, line int) {
+		if strings.Contains(lines[line-1], termKeepMarker) || (line > 1 && strings.Contains(lines[line-2], termKeepMarker)) {
+			return
+		}
+		out = append(out, termHits(path, s, line)...)
+	})
 	return out, err
 }
 
@@ -260,5 +275,20 @@ func TestScanTitleCaseFile(t *testing.T) {
 	}
 	if len(hits) != 1 || !strings.Contains(hits[0], ":3:") {
 		t.Fatalf("hits = %v, want only line 3", hits)
+	}
+}
+
+func TestScanTermsHonorsTermKeep(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "a.go")
+	src := "package x\n\nvar a = map[string]string{\n\t\"Móc câu\": \"x\", // term:keep\n\t// term:keep\n\t\"Phục bút\": \"y\",\n\t\"Đại cương\": \"z\",\n}\n"
+	if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := scanTerms(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || !strings.HasSuffix(hits[0], ":7: đại cương") {
+		t.Fatalf("hits = %v, want only line 7", hits)
 	}
 }

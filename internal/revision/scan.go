@@ -41,11 +41,11 @@ func Scan(st *store.Store) ([]Change, error) {
 		path := filepath.Join(st.Dir(), filepath.FromSlash(fmt.Sprintf("chapters/%02d.md", chapter)))
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("Đọc chính văn vùng làm việc của chương %d: %w", chapter, err)
+			return nil, fmt.Errorf("Đọc nội dung vùng làm việc của chương %d: %w", chapter, err)
 		}
 		content := domain.NormalizeChapterContent(string(data))
 		if strings.TrimSpace(content) == "" {
-			return nil, fmt.Errorf("Chính văn vùng làm việc của chương %d rỗng, từ chối tiếp nhận", chapter)
+			return nil, fmt.Errorf("Nội dung vùng làm việc của chương %d rỗng, từ chối tiếp nhận", chapter)
 		}
 		digest := domain.ChapterContentSHA256(content)
 		if digest == record.ContentSHA256 {

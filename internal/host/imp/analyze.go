@@ -189,7 +189,7 @@ func buildLedger(prior []ImportedChapterFacts) string {
 		b.WriteString("\n")
 	}
 	if len(active) > 0 {
-		b.WriteString("Phục bút đang hoạt động (dùng lại ID, đừng tạo mới):\n")
+		b.WriteString("Chi tiết gài trước đang hoạt động (dùng lại ID, đừng tạo mới):\n")
 		for _, id := range slices.Sorted(maps.Keys(active)) {
 			fmt.Fprintf(&b, "- %s: %s\n", id, active[id])
 		}

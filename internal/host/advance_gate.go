@@ -81,7 +81,7 @@ func (g *ChapterAdvanceGate) handleHold(hold domain.AdvanceHold) bool {
 		if err := g.store.RunMeta.ClearAdvanceHold(hold); err != nil {
 			return g.fail(fmt.Errorf("Tiêu thụ tạm dừng một lần: %w", err))
 		}
-		g.reportEvent("info", withAdvanceReason("Cả truyện đã hoàn kết, ý định tạm dừng một lần đã được gỡ", hold.Reason))
+		g.reportEvent("info", withAdvanceReason("Cả truyện đã kết thúc, ý định tạm dừng một lần đã được gỡ", hold.Reason))
 		return false
 	case flow.AdvanceHoldConsumeAndStop:
 		if err := g.store.RunMeta.ClearAdvanceHold(hold); err != nil {
@@ -90,7 +90,7 @@ func (g *ChapterAdvanceGate) handleHold(hold domain.AdvanceHold) bool {
 		msg := "Đã tạm dừng tại biên công việc hiện tại theo yêu cầu của người dùng"
 		switch hold.After {
 		case domain.AdvanceHoldAfterRewritesDrained:
-			msg = "Hàng đợi viết lại đã cạn, đã tạm dừng chờ nghiệm thu"
+			msg = "Hàng đợi viết lại đã cạn, đã tạm dừng chờ duyệt"
 		case domain.AdvanceHoldAtChapter:
 			msg = fmt.Sprintf("Đã viết tới chương %d, tạm dừng theo yêu cầu của người dùng", hold.TargetChapter)
 		}
@@ -204,9 +204,9 @@ func (g *ChapterAdvanceGate) Allow(inst *flow.Instruction) (bool, error) {
 		return true, nil
 	}
 	latest := progress.LatestCompleted()
-	message := fmt.Sprintf("Đã hoàn thành tới chương %d, nghiệm thu từng chương đang chờ cho phép chương %d; dùng /next để tạo, hoặc nhập ý kiến sửa đổi", latest, target)
+	message := fmt.Sprintf("Đã hoàn thành tới chương %d, duyệt từng chương đang chờ cho phép chương %d; dùng /next để tạo, hoặc nhập ý kiến sửa đổi", latest, target)
 	if latest == 0 {
-		message = fmt.Sprintf("Quy hoạch đã sẵn sàng, nghiệm thu từng chương đang chờ cho phép chương %d; dùng /next để tạo, hoặc nhập ý kiến sửa đổi", target)
+		message = fmt.Sprintf("Kế hoạch đã sẵn sàng, duyệt từng chương đang chờ cho phép chương %d; dùng /next để tạo, hoặc nhập ý kiến sửa đổi", target)
 	}
 	g.pauseNow(message)
 	return false, nil

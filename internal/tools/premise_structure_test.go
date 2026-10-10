@@ -137,7 +137,7 @@ x
 x
 ## Điểm bán hàng khác biệt
 x
-## Móc câu khác biệt
+## Hook khác biệt
 x
 ## Cam kết cốt lõi
 x
@@ -167,8 +167,8 @@ func TestParsePremiseSectionsVietnamese(t *testing.T) {
 }
 
 func TestParsePremiseSectionsTolerateTrailingNote(t *testing.T) {
-	sections := parsePremiseSections("## Hướng kết cục (Định hướng chủ đề)\na\n## MÓC CÂU khác biệt: điểm độc đáo\nb\n")
-	if sections["Hướng kết cục"] != "a" || sections["Móc câu khác biệt"] != "b" {
+	sections := parsePremiseSections("## Hướng kết cục (Định hướng chủ đề)\na\n## HOOK KHÁC BIỆT: điểm độc đáo\nb\n")
+	if sections["Hướng kết cục"] != "a" || sections["Hook khác biệt"] != "b" {
 		t.Fatalf("đuôi mô tả phải được bỏ qua: %+v", sections)
 	}
 }
@@ -189,5 +189,41 @@ func TestPremiseStructureMissingIsVietnamese(t *testing.T) {
 	missing, _ := structure["missing"].([]string)
 	if len(missing) == 0 || strings.IndexFunc(strings.Join(missing, ""), func(r rune) bool { return r >= 0x4e00 && r <= 0x9fff }) >= 0 {
 		t.Fatalf("missing phải khác rỗng và không chứa chữ Hán: %+v", missing)
+	}
+}
+
+// legacyHookHeading is the pre-rename heading that already-saved premises still carry.
+const legacyHookHeading = "Móc câu khác biệt" // term:keep
+
+// TestPremiseHookHeadingNewAndLegacy covers the renamed heading and the legacy alias for both tiers.
+func TestPremiseHookHeadingNewAndLegacy(t *testing.T) {
+	longNew := viLongPremise
+	longLegacy := strings.Replace(viLongPremise, "## Hook khác biệt", "## "+legacyHookHeading, 1)
+	shortNew := strings.Replace(strings.Replace(viLongPremise, "## Động cơ câu chuyện\nx\n", "", 1), "## Mệnh đề kết cục\nx\n", "## Tính phù hợp với truyện ngắn\nx\n", 1)
+	shortLegacy := strings.Replace(shortNew, "## Hook khác biệt", "## "+legacyHookHeading, 1)
+	if longNew == longLegacy || shortNew == shortLegacy {
+		t.Fatal("fixture không chứa tiêu đề Hook khác biệt để thay")
+	}
+	cases := []struct {
+		name    string
+		premise string
+		tier    domain.PlanningTier
+	}{
+		{"long/new", longNew, domain.PlanningTierLong},
+		{"long/legacy", longLegacy, domain.PlanningTierLong},
+		{"short/new", shortNew, domain.PlanningTierShort},
+		{"short/legacy", shortLegacy, domain.PlanningTierShort},
+	}
+	for _, c := range cases {
+		structure := premiseStructure(c.premise, c.tier)
+		missing, _ := structure["missing"].([]string)
+		for _, m := range missing {
+			if m == "Hook khác biệt" || m == legacyHookHeading {
+				t.Errorf("%s: Hook khác biệt bị báo thiếu: %v", c.name, missing)
+			}
+		}
+		if parsePremiseSections(c.premise)["Hook khác biệt"] != "x" {
+			t.Errorf("%s: khóa chuẩn Hook khác biệt không có nội dung", c.name)
+		}
 	}
 }

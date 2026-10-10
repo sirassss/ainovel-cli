@@ -123,7 +123,7 @@ func commandRegistryInstance() commandRegistry {
 			Name:        "review",
 			Group:       "writing",
 			Usage:       "/review on|off",
-			Description: "Bật/tắt chế độ nghiệm thu từng chương",
+			Description: "Bật/tắt chế độ duyệt từng chương",
 			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
 				if len(args) != 1 || (args[0] != "on" && args[0] != "off") {
 					m.applyEvent(host.Event{Time: time.Now(), Category: "ERROR", Summary: "Cách dùng: /review on|off", Level: "error"})
@@ -146,7 +146,7 @@ func commandRegistryInstance() commandRegistry {
 			Name:        "next",
 			Group:       "writing",
 			Usage:       "/next",
-			Description: "Nghiệm thu và cho phép viết tiếp một chương mới",
+			Description: "Duyệt và cho phép viết tiếp một chương mới",
 			AutoExecute: true,
 			NeedsIdle:   true,
 			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
@@ -167,7 +167,7 @@ func commandRegistryInstance() commandRegistry {
 			Name:        "start",
 			Group:       "writing",
 			Usage:       "/start <đường-dẫn-tệp>",
-			Description: "Tạo truyện mới từ tệp thiết lập hoặc đại cương có sẵn",
+			Description: "Tạo truyện mới từ tệp thiết lập hoặc dàn ý có sẵn",
 			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
 				if m.mode != modeNew {
 					m.applyEvent(host.Event{
@@ -229,7 +229,7 @@ func commandRegistryInstance() commandRegistry {
 			Aliases:     []string{"plan"},
 			Group:       "writing",
 			Usage:       "/cocreate",
-			Description: "Tạm dừng viết để đồng sáng tác quy hoạch giai đoạn tiếp theo",
+			Description: "Tạm dừng viết để đồng sáng tác kế hoạch giai đoạn tiếp theo",
 			AutoExecute: true,
 			Run: func(m Model, _ []string) (tea.Model, tea.Cmd) {
 				if m.mode != modeRunning {
@@ -353,7 +353,7 @@ func prepareFileStart(args []string) (string, error) {
 		path = path[1 : len(path)-1]
 	}
 	if path == "" {
-		return "", fmt.Errorf("Cách dùng: /start <đường dẫn tệp thiết lập hoặc đại cương>")
+		return "", fmt.Errorf("Cách dùng: /start <đường dẫn tệp thiết lập hoặc dàn ý>")
 	}
 	prompt, err := startup.LoadPromptFile(path)
 	if err != nil {

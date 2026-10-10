@@ -243,8 +243,8 @@ Khi đang ở trong giao diện TUI, bạn có thể gõ `/` để mở menu l�
 | `/model` | Chuyển đổi Model hoặc mức độ suy luận (reasoning/thinking) |
 | `/config` | Quản lý cấu hình Provider, Model ID, API Key, Base URL |
 | `/diag` | Xem báo cáo chẩn đoán toàn diện về sức khỏe, tiến độ và chất lượng truyện |
-| `/review` | Bật/tắt chế độ nghiệm thu từng chương (dừng lại sau mỗi chương để bạn duyệt) |
-| `/next` | Phê duyệt cho phép viết chương tiếp theo (khi ở chế độ nghiệm thu) |
+| `/review` | Bật/tắt chế độ duyệt từng chương (dừng lại sau mỗi chương để bạn duyệt) |
+| `/next` | Phê duyệt cho phép viết chương tiếp theo (khi ở chế độ duyệt) |
 | `/start <tệp>` | Đọc tệp dàn ý / ý tưởng bên ngoài để bắt đầu truyện mới |
 | `/import <tệp>` | Nhập tiểu thuyết từ bên ngoài vào để AI phân tích và viết tiếp |
 | `/reopen <hướng>` | Viết tiếp tập mới sau khi tác phẩm đã hoàn thành |

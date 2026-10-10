@@ -237,7 +237,7 @@ func (s *ProgressStore) Reopen(chapters []int, reason string) error {
 			return fmt.Errorf("progress chưa được khởi tạo: %w", errs.ErrToolPrecondition)
 		}
 		if p.Phase != domain.PhaseComplete {
-			return fmt.Errorf("reopen chỉ áp dụng cho sách đã hoàn kết (hiện phase=%s): %w", p.Phase, errs.ErrToolPrecondition)
+			return fmt.Errorf("reopen chỉ áp dụng cho sách đã kết thúc (hiện phase=%s): %w", p.Phase, errs.ErrToolPrecondition)
 		}
 		normalized, err := normalizePendingRewrites(chapters, p.CompletedChapters)
 		if err != nil {
@@ -266,7 +266,7 @@ func (s *ProgressStore) ReopenContinue() error {
 			return fmt.Errorf("progress chưa được khởi tạo: %w", errs.ErrToolPrecondition)
 		}
 		if p.Phase != domain.PhaseComplete {
-			return fmt.Errorf("Mở lại chỉ áp dụng cho sách đã hoàn kết (hiện phase=%s): %w", p.Phase, errs.ErrToolPrecondition)
+			return fmt.Errorf("Mở lại chỉ áp dụng cho sách đã kết thúc (hiện phase=%s): %w", p.Phase, errs.ErrToolPrecondition)
 		}
 		p.Phase = domain.PhaseWriting
 		p.ReopenCount++ // 审计 + 保证再完结的 progress digest 与上次不同（见字段注释）

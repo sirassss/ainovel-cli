@@ -195,7 +195,7 @@ func BuildWorkers(
 	architectThinking, _ := ResolveThinkingForModel(architectModel, roleThinking(cfg, "architect"))
 	architectShort := subagent.Config{
 		Name:             "architect_short",
-		Description:      "Kiến trúc sư truyện ngắn: tạo thiết lập gọn và đại cương phẳng cho truyện một tập, một xung đột, mật độ cao",
+		Description:      "Kiến trúc sư truyện ngắn: tạo thiết lập gọn và dàn ý phẳng cho truyện một tập, một xung đột, mật độ cao",
 		Model:            architectModel,
 		SystemPrompt:     bundle.Prompts.ArchitectShort,
 		Tools:            architectTools,
@@ -212,7 +212,7 @@ func BuildWorkers(
 	}
 	architectLong := subagent.Config{
 		Name:                "architect_long",
-		Description:         "Kiến trúc sư truyện dài: tạo thiết lập phân tầng và đại cương tập/cung cho truyện dài kỳ có thể nâng cấp liên tục",
+		Description:         "Kiến trúc sư truyện dài: tạo thiết lập phân tầng và dàn ý tập/cung cho truyện dài kỳ có thể nâng cấp liên tục",
 		Model:               architectModel,
 		SystemPrompt:        bundle.Prompts.ArchitectLong,
 		Tools:               architectTools,
@@ -281,7 +281,7 @@ func BuildWorkers(
 
 	editor := subagent.Config{
 		Name:             "editor",
-		Description:      "Người thẩm duyệt: đọc nguyên văn, phát hiện vấn đề ở hai tầng cấu trúc và thẩm mỹ",
+		Description:      "Người đánh giá: đọc nguyên văn, phát hiện vấn đề ở hai tầng cấu trúc và thẩm mỹ",
 		Model:            editorModel,
 		SystemPrompt:     bundle.Prompts.Editor,
 		Tools:            editorTools,

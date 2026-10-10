@@ -167,7 +167,7 @@ func (e *engine) run(ctx context.Context) {
 					}
 				}
 				e.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "warn",
-					Summary: "Engine đã dừng, phân công theo tài phán chưa được thực hiện; can thiệp được giữ lại, khi tiếp tục sáng tác sẽ tự tài phán lại"})
+					Summary: "Engine đã dừng, phân công theo phân xử chưa được thực hiện; can thiệp được giữ lại, khi tiếp tục sáng tác sẽ tự phân xử lại"})
 				op.dispatch = nil
 			}
 			if op.hold != nil || op.reopen != nil {
@@ -207,7 +207,7 @@ func (e *engine) run(ctx context.Context) {
 				state.ArcBoundary.IsVolumeEnd && state.HasArcReview && state.HasArcSummary && state.HasVolumeSummary {
 				complete, reconcileErr := tools.ReconcileLayeredCompletion(e.store)
 				if reconcileErr != nil {
-					e.pauseWithNotify(notify.KindWorkerFailure, "Khôi phục trạng thái hoàn kết thất bại, đã tạm dừng: "+reconcileErr.Error())
+					e.pauseWithNotify(notify.KindWorkerFailure, "Khôi phục trạng thái kết thúc truyện thất bại, đã tạm dừng: "+reconcileErr.Error())
 					return
 				}
 				if complete {
@@ -220,7 +220,7 @@ func (e *engine) run(ctx context.Context) {
 			var err error
 			inst, err = e.planStartFallback(ctx)
 			if err != nil {
-				e.pauseWithNotify(notify.KindPlanStart, "Đọc sự thật khôi phục quy hoạch thất bại, đã tạm dừng: "+err.Error())
+				e.pauseWithNotify(notify.KindPlanStart, "Đọc sự thật khôi phục kế hoạch thất bại, đã tạm dừng: "+err.Error())
 				return
 			}
 		}
@@ -326,7 +326,7 @@ func (e *engine) planStartFallback(ctx context.Context) (*flow.Instruction, erro
 		return &flow.Instruction{
 			Agent:  meta.PlanStart.Planner,
 			Task:   meta.PlanStart.PlannerTask,
-			Reason: "Bắt đầu quy hoạch theo tài phán khởi động đã được cố định",
+			Reason: "Bắt đầu lập kế hoạch theo phân xử khởi động đã được cố định",
 		}, nil
 	}
 	if meta.StartPrompt == "" {
@@ -338,7 +338,7 @@ func (e *engine) planStartFallback(ctx context.Context) (*flow.Instruction, erro
 // retryPlanStart 补裁启动决策并固化(裁定先落事实再执行,与 StartPrepared 同构)。
 func (e *engine) retryPlanStart(ctx context.Context, prompt string) *flow.Instruction {
 	start := time.Now()
-	decision, derr := runObservedDecision(e.observer, "Tài phán khởi động bổ sung", func() (arbiter.PlanStartDecision, error) {
+	decision, derr := runObservedDecision(e.observer, "Phân xử khởi động bổ sung", func() (arbiter.PlanStartDecision, error) {
 		return arbiter.DecidePlanStart(ctx, e.arbiterModel, e.planStartPrompt, prompt, e.style)
 	})
 	rec := storepkg.DecisionRecord{Kind: "plan_start", Decider: "arbiter", Input: prompt,
@@ -352,20 +352,20 @@ func (e *engine) retryPlanStart(ctx context.Context, prompt string) *flow.Instru
 	}
 	rec, recErr := e.store.Decisions.Append(rec)
 	if recErr != nil {
-		slog.Warn("Lưu kiểm toán tài phán khởi động bổ sung thất bại", "module", "engine", "err", recErr)
+		slog.Warn("Lưu bản ghi kiểm toán khởi động bổ sung thất bại", "module", "engine", "err", recErr)
 	}
 	if derr != nil {
-		e.pauseWithNotify(notify.KindPlanStart, "Tài phán khởi động thất bại, đã tạm dừng (hãy kiểm tra cấu hình model/mạng rồi tiếp tục): "+derr.Error())
+		e.pauseWithNotify(notify.KindPlanStart, "Phân xử khởi động thất bại, đã tạm dừng (hãy kiểm tra cấu hình model/mạng rồi tiếp tục): "+derr.Error())
 		return nil
 	}
 	if err := e.store.RunMeta.SetPlanStart(domain.PlanStartRecord{
 		RawPrompt: prompt, Planner: decision.Planner, PlannerTask: decision.Task, DecisionID: rec.ID,
 	}); err != nil {
-		e.pauseWithNotify(notify.KindPlanStart, "Không thể lưu tài phán khởi động, đã tạm dừng: "+err.Error())
+		e.pauseWithNotify(notify.KindPlanStart, "Không thể lưu phân xử khởi động, đã tạm dừng: "+err.Error())
 		return nil
 	}
 	e.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "info",
-		Summary: fmt.Sprintf("Đã bổ sung tài phán khởi động (kiến trúc sư: %s — %s)", decision.Planner, decision.Reason)})
+		Summary: fmt.Sprintf("Đã bổ sung phân xử khởi động (kiến trúc sư: %s — %s)", decision.Planner, decision.Reason)})
 	return &flow.Instruction{Agent: decision.Planner, Task: decision.Task, Reason: decision.Reason}
 }
 
@@ -377,7 +377,7 @@ func (e *engine) precheck(inst *flow.Instruction) (*flow.Instruction, error) {
 	}
 	if progress != nil && progress.Phase == domain.PhaseComplete {
 		// 完本期唯一合法出路是 reopen(干预动作),任何派发直接丢弃。
-		slog.Warn("Phân công sau khi hoàn kết bị loại bỏ", "module", "engine", "agent", inst.Agent)
+		slog.Warn("Phân công sau khi kết thúc truyện bị loại bỏ", "module", "engine", "agent", inst.Agent)
 		return &flow.Instruction{}, nil // 置空:下轮 Route 归 nil 自然停机
 	}
 	if inst.Agent == "writer" {
@@ -401,7 +401,7 @@ func (e *engine) precheck(inst *flow.Instruction) (*flow.Instruction, error) {
 				// 是说给 LLM 的;Engine 直接做正确的事)。
 				return &flow.Instruction{
 					Agent:  "architect_long",
-					Task:   fmt.Sprintf("Cung kế tiếp đang là khung xương (%s). Gọi save_foundation(type=expand_arc) để mở rộng cung kế; nếu tập hiện tại đã viết xong thì dùng type=append_volume để thêm và mở rộng tập kế.", err),
+					Task:   fmt.Sprintf("Cung kế tiếp đang là cung phác thảo (%s). Gọi save_foundation(type=expand_arc) để mở rộng cung kế; nếu tập hiện tại đã viết xong thì dùng type=append_volume để thêm và mở rộng tập kế.", err),
 					Reason: "Chương mục tiêu để viết chưa được mở rộng, hãy mở rộng trước rồi viết tiếp",
 				}, nil
 			}
@@ -452,12 +452,12 @@ func (e *engine) trackDeadlock(ctx context.Context, inst **flow.Instruction) (st
 	}
 	// Arbiter 僵局咨询(repeats ∈ [consultAt, abortAt))。裁定 retry 不清零计数。
 	facts := e.failureFacts("deadlock", in, e.workerErrorFor(in))
-	decision, err := runObservedDecision(e.observer, "Tài phán bế tắc", func() (arbiter.FailureDecision, error) {
+	decision, err := runObservedDecision(e.observer, "Phân xử bế tắc", func() (arbiter.FailureDecision, error) {
 		return arbiter.DecideFailure(ctx, e.arbiterModel, e.failurePrompt, facts)
 	})
 	e.recordFailureDecision("deadlock", in, facts, decision, err)
 	if err != nil {
-		e.pauseWithNotify(notify.KindDeadlock, "Tài phán bế tắc thất bại, đã tạm dừng chờ con người can thiệp: "+err.Error())
+		e.pauseWithNotify(notify.KindDeadlock, "Phân xử bế tắc thất bại, đã tạm dừng chờ con người can thiệp: "+err.Error())
 		return true
 	}
 	switch decision.Action {
@@ -467,7 +467,7 @@ func (e *engine) trackDeadlock(ctx context.Context, inst **flow.Instruction) (st
 		*inst = &flow.Instruction{Agent: decision.Dispatch.Agent, Task: decision.Dispatch.Task, Reason: decision.Reason}
 		return false
 	default: // abort
-		e.pauseStuck(notify.KindDeadlock, in, "Tài phán bế tắc: "+decision.Reason)
+		e.pauseStuck(notify.KindDeadlock, in, "Phân xử bế tắc: "+decision.Reason)
 		return true
 	}
 }
@@ -516,12 +516,12 @@ func (e *engine) handleWorkerError(ctx context.Context, inst *flow.Instruction, 
 	}
 	e.failedKey = ""
 	facts := e.failureFacts("worker_failure", inst, werr)
-	decision, err := runObservedDecision(e.observer, "Tài phán thất bại", func() (arbiter.FailureDecision, error) {
+	decision, err := runObservedDecision(e.observer, "Phân xử thất bại", func() (arbiter.FailureDecision, error) {
 		return arbiter.DecideFailure(ctx, e.arbiterModel, e.failurePrompt, facts)
 	})
 	e.recordFailureDecision("worker_failure", inst, facts, decision, err)
 	if err != nil {
-		e.pauseWithNotify(notify.KindWorkerFailure, "Tài phán thất bại không dùng được, đã tạm dừng chờ con người can thiệp: "+msg+contentFilterAdvice(werr))
+		e.pauseWithNotify(notify.KindWorkerFailure, "Phân xử thất bại không dùng được, đã tạm dừng chờ con người can thiệp: "+msg+contentFilterAdvice(werr))
 		return true
 	}
 	switch decision.Action {
@@ -534,7 +534,7 @@ func (e *engine) handleWorkerError(ctx context.Context, inst *flow.Instruction, 
 		e.mu.Unlock()
 		return false
 	default: // abort
-		e.pauseStuck(notify.KindWorkerFailure, inst, "Tài phán thất bại: "+decision.Reason+contentFilterAdvice(werr))
+		e.pauseStuck(notify.KindWorkerFailure, inst, "Phân xử thất bại: "+decision.Reason+contentFilterAdvice(werr))
 		return true
 	}
 }
@@ -681,7 +681,7 @@ func (e *engine) recordFailureDecision(kind string, inst *flow.Instruction, fact
 		rec.Error = derr.Error()
 	}
 	if _, err := e.store.Decisions.Append(rec); err != nil {
-		slog.Warn("Lưu kiểm toán tài phán thất bại", "module", "engine", "kind", kind, "err", err)
+		slog.Warn("Lưu bản ghi kiểm toán thất bại", "module", "engine", "kind", kind, "err", err)
 	}
 }
 
@@ -741,7 +741,7 @@ func (e *engine) applyControlOp(ctx context.Context, op controlOp) error {
 		if fresh.Phase != op.facts.Phase || fresh.Flow != op.facts.Flow ||
 			fresh.QueueHead() != op.facts.QueueHead() {
 			e.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "warn",
-				Summary: "Phân công theo tài phán đã lỗi thời (sự thật đã tiến), tài phán lại theo sự thật mới nhất"})
+				Summary: "Phân công theo phân xử đã lỗi thời (sự thật đã tiến), phân xử lại theo sự thật mới nhất"})
 			e.recordStale(op)
 			if op.text != "" && e.reconsult != nil {
 				// 同步重询:干预必须先于后续创作生效——异步会让引擎在新裁定
@@ -791,7 +791,7 @@ func (e *engine) applyControlOp(ctx context.Context, op controlOp) error {
 		// 已知窗口(best-effort 边界,见 engine-arbiter.md 澄清③):派单自此存于内存,
 		// worker 启动前被硬杀(kill -9,defer 不执行)会丢失本次派单意图——
 		// 正常退出/Abort 由 run 的 defer 回存 PendingSteer 兜底。
-		e.next = &flow.Instruction{Agent: op.dispatch.Agent, Task: interventionDispatchTask(op.dispatch.Task, op.text), Reason: "Tài phán can thiệp của người dùng"}
+		e.next = &flow.Instruction{Agent: op.dispatch.Agent, Task: interventionDispatchTask(op.dispatch.Task, op.text), Reason: "Phân xử can thiệp của người dùng"}
 		e.deferGateForNext = op.hold != nil && !op.hold.Cancel
 		e.mu.Unlock()
 	}

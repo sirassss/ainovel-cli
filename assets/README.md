@@ -6,7 +6,7 @@ Bản mặc định là tiếng Việt, nằm ngay ở thư mục gốc của m�
 
 | Thư mục | Chứa gì | Ai dùng | Cách nối dây |
 |---|---|---|---|
-| `prompts/` | system prompt của Worker (writer / editor / architect×2), prompt tài phán của Arbiter và prompt tác vụ một lần (import / simulation / revision) | `agents/build.go`, `internal/arbiter`, các runner imp / sim / revision | trường Prompts trong `load.go`. Lưu ý: simulation_guidance được `load.go` chèn vào khi nạp, không thấy trong tệp md |
+| `prompts/` | system prompt của Worker (writer / editor / architect×2), prompt của Trọng tài (Arbiter) và prompt tác vụ một lần (import / simulation / revision) | `agents/build.go`, `internal/arbiter`, các runner imp / sim / revision | trường Prompts trong `load.go`. Lưu ý: simulation_guidance được `load.go` chèn vào khi nạp, không thấy trong tệp md |
 | `references/` | Tài liệu kiến thức viết không phụ thuộc thể loại. Không vào system prompt, do novel_context cắt theo vai trò / chương rồi chèn vào `reference_pack` | writer / editor / architect | **Nối ba chỗ**: thêm trường vào `tools.References` + `load.go` loadReferences đọc + `novel_context.go` writerReferences / architectReferences chèn. Bỏ vào thư mục sẽ không tự động được nạp |
 | `references/genres/<style>/` | Kiến thức riêng của thể loại (style-references / arc-templates) | như trên, nạp khi `style != default` | `load.go` loadReferences |
 | `rules/` | Thư mục quy tắc tích hợp kiểu cũ đã bị loại bỏ; đường cơ sở cơ học đã chuyển vào mã, quy tắc người dùng đến từ snapshot ngôn ngữ tự nhiên của `~/.ainovel/rules/*.md` / `./.ainovel/rules/*.md` | `userrules.Service` chuẩn hóa thành `meta/user_rules.json`; `novel_context` chèn; `commit_chapter` kiểm tra | Đường cơ sở tích hợp xem `SystemDefaults()` trong `internal/rules/snapshot.go`; tệp `.md` của người dùng không cần định dạng, không cần YAML, được chuẩn hóa theo ngôn ngữ tự nhiên |
@@ -15,7 +15,7 @@ Bản mặc định là tiếng Việt, nằm ngay ở thư mục gốc của m�
 ## Phán đoán nội dung mới thuộc đâu (năm câu hỏi)
 
 1. Quy trình này bắt buộc phải được **đảm bảo**? → Đừng viết prompt, hãy viết ràng buộc trong mã (StopAfterTools / bộ chặn công cụ / Flow Router)
-2. Đây là căn cứ tài phán? → Quy trình dạng tra bảng viết trong `internal/flow/router.go`; phán đoán ngữ nghĩa viết trong `prompts/arbiter-*.md`
+2. Đây là căn cứ phân xử? → Quy trình dạng tra bảng viết trong `internal/flow/router.go`; phán đoán ngữ nghĩa viết trong `prompts/arbiter-*.md`
 3. Đây là tiêu chuẩn thẩm mỹ / thực thi của một vai trò? → `prompts/<role>.md`
 4. Đây là quy tắc mặc định có thể liệt kê cơ học (từ cấm / ngưỡng)? → `SystemDefaults()` trong `internal/rules/snapshot.go`; quy tắc tự định nghĩa của người dùng viết vào `.ainovel/rules/*.md`, do snapshot chuẩn hóa tiêu thụ (số chữ/dung lượng là ràng buộc mềm về ngữ nghĩa, đi qua preferences, không làm thành quy tắc cơ học)
 5. Đây là tài liệu kiến thức viết? → `references/` (nhớ nối ba chỗ)
@@ -37,15 +37,16 @@ Prompt, mô tả tool và thông báo trong code dùng thống nhất các từ 
 | Thuật ngữ tiếng Việt | Định danh trong code / ý nghĩa |
 |---|---|
 | tập (volume), cung (arc), chương | `volume`, `arc`, `chapter`: một tập gồm nhiều cung, một cung gồm nhiều chương |
-| cung khung xương | cung mới có `title`, `goal`, `estimated_chapters`, chưa có chương chi tiết; mở rộng bằng `save_foundation(type="expand_arc")` |
-| đại cương (phẳng / phân tầng) | `outline` (truyện ngắn) / `layered_outline` (truyện dài, tập → cung → chương) |
+| cung phác thảo | cung mới có `title`, `goal`, `estimated_chapters`, chưa có chương chi tiết; mở rộng bằng `save_foundation(type="expand_arc")` |
+| dàn ý (phẳng / phân tầng) | `outline` (truyện ngắn) / `layered_outline` (truyện dài, tập → cung → chương) |
 | la bàn | `compass` (`ending_direction`, `open_threads`, `estimated_scale`); cập nhật bằng `type="update_compass"` |
-| tập khép lại | tập kết thúc cả truyện, `append_volume` với `"final": true`; viết xong tự hoàn kết |
-| hoàn kết | `complete_book`, `phase=complete` |
-| hợp đồng chương | `chapter_contract` (`required_beats`, `forbidden_moves`, `continuity_checks`…) |
-| phục bút | `foreshadow`: `plant` (gieo) / `advance` (đẩy tiếp) / `resolve` (thu) |
+| tập cuối | tập kết thúc cả truyện, `append_volume` với `"final": true`; viết xong tự kết thúc truyện |
+| kết thúc truyện | `complete_book`, `phase=complete` |
+| yêu cầu chương | `chapter_contract` (`required_beats`, `forbidden_moves`, `continuity_checks`…) |
+| chi tiết gài trước | `foreshadow`: `plant` (gieo) / `advance` (đẩy tiếp) / `resolve` (thu) |
 | hàng đợi viết lại | `PendingRewrites`: các chương chờ viết lại hoặc trau chuốt |
-| thẩm duyệt | `save_review`, vai trò editor; kết luận `verdict` = `accept` / `polish` / `rewrite` |
-| nghiệm thu từng chương | chế độ chương chỉ được viết khi người dùng cho phép (`/next`), tên nội bộ "advance gate" |
-| tài phán (Bộ tài phán) | Arbiter: model phân loại can thiệp / sự cố / khởi động rồi giao việc |
+| đánh giá | `save_review`, vai trò editor; kết luận `verdict` = `accept` / `polish` / `rewrite` |
+| duyệt từng chương | chế độ chương chỉ được viết khi người dùng cho phép (`/next`), tên nội bộ "advance gate" |
+| hook | điểm kéo người đọc đọc tiếp, thường đặt ở cuối chương (trường `hook` trong dàn ý chương) |
+| Trọng tài | Arbiter: model phân loại can thiệp / sự cố / khởi động rồi giao việc |
 | sự thật | dữ liệu có cấu trúc đã lưu (facts) lấy từ store, không phải suy đoán của model |

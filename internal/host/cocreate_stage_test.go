@@ -250,10 +250,10 @@ func TestBuildStoryStateSummaryUsesDynamicPlanningWording(t *testing.T) {
 	}
 
 	got := buildStoryStateSummary(st)
-	if !strings.Contains(got, "hiện đã chi tiết hóa 2 chương (phần sau quy hoạch động theo cung)") {
+	if !strings.Contains(got, "hiện đã chi tiết hóa 2 chương (phần sau lập kế hoạch động theo cung)") {
 		t.Fatalf("动态规划摘要口径错误:\n%s", got)
 	}
-	if strings.Contains(got, "66") || strings.Contains(got, "quy hoạch 2 chương") {
+	if strings.Contains(got, "66") || strings.Contains(got, "kế hoạch 2 chương") {
 		t.Fatalf("动态规划摘要不得暗示固定总章数:\n%s", got)
 	}
 }

@@ -33,7 +33,7 @@ Các cung truyện dưới đây phù hợp với truyện dài thể loại ng�
 - Phù hợp đặt vào giai đoạn giữa mối quan hệ, dùng áp lực bên ngoài kiểm tra kết nối bên trong
 
 ### Cung Thường Nhật / Ngọt Ngào (5-8 chương)
-Cuộc sống thường ngày / tương tác trong vòng bạn bè / sự kiện nhỏ bất ngờ nhỏ / bố trí phục bút
+Cuộc sống thường ngày / tương tác trong vòng bạn bè / sự kiện nhỏ bất ngờ nhỏ / bố trí chi tiết gài trước
 - Ngọt ngào không phải không có xung đột, mà là xung đột nhỏ và giải quyết nhanh
 - Dùng chi tiết thường ngày củng cố sự đầu tư của độc giả vào mối quan hệ này
 - Tích lũy thế năng cho cung xung đột lớn tiếp theo — càng ngọt ngào, sự đổ vỡ sau đó càng đau

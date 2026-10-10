@@ -165,7 +165,7 @@ func (s *Service) applyPending(pending domain.PendingRevision) (*Result, error) 
 					feedback.Suggestion = analysis.OutlineImpact.Suggestion
 				}
 				if err := s.store.Outline.AppendOutlineFeedback(feedback); err != nil {
-					return nil, fmt.Errorf("Lưu ảnh hưởng đại cương của chương %d: %w", item.Chapter, err)
+					return nil, fmt.Errorf("Lưu ảnh hưởng dàn ý của chương %d: %w", item.Chapter, err)
 				}
 			}
 		}
@@ -202,7 +202,7 @@ func (s *Service) applyPreparedRecords(items []domain.PendingRevisionItem) error
 	for _, item := range items {
 		content, err := s.store.Drafts.LoadChapterText(item.Chapter)
 		if err != nil {
-			return fmt.Errorf("Đọc chính văn vùng làm việc của chương %d: %w", item.Chapter, err)
+			return fmt.Errorf("Đọc nội dung vùng làm việc của chương %d: %w", item.Chapter, err)
 		}
 		if domain.ChapterContentSHA256(content) != item.CurrentSHA256 {
 			return fmt.Errorf("%w: chương %d lại thay đổi sau khi phân tích, hãy chạy lại /sync", errPreparedStale, item.Chapter)

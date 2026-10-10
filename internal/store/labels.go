@@ -65,17 +65,17 @@ var labelsZH = mdLabels{
 	worldRules: "世界观规则", rule: "规则", boundary: "边界",
 }
 
-// labelsVI 用项目既定译名：tập / cung / chương / đề cương / điểm móc / phục bút。
+// labelsVI 用项目既定译名：tập / cung / chương / dàn ý / hook / chi tiết gài trước。
 var labelsVI = mdLabels{
 	bookTitleFmt: "%s", synopsis: "Giới thiệu", charProfiles: "Hồ sơ nhân vật", charArc: "Cung nhân vật",
 	traits: "Đặc điểm", listSep: ", ", openParen: " (", closeParen: ")", colon: ": ",
 
-	outline: "Đề cương", layeredOutline: "Đề cương phân tầng",
+	outline: "Dàn ý", layeredOutline: "Dàn ý phân tầng",
 	volumeFmt: "Tập %d", arcFmt: "Cung %d", chapterFmt: "Chương %d",
 	theme: "Chủ đề", goal: "Mục tiêu", pendingArcFmt: "*(chưa khai triển, ước %d chương)*",
-	coreEvent: "Sự kiện chính", hook: "Điểm móc", scenes: "Cảnh",
+	coreEvent: "Sự kiện chính", hook: "Hook", scenes: "Cảnh",
 
-	timeline: "Dòng thời gian", foreshadow: "Sổ phục bút",
+	timeline: "Dòng thời gian", foreshadow: "Sổ chi tiết gài trước",
 	resolvedAtFmt: "đã thu ở chương %d", plantedAtFmt: "gieo ở chương %d, trạng thái: %s",
 	relationships: "Quan hệ nhân vật", atChapterFmt: " (chương %d)",
 	worldRules: "Luật thế giới", rule: "Luật", boundary: "Ranh giới",

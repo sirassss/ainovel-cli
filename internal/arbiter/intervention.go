@@ -83,7 +83,7 @@ func CollectInterventionFacts(st *storepkg.Store) (InterventionFacts, error) {
 		if p.Layered {
 			outline, outlineErr := st.Outline.LoadOutline()
 			if outlineErr != nil {
-				return f, fmt.Errorf("Đọc đại cương chi tiết hiện tại: %w", outlineErr)
+				return f, fmt.Errorf("Đọc dàn ý chi tiết hiện tại: %w", outlineErr)
 			}
 			f.OutlinedChapters = len(outline)
 		} else {
@@ -112,7 +112,7 @@ func CollectInterventionFacts(st *storepkg.Store) (InterventionFacts, error) {
 	}
 	recent, err := st.Decisions.Recent(5)
 	if err != nil {
-		return f, fmt.Errorf("Đọc các tài phán gần đây: %w", err)
+		return f, fmt.Errorf("Đọc các phân xử gần đây: %w", err)
 	}
 	for _, r := range recent {
 		if r.Kind != "intervention" {
@@ -152,7 +152,7 @@ type InterventionDecision struct {
 
 var interventionContract = llmcontract.Contract{
 	Name:        "arbiter_intervention",
-	Description: "Tài phán can thiệp của người dùng: trả lời, quy tắc, tạm dừng, mở lại và phân công",
+	Description: "Phân xử can thiệp của người dùng: trả lời, quy tắc, tạm dừng, mở lại và phân công",
 	Schema: schema.Object(
 		schema.Property("answer", llmcontract.Nullable(schema.String("Văn bản phản hồi cho người dùng; không có thì là null"))).Required(),
 		schema.Property("rules", llmcontract.Nullable(schema.String("Nguyên văn quy tắc viết lâu dài cần lưu; không có thì là null"))).Required(),
@@ -167,7 +167,7 @@ var interventionContract = llmcontract.Contract{
 			schema.Property("reason", llmcontract.Nullable(schema.String("Lý do mở lại"))).Required(),
 		))).Required(),
 		schema.Property("dispatch", dispatchSchema("Đích phân công; không cần phân công thì là null")).Required(),
-		schema.Property("reason", schema.String("Lý do tài phán một câu")).Required(),
+		schema.Property("reason", schema.String("Lý do phân xử một câu")).Required(),
 	),
 }
 
@@ -188,7 +188,7 @@ func (d *InterventionDecision) ValidateAgainst(f InterventionFacts) error {
 	complete := f.Phase == string(domain.PhaseComplete)
 	if d.Reopen != nil {
 		if !complete {
-			return fmt.Errorf("reopen chỉ dùng được sau khi hoàn kết (hiện phase=%s)", f.Phase)
+			return fmt.Errorf("reopen chỉ dùng được sau khi kết thúc truyện (hiện phase=%s)", f.Phase)
 		}
 		if len(d.Reopen.Chapters) == 0 {
 			return fmt.Errorf("reopen.chapters không được để trống")
@@ -200,7 +200,7 @@ func (d *InterventionDecision) ValidateAgainst(f InterventionFacts) error {
 		}
 	}
 	if complete && d.Dispatch != nil {
-		return fmt.Errorf("Sau khi hoàn kết cấm phân công trực tiếp; viết lại dùng reopen (vào hàng đợi rồi Router tự phân công)")
+		return fmt.Errorf("Sau khi kết thúc truyện cấm phân công trực tiếp; viết lại dùng reopen (vào hàng đợi rồi Router tự phân công)")
 	}
 	if d.Hold != nil && !d.Hold.Cancel {
 		if f.Phase != string(domain.PhaseWriting) {
@@ -231,7 +231,7 @@ func validateDispatchAgainst(dispatch *DispatchOp, phase string) error {
 		return fmt.Errorf("Thiếu phase, cấm thực hiện phân công")
 	}
 	if phase == string(domain.PhaseComplete) {
-		return fmt.Errorf("Sau khi hoàn kết cấm phân công trực tiếp")
+		return fmt.Errorf("Sau khi kết thúc truyện cấm phân công trực tiếp")
 	}
 	switch dispatch.Agent {
 	case "writer", "editor":

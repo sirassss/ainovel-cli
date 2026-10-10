@@ -185,11 +185,11 @@ func StalledOutline(entries []OutlineEntry) string {
 		}
 	}
 	if worst, n := mostRepeated(hooks); n >= maxHookRepeat {
-		return fmt.Sprintf("Đại cương quay vòng: cùng một hook lặp ở %d/%d chương — %q. "+
+		return fmt.Sprintf("Dàn ý quay vòng: cùng một hook lặp ở %d/%d chương — %q. "+
 			"hook của mỗi chương phải là hệ quả mới phát sinh trong chương đó và được chương kế tiếp đáp lại; hãy viết lại từng chương", n, len(entries), truncateRunes(worst, 40))
 	}
 	if worst, n := mostRepeated(events); n >= maxCoreEventRepeat {
-		return fmt.Sprintf("Đại cương quay vòng: cùng một core_event lặp ở %d chương — %q. "+
+		return fmt.Sprintf("Dàn ý quay vòng: cùng một core_event lặp ở %d chương — %q. "+
 			"Mỗi chương phải xảy ra việc khác nhau và làm thay đổi tình thế; hãy viết lại từng chương", n, truncateRunes(worst, 40))
 	}
 	return ""
@@ -253,8 +253,8 @@ func OversizedArc(label string, chapters int) string {
 		return ""
 	}
 	return fmt.Sprintf("%s có %d chương chi tiết, vượt giới hạn %d chương mỗi cung. "+
-		"Thẩm duyệt cuối cung phải đọc trọn cả cung, cung quá dài thì model nào cũng không thẩm duyệt nổi (thực tế 20 chương đã làm kẹt cả pipeline). "+
+		"Đánh giá cuối cung phải đọc trọn cả cung, cung quá dài thì model nào cũng không đánh giá nổi (thực tế 20 chương đã làm kẹt cả pipeline). "+
 		"Hãy tách thành nhiều cung, mỗi cung có mục tiêu độc lập: lần gọi này chỉ mở rộng cung đầu tiên trong phạm vi %d chương, "+
-		"các cung còn lại để dạng khung xương, tới biên thì mở rộng tiếp",
+		"các cung còn lại để dạng phác thảo, tới biên thì mở rộng tiếp",
 		label, chapters, maxArcChapters, maxArcChapters)
 }

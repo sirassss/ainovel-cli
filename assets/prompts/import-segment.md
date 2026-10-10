@@ -11,7 +11,7 @@ Tin nhắn người dùng là một JSON hình chiếu cấu trúc:
 ## Ngữ nghĩa của ranh giới
 
 - `unit_id`: id của unit chứa ranh giới, phải nằm trong khoảng owned.
-- `kind`: `chapter` (đơn vị chính văn có thể nộp, gồm cả chương mở đầu/tiền truyện/ngoại truyện mà bạn phán đoán là một chương) / `group` (tiêu đề cấp cao hơn như tập, phần, quyển; bản thân nó không phải chương) / `front_matter` (phần phụ trước chính văn: lời tựa, bản quyền, mục lục…) / `back_matter` (phần phụ sau chính văn: lời bạt, lời cảm ơn…).
+- `kind`: `chapter` (đơn vị nội dung chương có thể nộp, gồm cả chương mở đầu/tiền truyện/ngoại truyện mà bạn phán đoán là một chương) / `group` (tiêu đề cấp cao hơn như tập, phần, quyển; bản thân nó không phải chương) / `front_matter` (phần phụ trước nội dung chương: lời tựa, bản quyền, mục lục…) / `back_matter` (phần phụ sau nội dung chương: lời bạt, lời cảm ơn…).
 - `title`: **sao chép nguyên văn từng chữ** tiêu đề trong unit của ranh giới đó (có thể bỏ ký hiệu trang trí và khoảng trắng thừa, nhưng không được đổi chữ). Chỉ khi nguồn thật sự không có quy ước dòng tiêu đề nào, mà chỗ đó lại đúng là điểm bắt đầu chương mới, mới được tự tóm tắt tiêu đề, và khi đó phải đặt `uncertain=true`.
 - `anchor`: chỉ khi một unit chứa nhiều ranh giới (dòng dài không xuống dòng) thì sao chép nguyên văn một đoạn ngắn tại chỗ ranh giới để định vị; nếu không thì để trống.
 - `uncertain`: đặt `true` khi bạn không chắc nó có phải một chương độc lập hay không, hoặc tiêu đề là do bạn tóm tắt (không có trong nguồn) — dùng để nhắc người dùng khi xem trước.
@@ -20,7 +20,7 @@ Tin nhắn người dùng là một JSON hình chiếu cấu trúc:
 ## Kỷ luật
 
 - **Ranh giới chỉ đặt ở chỗ phân cách cấu trúc thật sự**: dòng tiêu đề (tên chương/tên tập) hoặc điểm bắt đầu rõ ràng của vùng phụ. Chuyển cảnh, dấu vết ngắt trang, thay đổi nhịp bên trong một chương dài **không phải** ranh giới chương.
-- Khoảng owned của bạn chỉ là một cửa sổ của cả sách: nếu nó bắt đầu giữa phần chính văn tiếp nối của chương trước, **đừng** đặt ranh giới ở đầu khối — đoạn văn bản này thuộc ranh giới phía trước, trả về `boundaries` rỗng cũng là đầu ra đúng.
+- Khoảng owned của bạn chỉ là một cửa sổ của cả sách: nếu nó bắt đầu giữa phần nội dung chương tiếp nối của chương trước, **đừng** đặt ranh giới ở đầu khối — đoạn văn bản này thuộc ranh giới phía trước, trả về `boundaries` rỗng cũng là đầu ra đúng.
 - Chỉ khi hình chiếu bắt đầu từ **đầu cả sách** (`owned_start` chính là unit đầu tiên của sách) thì văn bản không rỗng ở đầu mới bắt buộc phải thuộc về một ranh giới (front_matter/chapter/group), không để văn bản đầu sách không thuộc về đâu.
 - Ranh giới phải tăng nghiêm ngặt theo thứ tự unit.
 - Đừng sinh regex; phán đoán từng chỗ theo ngữ nghĩa.

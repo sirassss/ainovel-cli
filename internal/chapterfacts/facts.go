@@ -20,7 +20,7 @@ func Properties(includeFeedback bool) []schema.Prop {
 		schema.Property("characters", textList("Nhân vật liên quan")).Required(),
 	)
 	foreshadow := schema.Object(
-		schema.Property("id", schema.String("ID phục bút")).Required(),
+		schema.Property("id", schema.String("ID chi tiết gài trước")).Required(),
 		schema.Property("action", schema.Enum("Thao tác", "plant", "advance", "resolve")).Required(),
 		schema.Property("description", llmcontract.Nullable(schema.String("Mô tả khi plant, các thao tác khác là null"))).Required(),
 	)
@@ -42,22 +42,22 @@ func Properties(includeFeedback bool) []schema.Prop {
 		schema.Property("characters", textList("Nhân vật xuất hiện")).Required(),
 		schema.Property("key_events", textList("Sự kiện then chốt")).Required(),
 		schema.Property("timeline_events", schema.Array("Sự kiện dòng thời gian", timeline)).Required(),
-		schema.Property("foreshadow_updates", schema.Array("Thao tác phục bút", foreshadow)).Required(),
+		schema.Property("foreshadow_updates", schema.Array("Thao tác chi tiết gài trước", foreshadow)).Required(),
 		schema.Property("relationship_changes", schema.Array("Biến đổi quan hệ", relationship)).Required(),
 		schema.Property("state_changes", schema.Array("Biến đổi trạng thái", stateChange)).Required(),
 		schema.Property("cast_intros", schema.Array("Nhân vật phụ mới", schema.Object(
 			schema.Property("name", schema.String("Họ tên")).Required(),
 			schema.Property("brief_role", schema.String("Vai trò")).Required(),
 		))).Required(),
-		schema.Property("hook_type", llmcontract.Nullable(schema.Enum("Móc câu cuối chương", domain.HookTypes()...))).Required(),
+		schema.Property("hook_type", llmcontract.Nullable(schema.Enum("Hook cuối chương", domain.HookTypes()...))).Required(),
 		schema.Property("dominant_strand", llmcontract.Nullable(schema.Enum("Tuyến truyện chủ đạo", domain.DominantStrands()...))).Required(),
 	}
 	if includeFeedback {
 		feedback := schema.Object(
-			schema.Property("deviation", schema.String("Mô tả phần lệch khỏi đại cương")).Required(),
-			schema.Property("suggestion", schema.String("Gợi ý điều chỉnh đại cương phía sau")).Required(),
+			schema.Property("deviation", schema.String("Mô tả phần lệch khỏi dàn ý")).Required(),
+			schema.Property("suggestion", schema.String("Gợi ý điều chỉnh dàn ý phía sau")).Required(),
 		)
-		feedback["description"] = "Đối tượng gợi ý cho đại cương phía sau; phải truyền trực tiếp JSON object, không truyền JSON dạng chuỗi"
+		feedback["description"] = "Đối tượng gợi ý cho dàn ý phía sau; phải truyền trực tiếp JSON object, không truyền JSON dạng chuỗi"
 		props = append(props, schema.Property("feedback", llmcontract.Nullable(feedback)).Required())
 	}
 	return props
@@ -94,9 +94,9 @@ func Validate(facts domain.ChapterFacts) error {
 		}
 		if placeholderForeshadowID(update.ID) {
 			return fmt.Errorf(
-				"foreshadow_updates[%d].id = %q là placeholder, không phải định danh. Mỗi phục bút cần một id duy nhất và ổn định"+
+				"foreshadow_updates[%d].id = %q là placeholder, không phải định danh. Mỗi chi tiết gài trước cần một id duy nhất và ổn định"+
 					"(như FORESHADOW_OBSERVER, jade-pendant), các chương sau dựa vào nó để advance/resolve; "+
-					"dùng lại placeholder sẽ khiến phục bút mới đụng phục bút cũ",
+					"dùng lại placeholder sẽ khiến chi tiết gài trước mới đụng chi tiết gài trước cũ",
 				i, update.ID)
 		}
 		switch update.Action {

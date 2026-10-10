@@ -42,7 +42,7 @@ func (s *Store) InvalidateChapterAggregates(fromChapter int) error {
 	}
 	volumes, err := s.Outline.LoadLayeredOutline()
 	if err != nil {
-		return fmt.Errorf("Đọc đại cương phân tầng: %w", err)
+		return fmt.Errorf("Đọc dàn ý phân tầng: %w", err)
 	}
 	chapter := 1
 	arcEnds := make(map[[2]int]int)

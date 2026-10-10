@@ -18,7 +18,7 @@ func NewSaveBookTool(store *store.Store) *SaveBookTool { return &SaveBookTool{st
 
 func (t *SaveBookTool) Name() string { return "save_book" }
 func (t *SaveBookTool) Description() string {
-	return "Lưu tên sách và lời giới thiệu không tiết lộ nội dung dành cho độc giả. Lời giới thiệu nên nêu nhân vật chính, xung đột cốt lõi và móc câu đọc tiếp, không được viết thành đại cương nội bộ hay tóm tắt kết cục."
+	return "Lưu tên sách và lời giới thiệu không tiết lộ nội dung dành cho độc giả. Lời giới thiệu nên nêu nhân vật chính, xung đột cốt lõi và hook đọc tiếp, không được viết thành dàn ý nội bộ hay tóm tắt kết cục."
 }
 func (t *SaveBookTool) Label() string                          { return "Lưu thông tin tác phẩm" }
 func (t *SaveBookTool) ReadOnly(_ json.RawMessage) bool        { return false }

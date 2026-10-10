@@ -787,7 +787,7 @@ func TestContextToolSelectedMemoryRecallsStoryThreadsAndReviewLessons(t *testing
 	if !containsRecallSummary(payload.Selected.ReviewLessons, "thiếu sót so với contract") {
 		t.Fatalf("expected review lesson recall to mention contract miss, got %+v", payload.Selected.ReviewLessons)
 	}
-	if !strings.Contains(payload.Summary, "gợi lại manh mối:") || !strings.Contains(payload.Summary, "gợi lại thẩm duyệt:") {
+	if !strings.Contains(payload.Summary, "gợi lại manh mối:") || !strings.Contains(payload.Summary, "gợi lại đánh giá:") {
 		t.Fatalf("expected loading summary to report selected memory, got %q", payload.Summary)
 	}
 }

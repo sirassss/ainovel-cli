@@ -33,7 +33,7 @@ func (d *PlanStartDecision) Validate() error {
 // planStartContract 紧邻 PlanStartDecision:字段全 required,planner 是封闭枚举。
 var planStartContract = llmcontract.Contract{
 	Name:        "arbiter_plan_start",
-	Description: "Tài phán khởi động: chọn kiến trúc sư và tạo văn bản nhiệm vụ đầy đủ",
+	Description: "Phân xử khởi động: chọn kiến trúc sư và tạo văn bản nhiệm vụ đầy đủ",
 	Schema: schema.Object(
 		schema.Property("planner", schema.Enum("Kiến trúc sư", "architect_long", "architect_short")).Required(),
 		schema.Property("task", schema.String("Nhiệm vụ đầy đủ giao cho kiến trúc sư (gồm yêu cầu đã mở rộng)")).Required(),

@@ -25,8 +25,7 @@ var pendingFlag = flag.String("pending", "", "directory (e.g. internal/domain) t
 
 const keepMarker = "han:keep"
 
-var pending = map[string]string{
-}
+var pending = map[string]string{}
 
 // pendingComments lists directories whose comments are not yet English; delete the
 // entry once the directory is cleaned.

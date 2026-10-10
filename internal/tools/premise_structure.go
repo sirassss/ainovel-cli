@@ -16,7 +16,8 @@ var premiseHeadingAliases = map[string]string{
 	"Hướng kết cục":                "Hướng kết cục",
 	"Vùng cấm sáng tác":            "Vùng cấm sáng tác",
 	"Điểm bán hàng khác biệt":      "Điểm bán hàng khác biệt",
-	"Móc câu khác biệt":            "Móc câu khác biệt",
+	"Hook khác biệt":               "Hook khác biệt",
+	"Móc câu khác biệt":            "Hook khác biệt", // term:keep legacy heading so premises saved before the rename still parse
 	"Cam kết cốt lõi":              "Cam kết cốt lõi",
 	"Động cơ câu chuyện":           "Động cơ câu chuyện",
 	"Tuyến quan hệ/trưởng thành":   "Tuyến quan hệ/trưởng thành",
@@ -28,7 +29,7 @@ var premiseHeadingAliases = map[string]string{
 	// han:keep alias tiêu đề premise của chế độ zh
 	"题材定位": "Định vị thể loại", "题材和基调": "Thể loại và giọng điệu", "核心冲突": "Xung đột cốt lõi", // han:keep
 	"主角目标": "Mục tiêu nhân vật chính", "结局方向": "Hướng kết cục", "终局方向": "Hướng kết cục", // han:keep
-	"写作禁区": "Vùng cấm sáng tác", "差异化卖点": "Điểm bán hàng khác biệt", "差异化钩子": "Móc câu khác biệt", // han:keep
+	"写作禁区": "Vùng cấm sáng tác", "差异化卖点": "Điểm bán hàng khác biệt", "差异化钩子": "Hook khác biệt", // han:keep
 	"核心兑现承诺": "Cam kết cốt lõi", "故事引擎": "Động cơ câu chuyện", "关系/成长主线": "Tuyến quan hệ/trưởng thành", // han:keep
 	"升级路径": "Lộ trình nâng cấp", "中段转折": "Chuyển hướng trung kỳ", "中期转向": "Chuyển hướng trung kỳ", // han:keep
 	"终局命题": "Mệnh đề kết cục", "短篇适配性": "Tính phù hợp với truyện ngắn", // han:keep
@@ -84,7 +85,7 @@ func canonicalPremiseHeading(line string) (string, bool) {
 	if title == "" {
 		return "", false
 	}
-	// Model hay chép cả phần mô tả trong prompt: "Hướng kết cục (…)", "Móc câu khác biệt: …".
+	// Model hay chép cả phần mô tả trong prompt: "Hướng kết cục (…)", "Hook khác biệt: …".
 	if i := strings.IndexAny(title, "(（:："); i >= 0 { // han:keep dấu ngăn cách full-width của tiêu đề zh
 		title = strings.TrimSpace(title[:i])
 	}
@@ -125,7 +126,7 @@ func requiredPremiseHeadings(tier domain.PlanningTier) []string {
 		"Hướng kết cục",
 		"Vùng cấm sáng tác",
 		"Điểm bán hàng khác biệt",
-		"Móc câu khác biệt",
+		"Hook khác biệt",
 		"Cam kết cốt lõi",
 	}
 

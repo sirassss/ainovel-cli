@@ -176,7 +176,7 @@ func (s *RunMetaStore) GrantAdvancePermit(chapter int) error {
 			return fmt.Errorf("run meta chưa được khởi tạo")
 		}
 		if meta.AdvanceMode != domain.ChapterAdvanceReview {
-			return fmt.Errorf("Chỉ chế độ nghiệm thu từng chương mới được cấp phép chương kế (hiện %s)", meta.AdvanceMode)
+			return fmt.Errorf("Chỉ chế độ duyệt từng chương mới được cấp phép chương kế (hiện %s)", meta.AdvanceMode)
 		}
 		if meta.AdvancePermitChapter == chapter {
 			return nil

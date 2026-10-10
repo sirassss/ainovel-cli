@@ -49,7 +49,7 @@ func mustNotContain(t *testing.T, got, want string) {
 func TestExtract_PlanChapter(t *testing.T) {
 	in := `{"chapter":1,"title":"卖身契","goal":"建立矿场基线","conflict":"父债","hook":"灰矿","emotion_arc":"压抑"}`
 	out := feedAll(t, "plan_chapter", in)
-	mustContain(t, out, "✻ Quy hoạch")
+	mustContain(t, out, "✻ Kế hoạch")
 	mustContain(t, out, "chapter: 1")
 	mustContain(t, out, "title: 卖身契")
 	mustContain(t, out, "goal: 建立矿场基线")
@@ -122,7 +122,7 @@ func TestExtract_FoundationUpdateCompass(t *testing.T) {
 func TestExtract_SaveReview(t *testing.T) {
 	in := `{"chapter":3,"scope":"chapter","verdict":"polish","summary":"节奏略慢。","dimensions":[{"dimension":"hook","score":55,"verdict":"fail"}],"issues":[{"type":"hook","severity":"error","description":"章末缺钩子。"}],"affected_chapters":[3,4]}`
 	out := feedAll(t, "save_review", in)
-	mustContain(t, out, "✻ Thẩm duyệt")
+	mustContain(t, out, "✻ Đánh giá")
 	mustContain(t, out, "verdict: polish")
 	mustContain(t, out, "summary: 节奏略慢。")
 	mustContain(t, out, "dimension: hook")

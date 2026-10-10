@@ -23,9 +23,9 @@ func NewPlanChapterTool(store *store.Store) *PlanChapterTool {
 
 func (t *PlanChapterTool) Name() string { return "plan_chapter" }
 func (t *PlanChapterTool) Description() string {
-	return "Lưu ý tưởng viết chương. Agent tự quyết mức độ chi tiết của quy hoạch, không bắt buộc chia cảnh"
+	return "Lưu ý tưởng viết chương. Agent tự quyết mức độ chi tiết của kế hoạch, không bắt buộc chia cảnh"
 }
-func (t *PlanChapterTool) Label() string { return "Quy hoạch chương" }
+func (t *PlanChapterTool) Label() string { return "Lập kế hoạch chương" }
 
 // 写工具，禁止并发。
 func (t *PlanChapterTool) ReadOnly(_ json.RawMessage) bool        { return false }
@@ -34,10 +34,10 @@ func (t *PlanChapterTool) ConcurrencySafe(_ json.RawMessage) bool { return false
 func (t *PlanChapterTool) Schema() map[string]any {
 	return schema.Object(
 		schema.Property("chapter", schema.Int("Số chương")).Required(),
-		schema.Property("title", schema.String("Tiêu đề chương tạm thời; có thể điều chỉnh theo chính văn sau khi viết")).Required(),
+		schema.Property("title", schema.String("Tiêu đề chương tạm thời; có thể điều chỉnh theo nội dung chương sau khi viết")).Required(),
 		schema.Property("goal", schema.String("Mục tiêu chương")).Required(),
 		schema.Property("conflict", schema.String("Xung đột cốt lõi")).Required(),
-		schema.Property("hook", schema.String("Móc câu cuối chương")).Required(),
+		schema.Property("hook", schema.String("Hook cuối chương")).Required(),
 		schema.Property("emotion_arc", schema.String("Đường cong cảm xúc")),
 		schema.Property("notes", schema.String("Ghi chú tự do (bất cứ điều gì bạn thấy cần nhớ khi viết)")),
 		schema.Property("required_beats", schema.Array("Các hạng mục tiến triển chương này bắt buộc hoàn thành", schema.String(""))),
@@ -73,7 +73,7 @@ func (t *PlanChapterTool) Execute(_ context.Context, args json.RawMessage) (json
 			"chapter":   plan.Chapter,
 			"skipped":   true,
 			"completed": true,
-			"reason":    fmt.Sprintf("Chương %d đã nộp xong, không thể quy hoạch lại", plan.Chapter),
+			"reason":    fmt.Sprintf("Chương %d đã nộp xong, không thể lập kế hoạch lại", plan.Chapter),
 		})
 	}
 	if err := t.store.Progress.ValidateChapterWork(plan.Chapter); err != nil {
@@ -106,7 +106,7 @@ func (t *PlanChapterTool) Execute(_ context.Context, args json.RawMessage) (json
 	return json.Marshal(map[string]any{
 		"planned":   true,
 		"chapter":   plan.Chapter,
-		"next_step": "Gọi ngay draft_chapter(chapter=số chương này, content=chuỗi chính văn đầy đủ) để ghi chính văn, đừng quy hoạch lặp lại cùng một chương",
+		"next_step": "Gọi ngay draft_chapter(chapter=số chương này, content=chuỗi nội dung chương đầy đủ) để ghi nội dung chương, đừng lập kế hoạch lặp lại cùng một chương",
 	})
 }
 

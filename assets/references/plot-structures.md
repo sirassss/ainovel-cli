@@ -14,7 +14,7 @@ Cấu trúc cốt truyện kinh điển nhất, phù hợp với hầu hết cá
 | Chương 2 | Sự kiện kích hoạt (Inciting Incident) — sự kiện phá vỡ hiện trạng |
 | Chương 3 | Nhân vật chính từ chối lời kêu gọi, nhưng cuối cùng quyết định hành động |
 
-**Ví dụ điểm móc hồi 1:**
+**Ví dụ hook hồi 1:**
 - "Cánh cửa mở ra, người bước vào là kẻ đã chết ba năm trước."
 - "Cô nhận được lá thư, người ký tên chính là bản thân cô."
 
@@ -26,7 +26,7 @@ Cấu trúc cốt truyện kinh điển nhất, phù hợp với hầu hết cá
 | Chương 6 | Điểm giữa (Midpoint) — bước ngoặt lớn / tiết lộ thông tin quan trọng |
 | Chương 7–8 | Leo thang căng thẳng, đồng minh có thể phản bội |
 
-**Ví dụ điểm móc hồi 2:**
+**Ví dụ hook hồi 2:**
 - "Người thầy hướng dẫn hóa ra là kẻ chủ mưu đứng sau tất cả."
 - "Đồng minh duy nhất đã mất tích."
 
@@ -69,7 +69,7 @@ Phù hợp với thể loại trinh thám / suy luận / kinh dị.
 
 ### Hồi 1: Bí Ẩn Xuất Hiện
 
-| Chương | Nội dung | Điểm móc |
+| Chương | Nội dung | Hook |
 |--------|----------|-----------|
 | Chương 1 | Phát hiện thi thể / sự kiện xảy ra | Ai đã làm? |
 | Chương 2 | Thám tử tiếp nhận vụ án | Tại sao vụ án này đặc biệt? |
@@ -77,7 +77,7 @@ Phù hợp với thể loại trinh thám / suy luận / kinh dị.
 
 ### Hồi 2: Điều Tra Đi Sâu
 
-| Chương | Nội dung | Điểm móc |
+| Chương | Nội dung | Hook |
 |--------|----------|-----------|
 | Chương 4 | Thẩm vấn nghi phạm, ai cũng có nghi vấn | Ai đang nói dối? |
 | Chương 5 | Manh mối mới xuất hiện, chỉ về hướng bất ngờ | Chúng ta đã sai từ đầu chăng? |
@@ -86,7 +86,7 @@ Phù hợp với thể loại trinh thám / suy luận / kinh dị.
 
 ### Hồi 3: Sự Thật Được Tiết Lộ
 
-| Chương | Nội dung | Điểm móc |
+| Chương | Nội dung | Hook |
 |--------|----------|-----------|
 | Chương 8 | Đột phá lớn / đảo ngược tình thế | Người chúng ta tin tưởng có vấn đề? |
 | Chương 9 | Cuộc đối đầu cuối cùng | Sự thật là gì? Cái giá phải trả là gì? |
@@ -131,11 +131,11 @@ Phù hợp với thể loại nhịp độ nhanh, căng thẳng và kịch tính
 ### Cấu Trúc Truyện Ngắn (5–6 chương)
 
 ```text
-Chương 1: Khủng hoảng xuất hiện → điểm móc: nhân vật chính bị truy sát / đe dọa
-Chương 2: Lên kế hoạch ứng phó → điểm móc: kế hoạch thất bại, tình hình tệ hơn
-Chương 3: Truy đuổi / đối đầu → điểm móc: bị dồn vào đường cùng
-Chương 4: Cơ hội đảo ngược → điểm móc: phát hiện hy vọng mới, nhưng thời gian cấp bách
-Chương 5: Đối đầu cuối cùng → điểm móc: ranh giới sống chết
+Chương 1: Khủng hoảng xuất hiện → hook: nhân vật chính bị truy sát / đe dọa
+Chương 2: Lên kế hoạch ứng phó → hook: kế hoạch thất bại, tình hình tệ hơn
+Chương 3: Truy đuổi / đối đầu → hook: bị dồn vào đường cùng
+Chương 4: Cơ hội đảo ngược → hook: phát hiện hy vọng mới, nhưng thời gian cấp bách
+Chương 5: Đối đầu cuối cùng → hook: ranh giới sống chết
 Chương 6: Kết cục → khắc họa hậu quả
 ```
 
@@ -230,10 +230,10 @@ Chương 5: Cao trào + kết cục
 ### Cấu Trúc Nội Tại Của Một Chương
 
 ```text
-Mở đầu (10%): điểm móc + kết nối ngữ cảnh từ chương trước
+Mở đầu (10%): hook + kết nối ngữ cảnh từ chương trước
 Phát triển (60%): đẩy sự kiện + xung đột
 Cao trào (20%): đỉnh điểm của chương
-Kết thúc (10%): điểm móc căng thẳng + dẫn dắt vào chương kế
+Kết thúc (10%): hook căng thẳng + dẫn dắt vào chương kế
 ```
 
 ### Cấu Trúc Chương Kém Hiệu Quả

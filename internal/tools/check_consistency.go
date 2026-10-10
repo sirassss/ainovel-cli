@@ -23,7 +23,7 @@ func NewCheckConsistencyTool(store *store.Store) *CheckConsistencyTool {
 
 func (t *CheckConsistencyTool) Name() string { return "check_consistency" }
 func (t *CheckConsistencyTool) Description() string {
-	return "Nạp bản nháp đã viết và dữ liệu đối chiếu (quy tắc thế giới, phục bút, quan hệ, biệt danh, tóm tắt gần nhất) để bạn kiểm tra tính nhất quán. Phải gọi sau draft_chapter"
+	return "Nạp bản nháp đã viết và dữ liệu đối chiếu (quy tắc thế giới, chi tiết gài trước, quan hệ, biệt danh, tóm tắt gần nhất) để bạn kiểm tra tính nhất quán. Phải gọi sau draft_chapter"
 }
 func (t *CheckConsistencyTool) Label() string { return "Kiểm tra nhất quán" }
 

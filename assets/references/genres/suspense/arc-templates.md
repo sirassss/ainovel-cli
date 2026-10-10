@@ -5,7 +5,7 @@ Các cung truyện dưới đây phù hợp với tiểu thuyết dài thể lo�
 ### Cung Điều Tra Vụ Án (10-15 chương)
 2-3 chương vụ án xảy ra / khám nghiệm hiện trường → 3-5 chương điều tra nhiều hướng (mỗi manh mối mở ra nghi vấn mới) → 2-3 chương đột phá then chốt → 1-2 chương tiết lộ sự thật + hậu quả
 
-- Manh mối phải được trình bày công bằng, khi tiết lộ độc giả có thể nhìn lại các phục bút trước đó
+- Manh mối phải được trình bày công bằng, khi tiết lộ độc giả có thể nhìn lại các chi tiết gài trước đó
 - Mỗi hướng điều tra không chỉ đơn thuần "loại trừ nghi phạm" mà phải hé lộ thông tin bối cảnh mới
 - Cú sốc cảm xúc sau khi tiết lộ sự thật quan trọng hơn bản thân quá trình suy luận logic
 
@@ -35,7 +35,7 @@ Các cung truyện dưới đây phù hợp với tiểu thuyết dài thể lo�
 
 - Các vụ án ban đầu mỗi vụ có đặc sắc riêng, từng vụ có thể độc lập thành lập
 - Phát hiện mối liên hệ là điểm ngoặt lớn, thay đổi nhận thức của nhân vật chính về toàn bộ cục diện
-- Động cơ của kẻ chủ mưu phải có phục bút hỗ trợ từ phần trước
+- Động cơ của kẻ chủ mưu phải có chi tiết gài trước hỗ trợ từ phần trước
 
 ### Cung Thường Ngày / Chuyển Tiếp (4-6 chương)
 Hàn gắn quan hệ nhân vật / ủ mầm manh mối mới / hồi phục tâm lý / đẩy mạch ngầm tiến lên

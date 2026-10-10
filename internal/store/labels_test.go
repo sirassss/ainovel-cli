@@ -30,7 +30,7 @@ func TestRenderersFollowLanguage(t *testing.T) {
 			t.Errorf("bản tiếng Việt còn nhãn tiếng Trung %q", han)
 		}
 	}
-	for _, want := range []string{"Đề cương", "Chương 1", "Sự kiện chính", "Điểm móc",
+	for _, want := range []string{"Dàn ý", "Chương 1", "Sự kiện chính", "Hook",
 		"Hồ sơ nhân vật", "Đặc điểm", "Luật thế giới", "Ranh giới"} {
 		if !strings.Contains(vi, want) {
 			t.Errorf("thiếu nhãn tiếng Việt %q", want)

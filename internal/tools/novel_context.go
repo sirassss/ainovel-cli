@@ -90,7 +90,7 @@ func (t *ContextTool) Name() string { return "novel_context" }
 func (t *ContextTool) Description() string {
 	return "Lấy trạng thái hiện tại của tiểu thuyết và ngữ cảnh sáng tác." +
 		"Không truyền chapter: trả về progress_status (các trường tiến độ như phase/flow/next_chapter/pending_rewrites) cùng thiết lập nền tảng, dùng để quyết định bước tiếp theo." +
-		"Truyền chapter=N: trả thêm ngữ cảnh viết của chương đó như tóm tắt tiền tình, phục bút, trạng thái nhân vật, quy tắc văn phong"
+		"Truyền chapter=N: trả thêm ngữ cảnh viết của chương đó như tóm tắt tiền tình, chi tiết gài trước, trạng thái nhân vật, quy tắc văn phong"
 }
 func (t *ContextTool) Label() string { return "Nạp ngữ cảnh" }
 
@@ -129,7 +129,7 @@ func (t *ContextTool) Execute(_ context.Context, args json.RawMessage) (json.Raw
 		}
 		// episodic 是已写入正文的备忘，不是待写素材。
 		if epi, ok := result["episodic_memory"].(map[string]any); ok && len(epi) > 0 {
-			epi["_usage"] = "Vùng này là ghi nhớ sự thật của phần chính văn đã viết (để đối chiếu nhất quán và nối mạch); nhắc lại nguyên văn các nội dung này trong chính văn chương mới là lỗi lặp"
+			epi["_usage"] = "Vùng này là ghi nhớ sự thật của phần nội dung chương đã viết (để đối chiếu nhất quán và nối mạch); nhắc lại nguyên văn các nội dung này trong nội dung chương mới là lỗi lặp"
 		}
 	} else {
 		// Architect 路径：只返回状态 + 结构化数据，不加载全量原文
@@ -224,7 +224,7 @@ func buildLoadingSummary(result map[string]any, chapter int) string {
 		items = append(items, fmt.Sprintf("bộ nhớ tình tiết:%d", len(episodic)))
 	}
 	if len(planning) > 0 {
-		items = append(items, fmt.Sprintf("bộ nhớ quy hoạch:%d", len(planning)))
+		items = append(items, fmt.Sprintf("bộ nhớ kế hoạch:%d", len(planning)))
 	}
 	if len(foundation) > 0 {
 		items = append(items, fmt.Sprintf("bộ nhớ nền tảng:%d", len(foundation)))
@@ -241,14 +241,14 @@ func buildLoadingSummary(result map[string]any, chapter int) string {
 	}
 
 	if n := sliceLen(planning["layered_outline"]); n > 0 {
-		items = append(items, fmt.Sprintf("đại cương phân tầng:%d tập", n))
+		items = append(items, fmt.Sprintf("dàn ý phân tầng:%d tập", n))
 	}
 
 	if n := sliceLen(working["timeline"]); n > 0 {
 		items = append(items, fmt.Sprintf("dòng thời gian:%d", n))
 	}
 	if n := firstSliceLen(episodic["foreshadow_ledger"], foundation["foreshadow_ledger"]); n > 0 {
-		items = append(items, fmt.Sprintf("phục bút:%d", n))
+		items = append(items, fmt.Sprintf("chi tiết gài trước:%d", n))
 	}
 	if n := sliceLen(episodic["relationship_state"]); n > 0 {
 		items = append(items, fmt.Sprintf("quan hệ:%d", n))
@@ -270,7 +270,7 @@ func buildLoadingSummary(result map[string]any, chapter int) string {
 			items = append(items, fmt.Sprintf("gợi lại manh mối:%d", n))
 		}
 		if n := sliceLen(selected["review_lessons"]); n > 0 {
-			items = append(items, fmt.Sprintf("gợi lại thẩm duyệt:%d", n))
+			items = append(items, fmt.Sprintf("gợi lại đánh giá:%d", n))
 		}
 	}
 
@@ -632,7 +632,7 @@ func (t *ContextTool) buildRelatedChapters(
 	// 1. 伏笔反查：活跃伏笔的描述是否与当前章大纲相关
 	for _, f := range foreshadow {
 		if strings.Contains(outlineText, f.ID) || containsAny(outlineText, strings.Fields(f.Description)) {
-			add(f.PlantedAt, fmt.Sprintf("chương gieo phục bút %s(%s)", f.ID, truncateRunes(f.Description, 15)))
+			add(f.PlantedAt, fmt.Sprintf("chương gieo chi tiết gài trước %s(%s)", f.ID, truncateRunes(f.Description, 15)))
 		}
 		if len(results) >= maxResults {
 			break
@@ -763,8 +763,8 @@ func (t *ContextTool) selectStoryThreads(state contextBuildState) []domain.Recal
 			Kind:    "story_thread",
 			Key:     entry.ID,
 			Chapter: entry.PlantedAt,
-			Reason:  "Chương hiện tại có thể cần nối tiếp phục bút đã có",
-			Summary: fmt.Sprintf("Phục bút “%s” được gieo ở chương %d: %s", entry.ID, entry.PlantedAt, truncateRunes(entry.Description, 30)),
+			Reason:  "Chương hiện tại có thể cần nối tiếp chi tiết gài trước đã có",
+			Summary: fmt.Sprintf("Chi tiết gài trước “%s” được gieo ở chương %d: %s", entry.ID, entry.PlantedAt, truncateRunes(entry.Description, 30)),
 		})
 		if len(items) >= maxThreads {
 			return items
@@ -778,8 +778,8 @@ func (t *ContextTool) selectStoryThreads(state contextBuildState) []domain.Recal
 			Kind:    "story_thread",
 			Key:     entry.ID,
 			Chapter: entry.PlantedAt,
-			Reason:  "Phục bút treo lâu chưa thu, cần chú ý kịp thời đẩy tiếp hoặc thu lại",
-			Summary: fmt.Sprintf("Phục bút “%s” được gieo ở chương %d, đã %d chương chưa thu: %s", entry.ID, entry.PlantedAt, state.chapter-entry.PlantedAt, truncateRunes(entry.Description, 30)),
+			Reason:  "Chi tiết gài trước treo lâu chưa thu, cần chú ý kịp thời đẩy tiếp hoặc thu lại",
+			Summary: fmt.Sprintf("Chi tiết gài trước “%s” được gieo ở chương %d, đã %d chương chưa thu: %s", entry.ID, entry.PlantedAt, state.chapter-entry.PlantedAt, truncateRunes(entry.Description, 30)),
 		})
 		if len(items) >= maxThreads {
 			break
@@ -833,7 +833,7 @@ func (t *ContextTool) selectReviewLessons(chapter int, reads *contextReads) []do
 				Kind:    "review_lesson",
 				Key:     fmt.Sprintf("review-%d-contract-%d", review.Chapter, i),
 				Chapter: review.Chapter,
-				Reason:  "Thẩm duyệt gần nhất chỉ ra thiếu sót so với contract",
+				Reason:  "Đánh giá gần nhất chỉ ra thiếu sót so với contract",
 				Summary: fmt.Sprintf("Chương %d thiếu sót so với contract: %s", review.Chapter, miss),
 			})
 			if len(items) >= 3 {
@@ -847,8 +847,8 @@ func (t *ContextTool) selectReviewLessons(chapter int, reads *contextReads) []do
 					Kind:    "review_lesson",
 					Key:     fmt.Sprintf("review-%d-issue-%d", review.Chapter, i),
 					Chapter: review.Chapter,
-					Reason:  "Thẩm duyệt gần nhất chỉ ra cần tránh lỗi lặp",
-					Summary: fmt.Sprintf("Nhắc nhở thẩm duyệt chương %d: %s", review.Chapter, truncateRunes(issue.Description, 36)),
+					Reason:  "Đánh giá gần nhất chỉ ra cần tránh lỗi lặp",
+					Summary: fmt.Sprintf("Nhắc nhở đánh giá chương %d: %s", review.Chapter, truncateRunes(issue.Description, 36)),
 				})
 			}
 			if len(items) >= 3 {

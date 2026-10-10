@@ -560,14 +560,14 @@ func (m *Model) syncRuntimePlaceholder() {
 		m.textarea.Placeholder = "Đang tạm dừng sáng tác..."
 	case "paused":
 		if m.snapshot.AdvanceMode == "review" && m.snapshot.Phase == "writing" {
-			m.textarea.Placeholder = "Chờ nghiệm thu: Nhập ý kiến chỉnh sửa, hoặc /next để duyệt chương tiếp"
+			m.textarea.Placeholder = "Chờ duyệt: Nhập ý kiến chỉnh sửa, hoặc /next để duyệt chương tiếp"
 		} else {
 			m.textarea.Placeholder = "Sáng tác đã tạm dừng, nhập nội dung bất kỳ để tiếp tục"
 		}
 	default:
 		if !m.snapshot.IsRunning {
 			if m.snapshot.AdvanceMode == "review" && m.snapshot.Phase == "writing" {
-				m.textarea.Placeholder = "Chờ nghiệm thu: Nhập ý kiến chỉnh sửa, hoặc /next để duyệt chương tiếp"
+				m.textarea.Placeholder = "Chờ duyệt: Nhập ý kiến chỉnh sửa, hoặc /next để duyệt chương tiếp"
 			} else {
 				m.textarea.Placeholder = "Sáng tác bị gián đoạn, nhập nội dung bất kỳ để tiếp tục"
 			}

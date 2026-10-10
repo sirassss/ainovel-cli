@@ -2,7 +2,7 @@
 
 ## Tóm tắt chương
 - **Sự kiện cốt lõi**: [Một câu tóm gọn những gì xảy ra trong chương này]
-- **Tiếp nối chương trước**: [Phản hồi điểm móc của chương trước]
+- **Tiếp nối chương trước**: [Phản hồi hook của chương trước]
 - **Mục tiêu tức thời**: [Nhân vật điểm nhìn muốn đạt gì]
 - **Lực cản**: [Ai/cơ chế nào chủ động cản]
 - **Cái giá**: [Thất bại, trì hoãn hoặc bị lộ sẽ mất gì]
@@ -11,7 +11,7 @@
 - **Lựa chọn và đánh đổi**: [Quyết định bộc lộ tính cách]
 - **Hồi đáp**: [Lời hứa cũ nào được trả]
 - **Hậu quả**: [Điều gì không thể quay về như đầu chương]
-- **Điểm móc**: [Điểm móc ở cuối chương này]
+- **Hook**: [Hook ở cuối chương này]
 
 ---
 
@@ -22,6 +22,6 @@
 ---
 
 ## Ghi chú chương
-- Điểm móc chương này: [Mô tả ngắn điểm móc cuối chương]
+- Hook chương này: [Mô tả ngắn hook cuối chương]
 - Xem trước chương sau: [Tùy chọn, 1-2 câu]
-- Đánh dấu phục bút: [Nếu có cài phục bút, ghi chép tại đây]
+- Đánh dấu chi tiết gài trước: [Nếu có cài chi tiết gài trước, ghi chép tại đây]
