@@ -6,8 +6,8 @@ import (
 	"github.com/voocel/ainovel-cli/internal/domain"
 )
 
-// premiseHeadingAliases ánh xạ tiêu đề premise (Việt, và Hán cho chế độ zh) về khóa
-// chuẩn tiếng Việt. Khóa chuẩn là thứ LLM nhìn thấy trong premise_sections/missing.
+// premiseHeadingAliases maps premise headings (Vietnamese, plus Han for zh mode) to the
+// canonical Vietnamese key. The canonical key is what the LLM sees in premise_sections/missing.
 var premiseHeadingAliases = map[string]string{
 	"Thể loại và giọng điệu":       "Thể loại và giọng điệu",
 	"Định vị thể loại":             "Định vị thể loại",
@@ -26,7 +26,7 @@ var premiseHeadingAliases = map[string]string{
 	"Mệnh đề kết cục":              "Mệnh đề kết cục",
 	"Tính phù hợp với truyện ngắn": "Tính phù hợp với truyện ngắn",
 
-	// han:keep alias tiêu đề premise của chế độ zh
+	// Premise heading aliases of zh mode. han:keep
 	"题材定位": "Định vị thể loại", "题材和基调": "Thể loại và giọng điệu", "核心冲突": "Xung đột cốt lõi", // han:keep
 	"主角目标": "Mục tiêu nhân vật chính", "结局方向": "Hướng kết cục", "终局方向": "Hướng kết cục", // han:keep
 	"写作禁区": "Vùng cấm sáng tác", "差异化卖点": "Điểm bán hàng khác biệt", "差异化钩子": "Hook khác biệt", // han:keep
@@ -36,7 +36,7 @@ var premiseHeadingAliases = map[string]string{
 	"本作为什么适合短篇/单卷收束": "Tính phù hợp với truyện ngắn", // han:keep
 }
 
-// premiseHeadingLookup là premiseHeadingAliases với khóa viết thường, để tra không phân biệt hoa thường.
+// premiseHeadingLookup is premiseHeadingAliases with lowercased keys, for case-insensitive lookup.
 var premiseHeadingLookup = func() map[string]string {
 	m := make(map[string]string, len(premiseHeadingAliases))
 	for k, v := range premiseHeadingAliases {
@@ -85,8 +85,8 @@ func canonicalPremiseHeading(line string) (string, bool) {
 	if title == "" {
 		return "", false
 	}
-	// Model hay chép cả phần mô tả trong prompt: "Hướng kết cục (…)", "Hook khác biệt: …".
-	if i := strings.IndexAny(title, "(（:："); i >= 0 { // han:keep dấu ngăn cách full-width của tiêu đề zh
+	// Models often copy the description from the prompt too: "Hướng kết cục (…)", "Hook khác biệt: …". han:keep
+	if i := strings.IndexAny(title, "(（:："); i >= 0 { // full-width separators of zh headings. han:keep
 		title = strings.TrimSpace(title[:i])
 	}
 	canonical, ok := premiseHeadingLookup[strings.ToLower(title)]

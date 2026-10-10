@@ -13,15 +13,15 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// EditChapterTool 对章节草稿做定点字符串替换，适用于打磨场景。
-// 相比 draft_chapter 整章重写，token 节省 10x+。
+// EditChapterTool performs targeted string replacement on a chapter draft, suited to polishing.
+// Compared with rewriting the whole chapter via draft_chapter, it saves 10x+ tokens.
 //
-// 落盘契约：只改 drafts/{ch:02d}.draft.md，禁止直接改 chapters/（终稿由 commit_chapter 独占）。
-// Seed 语义：drafts 不存在但 chapters 有 → 自动把 chapters 复制到 drafts 作为起点。
-// 归属检查：仅允许编辑已完成且位于 PendingRewrites 队列中的章节。
+// On-disk contract: only edits drafts/{ch:02d}.draft.md; directly editing chapters/ is forbidden (the final text is owned exclusively by commit_chapter).
+// Seed semantics: if drafts is missing but chapters has the chapter, chapters is copied to drafts as the starting point.
+// Ownership check: only chapters that are completed and in the PendingRewrites queue may be edited.
 //
-// 本工具是 agentcore.EditTool 的薄封装，找-换逻辑（多级容错匹配、diff 输出、行尾/BOM 保留）
-// 全部复用上游实现。
+// This tool is a thin wrapper around agentcore.EditTool; the find-and-replace logic (multi-level fuzzy matching, diff output, line-ending/BOM preservation)
+// is entirely reused from the upstream implementation.
 type EditChapterTool struct {
 	store *store.Store
 	edit  *agentcoretools.EditTool
@@ -37,14 +37,14 @@ func NewEditChapterTool(s *store.Store) *EditChapterTool {
 func (t *EditChapterTool) Name() string  { return "edit_chapter" }
 func (t *EditChapterTool) Label() string { return "Sửa chương" }
 
-// ReadOnly 明确声明写工具（配合 ConcurrencySafeTool 防止被并发调度）。
+// ReadOnly explicitly declares this a write tool (works with ConcurrencySafeTool to prevent concurrent scheduling).
 func (t *EditChapterTool) ReadOnly(_ json.RawMessage) bool { return false }
 
-// ConcurrencySafe 显式禁止并发：同章节多次 edit_chapter 并行会读-改-写竞态，
-// 即使不同章节并行也会穿插 checkpoint 顺序。统一串行最稳。
+// ConcurrencySafe explicitly forbids concurrency: parallel edit_chapter calls on the same chapter would race on read-modify-write,
+// and even parallel calls on different chapters would interleave the checkpoint order. Serializing everything is the safest.
 func (t *EditChapterTool) ConcurrencySafe(_ json.RawMessage) bool { return false }
 
-// ActivityDescription 供 UI/日志展示当前工具的活动描述。
+// ActivityDescription provides the description of the tool's current activity for UI/log display.
 func (t *EditChapterTool) ActivityDescription(_ json.RawMessage) string {
 	return "Sửa bản nháp chương"
 }
@@ -92,8 +92,8 @@ func (t *EditChapterTool) Execute(ctx context.Context, args json.RawMessage) (js
 		return nil, err
 	}
 
-	// 归属检查：机械落实 writer 协议。新章初稿只能整章覆盖，不能依赖
-	// 模型自行遵守提示词后仍把脆弱的精确编辑暴露为可执行路径。
+	// Ownership check: mechanically enforce the writer protocol. A new chapter's first draft can only be overwritten as a whole chapter; we must not rely on the
+	// model obeying the prompt and still exposing brittle exact edits as an executable path.
 	completed, err := t.store.Progress.IsChapterCompleted(a.Chapter)
 	if err != nil {
 		return nil, fmt.Errorf("load progress: %w: %w", errs.ErrStoreRead, err)
@@ -112,12 +112,12 @@ func (t *EditChapterTool) Execute(ctx context.Context, args json.RawMessage) (js
 		return nil, err
 	}
 
-	// Seed：drafts 不存在时从 chapters 复制一份作为起点
+	// Seed: when drafts is missing, copy one from chapters as the starting point
 	if err := t.ensureDraft(a.Chapter); err != nil {
 		return nil, err
 	}
 
-	// 委托 agentcore.EditTool 完成找-换
+	// Delegate the find-and-replace to agentcore.EditTool
 	subArgs, _ := json.Marshal(map[string]any{
 		"path":        fmt.Sprintf("drafts/%02d.draft.md", a.Chapter),
 		"file_path":   fmt.Sprintf("drafts/%02d.draft.md", a.Chapter),
@@ -139,7 +139,7 @@ func (t *EditChapterTool) Execute(ctx context.Context, args json.RawMessage) (js
 		return nil, fmt.Errorf("checkpoint edit: %w: %w", errs.ErrStoreWrite, err)
 	}
 
-	// 附加指引：让 writer 知道后续步骤，避免遗漏 check_consistency / commit_chapter
+	// Append guidance: let the writer know the follow-up steps, to avoid missing check_consistency / commit_chapter
 	var passthrough map[string]any
 	if err := json.Unmarshal(result, &passthrough); err != nil {
 		return result, nil
@@ -149,10 +149,10 @@ func (t *EditChapterTool) Execute(ctx context.Context, args json.RawMessage) (js
 	return json.Marshal(passthrough)
 }
 
-// ensureDraft 保证 drafts/{ch}.draft.md 存在：
-//   - 已有草稿 → 直接返回
-//   - 无草稿但有终稿 → 把终稿复制到 drafts 作为修改起点（常见于打磨场景）
-//   - 都没有 → 报错，提示先用 draft_chapter 创建初稿
+// ensureDraft guarantees drafts/{ch}.draft.md exists:
+//   - draft exists → return directly
+//   - no draft but a final text exists → copy the final text to drafts as the starting point for edits (common in polishing)
+//   - neither exists → error, telling the caller to create the first draft with draft_chapter first
 func (t *EditChapterTool) ensureDraft(chapter int) error {
 	draft, err := t.store.Drafts.LoadDraft(chapter)
 	if err != nil {

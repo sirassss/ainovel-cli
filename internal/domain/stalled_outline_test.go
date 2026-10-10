@@ -3,8 +3,8 @@ package domain
 import "strings"
 import "testing"
 
-// Tái hiện dàn ý thật đã sinh ra truyện "viết lại rồi thêm một tí":
-// 11/12 chương dùng chung một hook.
+// Reproduces the real outline that produced a story of "rewrite, then add a little more":
+// 11 of 12 chapters share one hook.
 func TestStalledOutlineCatchesRepeatedHook(t *testing.T) {
 	same := "Một tu sĩ trẻ xuất hiện với lời mời gia nhập tông phái"
 	var entries []OutlineEntry
@@ -32,8 +32,8 @@ func TestStalledOutlineAcceptsHealthyOutline(t *testing.T) {
 	}
 }
 
-// Tái hiện sự cố thật: Tập 1 còn hai cung phác thảo (38 chương) mà sách
-// vẫn được tuyên bố hoàn thành sau 15 chương của Tập 2.
+// Reproduces a real incident: Volume 1 still had two skeleton arcs (38 chapters), yet the book
+// was declared complete after the 15 chapters of Volume 2.
 func TestSkeletonArcsSeesUnexpandedVolume(t *testing.T) {
 	volumes := []VolumeOutline{
 		{Index: 1, Arcs: []ArcOutline{
@@ -62,8 +62,8 @@ func TestSkeletonArcsSilentWhenAllExpanded(t *testing.T) {
 	}
 }
 
-// Tái hiện sự cố thật: Cung 2 khai triển 20 chương (113792 ký tự ≈ 37k token),
-// khiến thẩm định biên cung không model nào đọc nổi và cả pipeline kẹt cứng.
+// Reproduces a real incident: Arc 2 was expanded to 20 chapters (113792 characters ≈ 37k tokens),
+// so no model could read the arc-boundary review and the whole pipeline hung.
 func TestOversizedArcCatchesTwentyChapterArc(t *testing.T) {
 	got := OversizedArc("Tập 1 cung 2", 20)
 	if got == "" {

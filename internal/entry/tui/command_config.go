@@ -146,7 +146,7 @@ func (s *modelConfigState) applyProviderChoice(choice configProviderChoice) {
 		return
 	}
 
-	// Thêm mới
+	// Add new
 	s.existing = false
 	s.hasAPIKey = false
 	s.apiKeyHint = ""

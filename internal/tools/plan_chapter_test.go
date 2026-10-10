@@ -99,10 +99,10 @@ func TestPlanChapterAllowsExpandedLayeredChapter(t *testing.T) {
 	}
 }
 
-// Chương đã viết xong nhưng đang nằm trong hàng chờ viết lại phải lập kế hoạch được:
-// đây là chỗ duy nhất ghi được "viết lại thành cái gì". Trước đây nó bị từ chối, khiến
-// revise_outline / save_foundation(outline) / plan_chapter bịt cả ba đường, và kiến trúc
-// sư quay vòng 4 lượt rồi bị ngắt mạch.
+// A chapter that is already written but sits in the rewrite queue must be plannable:
+// this is the only place that records "what to rewrite it into". Previously it was rejected, so
+// revise_outline / save_foundation(outline) / plan_chapter blocked all three paths, and the architect
+// spun for 4 turns before the circuit breaker tripped.
 func TestPlanChapterAllowsChapterQueuedForRewrite(t *testing.T) {
 	st := store.NewStore(t.TempDir())
 	if err := st.Init(); err != nil {
@@ -140,7 +140,7 @@ func TestPlanChapterAllowsChapterQueuedForRewrite(t *testing.T) {
 	}
 }
 
-// Chương đã xong và KHÔNG chờ viết lại thì vẫn phải bị chặn — hành vi cũ giữ nguyên.
+// A chapter that is done and NOT waiting for rewrite must still be blocked; the old behavior is unchanged.
 func TestPlanChapterStillSkipsSettledCompletedChapter(t *testing.T) {
 	st := store.NewStore(t.TempDir())
 	if err := st.Init(); err != nil {

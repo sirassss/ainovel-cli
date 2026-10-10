@@ -16,12 +16,12 @@ const validGlobal = `{
   "providers": { "openrouter": { "api_key": "sk-test-123456" } }
 }`
 
-// writeGlobal 在隔离的 HOME 下写入全局配置，并返回该 HOME。
+// writeGlobal writes the global config under an isolated HOME and returns that HOME.
 func writeGlobal(t *testing.T, content string) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	// Windows 的 os.UserHomeDir 读 USERPROFILE；不设它会读到本机真实 ~/.ainovel。
+	// Windows' os.UserHomeDir reads USERPROFILE; without setting it, the machine's real ~/.ainovel would be read.
 	t.Setenv("USERPROFILE", home)
 	dir := filepath.Join(home, ".ainovel")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -35,8 +35,8 @@ func writeGlobal(t *testing.T, content string) string {
 	return home
 }
 
-// writeProjectConfig 在当前工作目录的 ./.ainovel/ 下写入项目级配置。
-// 调用前需先 t.Chdir 到目标目录。
+// writeProjectConfig writes a project-level config under ./.ainovel/ in the current working directory.
+// t.Chdir to the target directory is required before calling it.
 func writeProjectConfig(t *testing.T, content string) {
 	t.Helper()
 	if err := os.MkdirAll(".ainovel", 0o755); err != nil {
@@ -47,12 +47,12 @@ func writeProjectConfig(t *testing.T, content string) {
 	}
 }
 
-// 根因 3：项目级 ./.ainovel/config.json 存在但是坏 JSON，必须报错，不能静默吞掉退回全局。
+// Root cause 3: a project-level ./.ainovel/config.json that exists but is bad JSON must report an error and must not be silently swallowed by falling back to the global one.
 func TestLoadConfig_CorruptProjectFailsLoud(t *testing.T) {
 	writeGlobal(t, validGlobal)
 	proj := t.TempDir()
 	t.Chdir(proj)
-	// 手抄示例多了个尾逗号——最常见的坏 JSON。
+	// A hand-copied example has an extra trailing comma - the most common kind of bad JSON.
 	writeProjectConfig(t, `{ "model": "x", }`)
 
 	if _, err := LoadConfig(); err == nil {
@@ -60,8 +60,8 @@ func TestLoadConfig_CorruptProjectFailsLoud(t *testing.T) {
 	}
 }
 
-// 全局是最低优先级基底：坏文件不得阻断更高优先级的项目级覆盖（回归守卫——
-// 上一版误把全局也 fail-loud，导致"坏全局 + 有效项目配置"的用户被无关文件挡住）。
+// The global config is the lowest-priority base: a bad file must not block a higher-priority project-level override (a regression guard -
+// the previous version wrongly made the global one fail loud too, so users with "bad global + valid project config" were blocked by an unrelated file).
 func TestLoadConfig_CorruptGlobalDoesNotBlockProjectOverride(t *testing.T) {
 	writeGlobal(t, `{ not json`)
 	proj := t.TempDir()
@@ -77,12 +77,12 @@ func TestLoadConfig_CorruptGlobalDoesNotBlockProjectOverride(t *testing.T) {
 	}
 }
 
-// 就近编辑：项目目录有 ./.ainovel/config.json 时 EffectiveConfigPath 指向它（绝对路径），
-// 否则回落全局——/config 与 /model 都据此决定写盘位置。
+// Nearest-edit: when the project directory has ./.ainovel/config.json, EffectiveConfigPath points to it (an absolute path),
+// otherwise it falls back to the global one - /config and /model both use this to decide where to write.
 func TestEffectiveConfigPathPrefersProject(t *testing.T) {
 	writeGlobal(t, validGlobal)
 
-	t.Chdir(t.TempDir()) // 无项目配置
+	t.Chdir(t.TempDir()) // No project config
 	if got := EffectiveConfigPath(); got != DefaultConfigPath() {
 		t.Fatalf("无项目配置应回落全局，got %q want %q", got, DefaultConfigPath())
 	}
@@ -99,19 +99,19 @@ func TestEffectiveConfigPathPrefersProject(t *testing.T) {
 	}
 }
 
-// 文件不存在是正常情况（便携/首次），不能报错。
+// A missing file is a normal situation (portable / first run) and must not report an error.
 func TestLoadConfig_MissingFilesNoError(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home) // ~/.ainovel/config.json 不存在
+	t.Setenv("HOME", home) // ~/.ainovel/config.json does not exist
 	t.Setenv("USERPROFILE", home)
-	t.Chdir(t.TempDir()) // 也没有 ./.ainovel/config.json
+	t.Chdir(t.TempDir()) // And there is no ./.ainovel/config.json either
 
 	if _, err := LoadConfig(); err != nil {
 		t.Fatalf("缺失配置文件不应报错，得到: %v", err)
 	}
 }
 
-// 正常路径：全局 + 项目级合并生效。
+// Normal path: the global + project-level merge takes effect.
 func TestLoadConfig_ValidMergeWorks(t *testing.T) {
 	writeGlobal(t, validGlobal)
 	proj := t.TempDir()
@@ -210,8 +210,8 @@ func TestMergeConfig_ProviderExtraFields(t *testing.T) {
 	}
 }
 
-// 根因 2（issue #37 核心复现）：项目级覆盖 provider 但没声明对应 providers 凭证，
-// ValidateBase 必须报 config 错误（而非放行后在更深处崩溃）。
+// Root cause 2 (the core reproduction of issue #37): the project level overrides provider but declares no matching providers credentials;
+// ValidateBase must report a config error (rather than letting it through and crashing somewhere deeper).
 func TestValidateBase_ProviderOverrideWithoutCredentials(t *testing.T) {
 	cfg := Config{
 		Provider:  "mimo",
@@ -266,8 +266,8 @@ func TestValidateBaseRejectsProviderAPIOnNonOpenAIProvider(t *testing.T) {
 	}
 }
 
-// 示例配置必须自洽：去注释后是合法 JSON、
-// 顶层 provider 指针不悬空、且点破了“指针”心智——它是用户照抄的样板，自己坏了就坑人。
+// The example config must be self-consistent: valid JSON once comments are stripped,
+// the top-level provider pointer does not dangle, and it spells out the "pointer" concept - it is a template users copy verbatim, so if it is broken itself it leads them astray.
 func TestExampleConfigIsValidAndSelfConsistent(t *testing.T) {
 	if exampleConfig == "" {
 		t.Fatal("go:embed 未生效，exampleConfig 为空")

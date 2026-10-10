@@ -19,7 +19,7 @@ const (
 	APIKeyClear   APIKeyAction = "clear"
 )
 
-// ProviderSnapshot 是供 TUI 使用的脱敏 provider 配置。
+// ProviderSnapshot is the redacted provider configuration for the TUI.
 type ProviderSnapshot struct {
 	Name           string
 	Type           string
@@ -43,8 +43,8 @@ func (s ModelConfigurationSnapshot) ReferencesFor(provider, model string) []stri
 	return append([]string(nil), s.References[modelReferenceKey(provider, model)]...)
 }
 
-// ModelConfigurationDraft 是 /config 提交给 Host 的单个 provider 配置草稿。
-// 只描述该 provider 的定义（协议/凭证/模型库），不含“当前用哪个”——切换归 /model。
+// ModelConfigurationDraft is a single provider configuration draft that /config submits to the Host.
+// It describes only that provider's definition (protocol/credentials/model library), not "which one is currently in use"; switching belongs to /model.
 type ModelConfigurationDraft struct {
 	Provider     string
 	Type         string
@@ -56,8 +56,8 @@ type ModelConfigurationDraft struct {
 	APIKey       string
 }
 
-// ModelRename 描述同一条模型配置的 ID 变化。它不是“删旧增新”的猜测，
-// Host 只在 TUI 明确提交该关系时迁移 default、角色和 fallback 引用。
+// ModelRename describes an ID change of the same model configuration. It is not a guess of "delete the old, add a new one";
+// the Host migrates default, role and fallback references only when the TUI explicitly submits this relation.
 type ModelRename struct {
 	From string
 	To   string
@@ -73,8 +73,8 @@ func modelReferenceKey(provider, model string) string {
 	return strings.TrimSpace(provider) + "\x00" + strings.TrimSpace(model)
 }
 
-// MaskAPIKey 仅保留足够识别凭证的首尾片段；短凭证全部隐藏。
-// TUI 只接收这个结果，绝不持有配置中的完整 API Key。
+// MaskAPIKey keeps only enough leading and trailing fragments to identify the credential; short credentials are hidden entirely.
+// The TUI receives only this result and never holds the full API Key from the configuration.
 func MaskAPIKey(value string) string {
 	runes := []rune(strings.TrimSpace(value))
 	if len(runes) == 0 {
@@ -86,7 +86,7 @@ func MaskAPIKey(value string) string {
 	return string(runes[:4]) + "******" + string(runes[len(runes)-4:])
 }
 
-// ModelConfiguration 返回脱敏配置、可写目标和模型引用，绝不暴露现有 API Key。
+// ModelConfiguration returns the redacted configuration, writable targets and model references, and never exposes the existing API Key.
 func (h *Host) ModelConfiguration() ModelConfigurationSnapshot {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -154,7 +154,7 @@ type preparedProviderDraft struct {
 	oldModels []bootstrap.ModelConfig
 }
 
-// prepareProviderDraftLocked 将 TUI 草稿规范化并合入配置副本，保存和连接测试共用同一条校验链路。
+// prepareProviderDraftLocked normalizes the TUI draft and merges it into a copy of the configuration; saving and connection testing share this one validation chain.
 func (h *Host) prepareProviderDraftLocked(draft ModelConfigurationDraft) (preparedProviderDraft, error) {
 	draft.Provider = strings.TrimSpace(draft.Provider)
 	draft.Type = strings.ToLower(strings.TrimSpace(draft.Type))
@@ -194,7 +194,7 @@ func (h *Host) prepareProviderDraftLocked(draft ModelConfigurationDraft) (prepar
 
 	switch draft.APIKeyAction {
 	case "", APIKeyKeep:
-		// 保留候选配置里的现有值；新增 provider 时自然为空。
+		// Keep the existing values in the candidate configuration; they are naturally empty when adding a new provider.
 	case APIKeyReplace:
 		pc.APIKey = draft.APIKey
 	case APIKeyClear:
@@ -213,7 +213,7 @@ func (h *Host) prepareProviderDraftLocked(draft ModelConfigurationDraft) (prepar
 	return preparedProviderDraft{draft: draft, candidate: candidate, provider: pc, oldModels: oldModels}, nil
 }
 
-// ConfigureModels 校验、持久化并热应用一个 provider 的模型库。
+// ConfigureModels validates, persists and hot-applies the model library of one provider.
 func (h *Host) ConfigureModels(draft ModelConfigurationDraft) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -235,8 +235,8 @@ func (h *Host) ConfigureModels(draft ModelConfigurationDraft) error {
 	for _, model := range pc.Models {
 		newNames[model.Name] = true
 	}
-	// 删除模型前先查引用：被顶层默认或任何角色/fallback 指向的模型不能删，
-	// 让用户先去 /model 切走——/config 不再代切默认。
+	// Check references before deleting a model: a model pointed to by the top-level default or any role/fallback cannot be deleted;
+	// the user must switch away in /model first, since /config no longer switches the default on their behalf.
 	for _, old := range preparedDraft.oldModels {
 		if newNames[old.Name] {
 			continue
@@ -249,7 +249,7 @@ func (h *Host) ConfigureModels(draft ModelConfigurationDraft) error {
 		}
 	}
 
-	// 普通编辑不改变“当前用哪个”；显式重命名只迁移同一模型的引用身份。
+	// A plain edit does not change "which one is currently in use"; an explicit rename migrates only the reference identity of the same model.
 	if err := candidate.ValidateBase(); err != nil {
 		return err
 	}
@@ -267,8 +267,8 @@ func (h *Host) ConfigureModels(draft ModelConfigurationDraft) error {
 
 	h.models.ApplyPrepared(prepared)
 	h.cfg = candidate
-	// 模型客户端被重建后重新下发推理强度：applyThinkingLocked 按各角色的新模型能力钳制生效值，
-	// 存储的强度意图保持不变。
+	// After the model client is rebuilt, re-issue the reasoning effort: applyThinkingLocked clamps the effective value to each role's new model capability,
+	// while the stored effort intent stays unchanged.
 	h.applyThinkingLocked("default")
 	summary := fmt.Sprintf("Đã lưu cấu hình provider: %s → %s", draft.Provider, h.configPath)
 	if draft.Provider != h.cfg.Provider {
@@ -354,15 +354,15 @@ func renameModelReferences(cfg *bootstrap.Config, provider string, renames map[s
 
 func (h *Host) saveModelConfigurationLocked(candidate bootstrap.Config, provider string, pc bootstrap.ProviderConfig, renamed bool) error {
 	if renamed {
-		// 引用与 provider 定义必须在同一次文件替换中落盘，否则进程重启可能只看到一半。
-		// /model 也使用 SaveConfig 写回有效配置；重命名沿用同一语义。
+		// References and the provider definition must land in the same file replacement, or a process restart might see only half.
+		// /model also writes the effective configuration back via SaveConfig; a rename follows the same semantics.
 		return bootstrap.SaveConfig(h.configPath, candidate)
 	}
 	return bootstrap.SaveProviderConfig(h.configPath, provider, pc)
 }
 
-// TestModelConnection 使用当前草稿构造一个真实模型客户端并发送最小请求。
-// 它不保存配置、不切换运行时模型，也不在失败时降级到其他 Provider。
+// TestModelConnection builds a real model client from the current draft and sends a minimal request.
+// It does not save the configuration, does not switch the runtime model, and does not fall back to another Provider on failure.
 func (h *Host) TestModelConnection(ctx context.Context, draft ModelConfigurationDraft, modelName string) error {
 	h.mu.Lock()
 	preparedDraft, err := h.prepareProviderDraftLocked(draft)

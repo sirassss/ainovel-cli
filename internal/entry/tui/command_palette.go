@@ -77,8 +77,8 @@ func (m *Model) clearCommandPalette() {
 	m.compActive = false
 }
 
-// syncCommandInputHighlight 复用命令注册表识别第一个 token。只记录完整、已注册的
-// 命令；最终渲染时仅给这个 token 着色，参数保持普通正文色。
+// syncCommandInputHighlight reuses the command registry to recognize the first token. It records only a complete, registered
+// command; at final render only this token is colored, and arguments keep the normal body color.
 func (m *Model) syncCommandInputHighlight() {
 	m.commandToken = ""
 	fields := strings.Fields(m.textarea.Value())
@@ -179,8 +179,8 @@ func renderCommandPalette(width int, items []commandPaletteItem, cursor int) str
 		}
 
 		name := nameRenderer.Render(item.Name)
-		// truncateWidth 按视觉宽度截断（中文字符算 2 列）；用 truncate 会按 rune 数算，
-		// 中文场景实际宽度 = 期望的 2 倍，导致弹窗溢出。
+		// truncateWidth truncates by visual width (CJK characters count as 2 columns); truncate counts runes,
+		// so for CJK text the actual width is 2x the intended one, which makes the popup overflow.
 		desc := truncateWidth(item.Description, max(12, contentW-18))
 		descText := descRenderer.Render(desc)
 		line := prefix + name

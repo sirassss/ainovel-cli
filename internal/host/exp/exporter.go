@@ -10,15 +10,15 @@ import (
 	"github.com/voocel/ainovel-cli/internal/domain"
 )
 
-// Run 执行一次导出。同步返回，IO 量小（本地文件读写）。
+// Run performs one export. It returns synchronously; the IO volume is small (local file reads and writes).
 //
-// 失败语义：
-//   - deps/opts 非法 → 配置错误立即返回
-//   - 无任何已完成章节 → 返回错误（让调用方明确）
-//   - 范围内某章 chapters/{ch}.md 缺失 → 返回错误（progress 与文件系统不一致是事实层 bug，应让用户看见）
-//   - 输出路径已存在且未指定 Overwrite → 返回错误
+// Failure semantics:
+//   - invalid deps/opts → configuration error returned immediately
+//   - no completed chapters at all → return an error (so the caller is explicit)
+//   - a chapter in range with chapters/{ch}.md missing → return an error (progress being inconsistent with the filesystem is a fact-layer bug, and the user should see it)
+//   - output path already exists and Overwrite is not set → return an error
 //
-// Skipped 用于"范围内合法但尚未完成"的情况（用户传 to=100 但只写到 80）。
+// Skipped is for the case "legal within range but not yet completed" (the user passes to=100 but only 80 are written).
 func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -156,7 +156,7 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 	}, nil
 }
 
-// inferFormat 从输出路径后缀推断格式。空路径回退 TXT；未知后缀报错（避免静默错误）。
+// inferFormat infers the format from the output path suffix. An empty path falls back to TXT; an unknown suffix is an error (to avoid silent mistakes).
 func inferFormat(path string) (Format, error) {
 	if path == "" {
 		return FormatTXT, nil
@@ -171,8 +171,8 @@ func inferFormat(path string) (Format, error) {
 	}
 }
 
-// atomicWrite 与 store/io.go 的 WriteFile 同形：tmp + sync + rename。
-// 不复用 store.IO 是因为输出路径可能在 store.Dir() 之外。
+// atomicWrite has the same shape as WriteFile in store/io.go: tmp + sync + rename.
+// It does not reuse store.IO because the output path may be outside store.Dir().
 func atomicWrite(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -202,8 +202,8 @@ func atomicWrite(path string, data []byte) error {
 	return os.Rename(tmpPath, path)
 }
 
-// sanitizeFileName 替换文件名里在大多数文件系统上不允许或易混淆的字符。
-// 不做激进的转码，只挡住路径分隔符和控制字符。
+// sanitizeFileName replaces characters in a file name that are disallowed or confusable on most filesystems.
+// It does no aggressive transcoding and only blocks path separators and control characters.
 func sanitizeFileName(name string) string {
 	name = strings.TrimSpace(name)
 	if name == "" {

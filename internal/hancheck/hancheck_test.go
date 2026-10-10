@@ -29,34 +29,7 @@ var pending = map[string]string{}
 
 // pendingComments lists directories whose comments are not yet English; delete the
 // entry once the directory is cleaned.
-var pendingComments = map[string]string{
-	"assets":                  "phase2",
-	"cmd/ainovel-cli":         "phase2",
-	"internal/agents":         "phase2",
-	"internal/agents/guard":   "phase2",
-	"internal/arbiter":        "phase2",
-	"internal/bootstrap":      "phase2",
-	"internal/chapterfacts":   "phase2",
-	"internal/domain":         "phase2",
-	"internal/entry/headless": "phase2",
-	"internal/entry/startup":  "phase2",
-	"internal/entry/tui":      "phase2",
-	"internal/flow":           "phase2",
-	"internal/host":           "phase2",
-	"internal/host/exp":       "phase2",
-	"internal/host/imp":       "phase2",
-	"internal/host/sim":       "phase2",
-	"internal/llmcontract":    "phase2",
-	"internal/llmretry":       "phase2",
-	"internal/logger":         "phase2",
-	"internal/notify":         "phase2",
-	"internal/revision":       "phase2",
-	"internal/rules":          "phase2",
-	"internal/store":          "phase2",
-	"internal/tools":          "phase2",
-	"internal/userrules":      "phase2",
-	"internal/utils":          "phase2",
-}
+var pendingComments = map[string]string{}
 
 type violation struct {
 	file string

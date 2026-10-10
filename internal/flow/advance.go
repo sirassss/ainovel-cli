@@ -6,8 +6,8 @@ import (
 	"github.com/voocel/ainovel-cli/internal/domain"
 )
 
-// StartsForwardChapter 判断一条指令是否会开始尚未完成的正向新章。
-// 它只读事实，不决定是否放行；Task/Reason 文案不参与判断。
+// StartsForwardChapter reports whether an instruction would start a new, not yet completed forward chapter.
+// It only reads facts and does not decide whether to let it through; the Task/Reason text takes no part in the judgment.
 func StartsForwardChapter(inst *Instruction, progress *domain.Progress, pending *domain.PendingCommit) bool {
 	if inst == nil || inst.Agent != "writer" || progress == nil || progress.Phase != domain.PhaseWriting {
 		return false
@@ -22,7 +22,7 @@ func StartsForwardChapter(inst *Instruction, progress *domain.Progress, pending 
 	return target > 0 && target == progress.NextChapter()
 }
 
-// AdvanceHoldResolution 是一次性暂停在当前事实下的处理结果。
+// AdvanceHoldResolution is the outcome of handling a one-shot hold under the current facts.
 type AdvanceHoldResolution int
 
 const (
@@ -31,8 +31,8 @@ const (
 	AdvanceHoldConsumeAndStop
 )
 
-// ResolveAdvanceHold 纯函数解析一次性暂停。未知条件和缺失事实显式报错，
-// 不允许按“继续运行”静默降级。
+// ResolveAdvanceHold is a pure function that resolves a one-shot hold. Unknown conditions and missing facts are reported as explicit errors,
+// and must not silently degrade to "keep running".
 func ResolveAdvanceHold(hold *domain.AdvanceHold, progress *domain.Progress) (AdvanceHoldResolution, error) {
 	if hold == nil {
 		return AdvanceHoldKeep, nil

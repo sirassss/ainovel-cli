@@ -23,11 +23,11 @@ var (
 	date    = "unknown"
 )
 
-// headlessMode ghi nhận chế độ khởi động headless.
+// headlessMode records whether the process started in headless mode.
 var headlessMode bool
 
 func main() {
-	// Kiểm tra lệnh con eval trước khi parse flag
+	// Check for the eval subcommand before parsing flags
 	if len(os.Args) > 1 && os.Args[1] == "eval" {
 		os.Exit(eval.Command(os.Args[2:]))
 	}
@@ -49,7 +49,7 @@ func main() {
 	}
 	headlessMode = opts.Headless
 
-	// Khởi tạo lần đầu nếu chưa có cấu hình
+	// First-time setup if no configuration exists yet
 	if bootstrap.NeedsSetup() {
 		if opts.Headless {
 			die("Lỗi: Chế độ headless không hỗ trợ thiết lập lần đầu, vui lòng chạy chế độ TUI trước để hoàn tất cấu hình.")
@@ -62,7 +62,7 @@ func main() {
 		return
 	}
 
-	// Đọc cấu hình
+	// Load the configuration
 	cfg, err := bootstrap.LoadConfig()
 	if err != nil {
 		die("Lỗi cấu hình: %v", err)
@@ -71,7 +71,7 @@ func main() {
 	runWithConfig(cfg, opts, args)
 }
 
-// die xử lý thoát khi có lỗi nghiêm trọng: in ra stderr, lưu log và tạm dừng nếu ở terminal tương tác.
+// die handles fatal errors: print to stderr, write the log, and pause when running in an interactive terminal.
 func die(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Fprintln(os.Stderr, msg)

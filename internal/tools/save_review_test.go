@@ -201,8 +201,8 @@ func TestSaveReviewRejectsIssueOutsideChapterScope(t *testing.T) {
 	}
 }
 
-// TestSaveReviewKeepsModelDefinedDimension 验证工具不再把文学评价维度和分数阈值
-// 写死在 Go 中；Editor 可以按当前任务补充更准确的评价面。
+// TestSaveReviewKeepsModelDefinedDimension verifies the tool no longer hardcodes literary review dimensions and score thresholds
+// in Go; the Editor can add more accurate review aspects for the current task.
 func TestSaveReviewKeepsModelDefinedDimension(t *testing.T) {
 	s := store.NewStore(t.TempDir())
 	if err := s.Init(); err != nil {
@@ -309,10 +309,10 @@ func TestSaveReviewRejectsIssueWithoutEvidence(t *testing.T) {
 	}
 }
 
-// TestSaveReviewDoesNotDirtyQueueOnIllegalFlowTransition 防回归：返工排空中途
-// （Flow=rewriting、PendingRewrites=[8,9]）对已重写章复审得到 polish 时，
-// Flow=polishing 与 rewriting 构成非法迁移。ApplyReviewOutcome 必须在同一次写锁中
-// 完成校验和写入，非法迁移时队列保持不变。
+// TestSaveReviewDoesNotDirtyQueueOnIllegalFlowTransition is a regression guard: midway through draining a rewrite queue
+// (Flow=rewriting, PendingRewrites=[8,9]), re-reviewing an already rewritten chapter and getting polish means
+// Flow=polishing vs rewriting is an illegal transition. ApplyReviewOutcome must validate and write
+// within a single write lock, and on an illegal transition the queue stays unchanged.
 func TestSaveReviewDoesNotDirtyQueueOnIllegalFlowTransition(t *testing.T) {
 	s := store.NewStore(t.TempDir())
 	if err := s.Init(); err != nil {
@@ -385,7 +385,7 @@ func TestSaveReviewKeepsOutcomeWhenReviewArtifactWriteFails(t *testing.T) {
 	if err := s.Progress.MarkChapterComplete(3, 3000, "", ""); err != nil {
 		t.Fatalf("MarkChapterComplete: %v", err)
 	}
-	// 让目标文件路径成为目录，稳定触发原子 rename 失败。
+	// Make the target file path a directory so the atomic rename reliably fails.
 	if err := os.MkdirAll(filepath.Join(dir, "reviews", "03.json"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -452,7 +452,7 @@ func setupArcReviewStore(t *testing.T) *store.Store {
 			t.Fatal(err)
 		}
 	}
-	// 第一弧已经完整收尾，因此 Router 当前唯一待补工件是第二弧评审。
+	// The first arc is fully wrapped up, so the only artifact the Router currently needs is the second arc's review.
 	if err := s.World.SaveReview(domain.ReviewEntry{Chapter: 2, Scope: "arc", Verdict: "accept", Summary: "第一弧评审"}); err != nil {
 		t.Fatal(err)
 	}

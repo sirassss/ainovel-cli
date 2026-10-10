@@ -11,8 +11,8 @@ import (
 	"github.com/voocel/agentcore"
 )
 
-// handleToolUpdate 处理 Worker 的进度中继(ProgressPayload):TOOL 行、流式正文、
-// thinking、retry、context。Engine 经 observer.workerProgress 喂入。
+// handleToolUpdate handles the Worker's progress relay (ProgressPayload): TOOL rows, streamed body,
+// thinking, retry, context. The Engine feeds it via observer.workerProgress.
 func (o *observer) handleToolUpdate(ev agentcore.Event) {
 	if ev.Progress == nil {
 		return
@@ -23,9 +23,9 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 			o.handleSubagentDelta(ev.Progress)
 		}
 	case agentcore.ProgressToolStart:
-		// Worker 内部的工具调用（如 writer → draft_chapter）。
-		// 注意：TOOL 行可能已经在流式识别阶段被 handleSubagentDelta 提前发出。
-		// 此处：若已发 → 只更新 summary（args 此时完整，能显示 "tool(第N章)"）；否则正常发。
+		// Tool calls inside the Worker (such as writer → draft_chapter).
+		// Note: the TOOL row may already have been emitted early by handleSubagentDelta during the streaming recognition stage.
+		// Here: if already emitted → only update the summary (args are complete now and can show "tool(chapter N)"); otherwise emit normally.
 		if ev.Progress.Agent == "" || ev.Progress.Tool == "" {
 			break
 		}
@@ -39,10 +39,10 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 			})
 			break
 		}
-		// 未提前发过 → 正常流程
-		// （非流式 tool args 的模型不会触发 ensureSubagentToolStarted，
-		// fallback header 必须在这条路径上补一次，否则 read_chapter 这类
-		// 无 extractor 的工具流式面板上就没有 ✻ 头部，紧贴前面思考一段。）
+		// Not emitted early → normal flow
+		// (a model with non-streamed tool args never triggers ensureSubagentToolStarted,
+		// so the fallback header must be added once on this path, or a tool without an extractor like read_chapter
+		// would have no ✻ header on the streaming panel, sticking right against the preceding thinking segment.)
 		id := nextEventID()
 		o.toolStarts[ev.Progress.Agent] = &activeCall{id: id, start: time.Now(), summary: toolName, depth: 1}
 		o.emitAndLog(Event{
@@ -70,8 +70,8 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 			return
 		}
 		delete(o.toolStarts, ev.Progress.Agent)
-		// 同 ID 更新事件：TUI 按 ID 定位原 TOOL 行，回填 FinishedAt / Duration。
-		// Summary / Depth 也带上，保证 runtime queue replay 时能还原完整行。
+		// Same-ID update event: the TUI locates the original TOOL row by ID and backfills FinishedAt / Duration.
+		// Summary / Depth are carried too, so the runtime queue replay can restore the full row.
 		finishEv := Event{
 			ID:         call.id,
 			Time:       call.start,
@@ -88,8 +88,8 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 	case agentcore.ProgressThinking:
 		o.handleThinkingProgress(ev)
 	case agentcore.ProgressRetry:
-		// 只展示上游明确报告的实际等待时间，避免本地估算与真实退避节奏不一致。
-		// Summary 不嵌静态延时——UI 依 RetryAt 逐秒倒计时；Detail/日志保留发出时的延时快照。
+		// Show only the actual wait time explicitly reported upstream, to avoid a mismatch between a local estimate and the real backoff rhythm.
+		// Summary embeds no static delay: the UI counts down per second from RetryAt; Detail/log keep the delay snapshot at emission time.
 		delay := retryProgressDelay(ev.Progress)
 		retryEv := Event{
 			ID:       o.retryEventID(ev.Progress.Agent, ev.Progress.Attempt),
@@ -113,9 +113,9 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 		if msg == "" {
 			msg = "unknown error"
 		}
-		// 如果有进行中的 TOOL 行，原地标记为失败并把完整错误放进 Detail。
-		// 同一次失败只生成一个 ERROR 级事件，避免 TOOL 失败态与附加 ERROR
-		// 详情在 tui.log 中被误读成两次独立故障。
+		// If there is a TOOL row in progress, mark it failed in place and put the full error into Detail.
+		// A single failure generates only one ERROR-level event, so that the TOOL failed state and the additional ERROR
+		// detail are not misread in tui.log as two independent faults.
 		if call, ok := o.toolStarts[ev.Progress.Agent]; ok {
 			delete(o.toolStarts, ev.Progress.Agent)
 			detail := fmt.Sprintf("%s lỗi: %s", ev.Progress.Tool, msg)
@@ -137,7 +137,7 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 			o.persistEvent(finishEv)
 			return
 		}
-		// 极少数缺失 start 的进度流无法原地更新，保留独立 ERROR 事件暴露故障。
+		// In the rare case of a progress stream missing its start, in-place update is impossible; keep a separate ERROR event to expose the fault.
 		errEv := Event{
 			Time:     time.Now(),
 			Category: "ERROR",
@@ -303,7 +303,7 @@ func (o *observer) emitCallFinish(call *activeCall, category, agentName string, 
 	detail := ""
 	kind := ""
 	if failed && o.aborting.Load() && errors.Is(callErr, context.Canceled) {
-		// 用户暂停/预算停机引发的 cancel 是预期行为，不是失败。
+		// A cancel caused by a user pause / budget stop is expected behavior, not a failure.
 		failed, level, kind = false, "warn", "canceled"
 		summary = call.summary + " (đã dừng theo yêu cầu)"
 	} else if failed {

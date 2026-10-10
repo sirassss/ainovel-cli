@@ -11,10 +11,10 @@ import (
 
 func TestConfigResolveReasoningEffort(t *testing.T) {
 	cfg := Config{
-		ReasoningEffort: "low", // 顶层默认
+		ReasoningEffort: "low", // Top-level default
 		Roles: map[string]RoleConfig{
-			"writer":    {Provider: "p", Model: "m", ReasoningEffort: "high"}, // 角色覆盖
-			"architect": {Provider: "p", Model: "m"},                          // 无 reasoning_effort，应回落默认
+			"writer":    {Provider: "p", Model: "m", ReasoningEffort: "high"}, // Role override
+			"architect": {Provider: "p", Model: "m"},                          // No reasoning_effort, should fall back to the default
 		},
 	}
 
@@ -22,12 +22,12 @@ func TestConfigResolveReasoningEffort(t *testing.T) {
 		role string
 		want string
 	}{
-		{"writer", "high"},   // 角色覆盖优先
-		{"architect", "low"}, // 角色未配 → 回落顶层默认
-		{"editor", "low"},    // 角色不存在 → 顶层默认
-		{"", "low"},          // 空 → 顶层默认
-		{"default", "low"},   // default → 顶层默认
-		{"arbiter", "low"},   // 非配置角色（裁定恒随顶层默认）
+		{"writer", "high"},   // Role override takes priority
+		{"architect", "low"}, // Role not configured -> fall back to the top-level default
+		{"editor", "low"},    // Role does not exist -> top-level default
+		{"", "low"},          // Empty -> top-level default
+		{"default", "low"},   // default -> top-level default
+		{"arbiter", "low"},   // A non-configurable role (the ruling always follows the top-level default)
 	}
 	for _, c := range cases {
 		if got := cfg.ResolveReasoningEffort(c.role); got != c.want {
@@ -35,7 +35,7 @@ func TestConfigResolveReasoningEffort(t *testing.T) {
 		}
 	}
 
-	// 顶层默认也为空时，未覆盖角色返回 ""（不覆盖）。
+	// When the top-level default is also empty, a role without an override returns "" (no override).
 	empty := Config{Roles: map[string]RoleConfig{"writer": {ReasoningEffort: "xhigh"}}}
 	if got := empty.ResolveReasoningEffort("editor"); got != "" {
 		t.Errorf("空默认下 editor 应返回 \"\"，得 %q", got)
@@ -104,7 +104,7 @@ func TestProviderStreamIdleTimeoutValue(t *testing.T) {
 		{"15m", 15 * time.Minute, false},
 		{"abc", 0, true},
 		{"-5s", 0, true},
-		{"0", 0, true}, // 不提供"关闭看门狗"——真死流需要有限界
+		{"0", 0, true}, // No "disable the watchdog" option is offered - a truly dead stream needs a bounded limit
 	}
 	for _, c := range cases {
 		got, err := ProviderConfig{StreamIdleTimeout: c.in}.StreamIdleTimeoutValue()

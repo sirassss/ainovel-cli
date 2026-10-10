@@ -1,7 +1,7 @@
-// Package llmretry 是直接模型调用共用的请求层重试内核：仅重试模型适配器
-// 明确标记为 retryable 的错误，遵守 Retry-After/指数退避，并经 ToolProgress
-// 把进度送入既有工作台观察链。账户、鉴权、权限等终止错误会立即返回；
-// retryable 错误持续重试，生命周期只由 context 控制。
+// Package llmretry is the request-layer retry kernel shared by direct model calls: it retries only errors the model adapter
+// explicitly marks as retryable, honors Retry-After / exponential backoff, and sends progress through ToolProgress
+// into the existing workbench observation chain. Terminal errors such as account, authentication and permission errors return immediately;
+// retryable errors are retried indefinitely, and the lifetime is controlled only by the context.
 package llmretry
 
 import (
@@ -15,26 +15,26 @@ import (
 
 const maxRetryDelay = 60 * time.Second
 
-// Generator 是请求重试所需的最小模型接口。
+// Generator is the minimal model interface needed for request retry.
 type Generator interface {
 	Generate(context.Context, []agentcore.Message, []agentcore.ToolSpec, ...agentcore.CallOption) (*agentcore.LLMResponse, error)
 }
 
-// Event 描述一次即将发生的请求重试。
+// Event describes an upcoming request retry.
 type Event struct {
 	Attempt int
 	Delay   time.Duration
 	Err     error
 }
 
-// Config 配置重试的可观测信息，不改变重试语义。
+// Config configures the observable information of retries and does not change retry semantics.
 type Config struct {
 	Agent   string
 	OnRetry func(Event)
 }
 
-// Generate 调用 model.Generate。retryable 错误退避后持续重试，直到成功或
-// context 结束；非 retryable 错误立即返回。
+// Generate calls model.Generate. retryable errors are retried after backoff until success or
+// the context ends; non-retryable errors return immediately.
 func Generate(ctx context.Context, model Generator, cfg Config, messages []agentcore.Message, opts ...agentcore.CallOption) (*agentcore.LLMResponse, error) {
 	for retry := 1; ; retry++ {
 		resp, err := model.Generate(ctx, messages, nil, opts...)

@@ -7,10 +7,10 @@ var (
 	dominantStrands = []string{"quest", "fire", "constellation"}
 )
 
-// HookTypes 返回章节钩子分类。返回副本，调用方不能修改领域词表。
+// HookTypes returns the chapter hook categories. It returns a copy, so callers cannot modify the domain vocabulary.
 func HookTypes() []string { return slices.Clone(hookTypes) }
 
-// DominantStrands 返回章节主导叙事线分类。
+// DominantStrands returns the categories of a chapter's dominant narrative strand.
 func DominantStrands() []string { return slices.Clone(dominantStrands) }
 
 func ValidHookType(value string) bool       { return slices.Contains(hookTypes, value) }

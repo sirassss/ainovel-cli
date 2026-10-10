@@ -10,10 +10,10 @@ import (
 	"github.com/voocel/ainovel-cli/internal/llmcontract"
 )
 
-// PlanStartDecision 启动裁定:选规划师并产出(必要时扩充过的)任务文本。
+// PlanStartDecision is the start adjudication: picks the planner and produces the task text (expanded if necessary).
 type PlanStartDecision struct {
 	Planner string `json:"planner"` // architect_long | architect_short
-	Task    string `json:"task"`    // 交给规划师的完整任务(含扩充后的需求)
+	Task    string `json:"task"`    // the complete task handed to the planner (including the expanded requirements)
 	Reason  string `json:"reason"`
 }
 
@@ -30,7 +30,7 @@ func (d *PlanStartDecision) Validate() error {
 	return nil
 }
 
-// planStartContract 紧邻 PlanStartDecision:字段全 required,planner 是封闭枚举。
+// planStartContract sits next to PlanStartDecision: all fields required, planner is a closed enum.
 var planStartContract = llmcontract.Contract{
 	Name:        "arbiter_plan_start",
 	Description: "Phân xử khởi động: chọn kiến trúc sư và tạo văn bản nhiệm vụ đầy đủ",
@@ -41,15 +41,15 @@ var planStartContract = llmcontract.Contract{
 	),
 }
 
-// planStartPayload 是 plan_start 的用户负载(事实即输入,无 store 状态——新书)。
+// planStartPayload is the user payload of plan_start (the facts are the input, no store state - a new book).
 type planStartPayload struct {
 	Requirement string `json:"requirement"`
 	Style       string `json:"style,omitempty"`
 }
 
-// DecidePlanStart 启动裁定:根据用户需求选规划师;需求过短(<20 字)时在 task 里
-// 自主补充差异化方向、目标读者与核心消费点、至少一个非常规钩子。
-// 失败语义:返回 error → 调用方显式报错中止启动(启动期用户在场,报错优于猜测)。
+// DecidePlanStart is the start adjudication: picks a planner from the user's requirements; when the requirements are too short (<20 characters), it autonomously adds in the task
+// a differentiated direction, the target readers and core consumption points, and at least one unconventional hook.
+// Failure semantics: returning an error → the caller explicitly reports the error and aborts the start (the user is present at startup, so an error beats a guess).
 func DecidePlanStart(ctx context.Context, model agentcore.ChatModel, systemPrompt, requirement, style string) (PlanStartDecision, error) {
 	payload, err := marshalPayload(planStartPayload{Requirement: requirement, Style: style})
 	if err != nil {

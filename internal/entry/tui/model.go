@@ -16,10 +16,10 @@ import (
 
 const maxEvents = 500
 
-// maxStreamRounds 限制流式面板保留的轮次数。每个 LLM call 结束触发一次 streamClear
-// 开新轮，单章 writer 约 3~5 轮（agent header / 思考 / draft / commit），32 轮约等于
-// 回看最近 6~10 章的流式输出。已 commit 的章节正文落盘在 store/drafts，超出即丢以免
-// 每个 token delta 触发 O(全文) 重渲染。稳态内存上限约 512KB，远低于卡顿阈值。
+// maxStreamRounds limits how many rounds the stream panel keeps. Each LLM call ending triggers a streamClear
+// that opens a new round; a single-chapter writer takes about 3~5 rounds (agent header / thinking / draft / commit), so 32 rounds is roughly
+// a look back over the streaming output of the last 6~10 chapters. Committed chapter text is persisted in store/drafts; anything beyond the limit is dropped so that
+// each token delta does not trigger an O(full text) re-render. Steady-state memory is capped at about 512KB, far below the lag threshold.
 const maxStreamRounds = 32
 
 type focusPane int
@@ -28,28 +28,28 @@ const (
 	focusEvents focusPane = iota
 	focusStream
 	focusDetail
-	focusState // 左侧状态侧栏（可滚动）
+	focusState // Left status sidebar (scrollable)
 
-	focusPaneCount // 焦点总数，Tab 轮转用
+	focusPaneCount // Total number of focus targets, used for Tab cycling
 )
 
 type appMode int
 
 const (
-	modeNew     appMode = iota // 等待用户输入小说需求
-	modeRunning                // 正在创作（包括出错停止，输入可恢复）
-	modeDone                   // 创作完成
+	modeNew     appMode = iota // Waiting for the user to enter the novel request
+	modeRunning                // Creating (including stopped on error; input can resume)
+	modeDone                   // Creation complete
 )
 
-// 顶栏 / 流式活动共用的 spinner 帧序列（bubbles.Spinner.MiniDot）。
+// Spinner frame sequence shared by the top bar / streaming activity (bubbles.Spinner.MiniDot).
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
-// 事件流"进行中"行专用的 spinner 帧序列（bubbles.Spinner.Dot）。
-// 7 个点 + 1 个缺口沿 3×3 格子顺时针旋转，视觉上像完整的加载圆圈。
-// 用独立帧索引 + 更快 tick，不影响顶栏和星星动画的节奏。
+// Spinner frame sequence dedicated to the "in progress" rows of the event stream (bubbles.Spinner.Dot).
+// 7 dots and 1 gap rotate clockwise around a 3x3 grid, visually like a complete loading circle.
+// It uses its own frame index and a faster tick, and does not affect the rhythm of the top bar and star animations.
 var toolSpinnerFrames = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
 
-// Model 是 TUI 的顶层状态。
+// Model is the top-level state of the TUI.
 type Model struct {
 	runtime        *host.Host
 	cocreate       *cocreateState
@@ -65,61 +65,61 @@ type Model struct {
 	compItems      []commandPaletteItem
 	compIdx        int
 	compActive     bool
-	commandToken   string // 当前已注册的命令 token；仅渲染该段，不染参数
+	commandToken   string // The currently registered command token; only this segment is rendered, arguments are not colored
 	snapshot       host.UISnapshot
 	events         []host.Event
-	eventIndex     map[string]int   // event.ID → m.events 下标；调用类事件到达时原地更新
-	viewport       viewport.Model   // 事件流 viewport
-	streamVP       viewport.Model   // 流式输出 viewport
-	detailVP       viewport.Model   // 右侧详情 viewport
-	stateVP        viewport.Model   // 左侧状态侧栏 viewport（可滚动）
-	streamBuf      *strings.Builder // 流式文本累积缓冲
+	eventIndex     map[string]int   // event.ID -> index in m.events; call-type events are updated in place when they arrive
+	viewport       viewport.Model   // Event stream viewport
+	streamVP       viewport.Model   // Streaming output viewport
+	detailVP       viewport.Model   // Right detail viewport
+	stateVP        viewport.Model   // Left status sidebar viewport (scrollable)
+	streamBuf      *strings.Builder // Accumulated streaming text buffer
 	streamRounds   []string
 	textarea       textarea.Model
 	width          int
 	height         int
 	autoScroll     bool
-	streamScroll   bool      // 流式面板自动跟随
-	streamDirty    bool      // streamRounds 有尚未刷新的 delta
-	flushPending   bool      // 已调度一次流式刷新，避免每个 delta 重复启动 timer
-	lastKeyAt      time.Time // 上次非 Enter 按键时间；KeyEnter 节流防粘贴 \n 流误触发提交
-	inputHistory   []string  // 已提交的输入历史（去重：相邻不重复）
-	historyIdx     int       // 当前浏览索引；== len(inputHistory) 表示"未浏览，正在编辑草稿"
-	historyDraft   string    // 进入历史浏览前保存的草稿，回到末端时恢复
+	streamScroll   bool      // Stream panel auto-follow
+	streamDirty    bool      // streamRounds has deltas not yet flushed
+	flushPending   bool      // A stream flush has been scheduled, avoiding restarting the timer for every delta
+	lastKeyAt      time.Time // Time of the last non-Enter key; throttles KeyEnter so a pasted \n stream does not trigger a submit by mistake
+	inputHistory   []string  // Submitted input history (deduplicated: adjacent entries are not repeated)
+	historyIdx     int       // Current browse index; == len(inputHistory) means "not browsing, editing the draft"
+	historyDraft   string    // Draft saved before entering history browsing, restored when returning to the end
 	focusPane      focusPane
 	hoverPane      focusPane
 	hoverActive    bool
 	mode           appMode
-	starting       bool // UI 已进入工作台，Host 正在执行启动初始化
+	starting       bool // The UI has entered the workbench and Host is running startup initialization
 	startupMode    startupMode
-	importHint     string // 启动时检测到未完成导入的提示（欢迎屏显示；发起导入后清空）
+	importHint     string // Hint that an unfinished import was detected at startup (shown on the welcome screen; cleared once an import is started)
 	cocreateSeq    int
 	reportSeq      int
 	err            error
 	spinnerIdx     int
-	toolSpinnerIdx int  // 事件流进行中行的独立帧索引（150ms tick，不影响顶栏/星星）
-	toolTicking    bool // 已启动工具动画 timer；无运行事件时自动停止
-	cursorIdx      int  // 流式光标帧索引（随主动画推进）
-	streamRound    int  // 流式输出轮次计数
-	quitPending    bool // 双次 Ctrl+C 退出确认
-	abortPending   bool // 等待 Done 回来的手动暂停
-	mouseOff       bool // true 时已禁用鼠标上报，让用户原生拖拽选中复制；再次切换恢复
+	toolSpinnerIdx int  // Independent frame index for the in-progress rows of the event stream (150ms tick, does not affect the top bar / stars)
+	toolTicking    bool // Tool animation timer has started; stops automatically when there are no running events
+	cursorIdx      int  // Streaming cursor frame index (advances with the main animation)
+	streamRound    int  // Streaming output round counter
+	quitPending    bool // Double Ctrl+C exit confirmation
+	abortPending   bool // A manual pause waiting for Done to return
+	mouseOff       bool // When true, mouse reporting is disabled so the user can drag-select and copy natively; toggling again restores it
 }
 
-// NewModel 创建 TUI Model。
+// NewModel creates the TUI Model.
 func NewModel(rt *host.Host, version string) Model {
 	ta := textarea.New()
 	ta.Placeholder = placeholderForNewMode(startupModeQuick)
 	ta.CharLimit = 5000
 	ta.SetHeight(1)
-	// MaxHeight=6 让超长输入按宽度自动 wrap 显示成多行（视觉上限 6 行）。
+	// MaxHeight=6 makes overlong input auto-wrap by width and display as multiple lines (visual cap of 6 lines).
 	ta.MaxHeight = 6
 	ta.ShowLineNumbers = false
 	ta.Focus()
 
-	// 默认 Enter 不换行（由 handleEnterKey 提交）；
-	// 主动换行重绑到 ctrl+j（unix \n）和 alt+enter（GUI 习惯）。
-	// 终端协议层无法区分 Shift+Enter 与 Enter，所以不支持 Shift+Enter。
+	// By default Enter does not insert a newline (handleEnterKey submits);
+	// explicit newline is rebound to ctrl+j (unix \n) and alt+enter (GUI habit).
+	// The terminal protocol cannot distinguish Shift+Enter from Enter, so Shift+Enter is not supported.
 	ta.KeyMap.InsertNewline.SetKeys("ctrl+j", "alt+enter")
 
 	vp := viewport.New(80, 20)
@@ -134,8 +134,8 @@ func NewModel(rt *host.Host, version string) Model {
 	stvp := viewport.New(32, 20)
 	stvp.SetContent("")
 
-	// 启动时检测一次未完成导入（LoadState 重算工件 digest，不进快照轮询）；
-	// 半路书若不主动告知，用户只有在创作被门禁拒绝时才会发现（RFC §18.2）。
+	// Detect an unfinished import once at startup (LoadState recomputes the artifact digest, not part of snapshot polling);
+	// if a half-finished book is not announced proactively, the user only discovers it when creation is rejected by a gate (RFC §18.2).
 	importHint := ""
 	if rt != nil {
 		importHint = rt.ImportResumeHint()
@@ -213,9 +213,9 @@ func (m *Model) paneHighlighted(pane focusPane) bool {
 	return m.hoverActive && m.hoverPane == pane
 }
 
-// hasRunningEvent 是否存在未完成（spinner 仍在转）的调用类事件。
-// toolSpinnerTick 用此判断是否值得重渲：没有 running 事件时 spinner 帧不影响输出，
-// 整个 refreshEventViewport 是确定的无效工作。
+// hasRunningEvent reports whether any call-type event is unfinished (its spinner is still turning).
+// toolSpinnerTick uses this to decide whether a re-render is worthwhile: with no running events the spinner frame does not affect the output,
+// and the whole refreshEventViewport would be definitively wasted work.
 func (m *Model) hasRunningEvent() bool {
 	for i := range m.events {
 		if m.events[i].Running() {
@@ -225,8 +225,8 @@ func (m *Model) hasRunningEvent() bool {
 	return false
 }
 
-// flushStreamIfDirty 将累积的 streamRounds 渲染到 viewport；mark 为已刷。
-// 返回是否真正刷了，便于调用方决定要不要 GotoBottom。
+// flushStreamIfDirty renders the accumulated streamRounds into the viewport and marks them flushed.
+// It returns whether it actually flushed, so the caller can decide whether to GotoBottom.
 func (m *Model) flushStreamIfDirty() bool {
 	if !m.streamDirty {
 		return false
@@ -236,7 +236,7 @@ func (m *Model) flushStreamIfDirty() bool {
 	return true
 }
 
-// refreshEventViewport 重新渲染事件流内容并设置 viewport。
+// refreshEventViewport re-renders the event stream content and sets the viewport.
 func (m *Model) refreshEventViewport() {
 	centerW := m.eventFlowWidth()
 	content := renderEventContent(m.events, centerW, m.toolSpinnerIdx)
@@ -273,8 +273,8 @@ func (m *Model) refreshDetailViewport() {
 	m.detailVP.SetContent(renderDetailContent(m.snapshot, rightW-4))
 }
 
-// refreshStateViewport 把左侧状态侧栏内容刷进 viewport。
-// 侧栏内容纯由 snapshot 派生，故快照或尺寸变化时都要重刷。
+// refreshStateViewport pushes the left status sidebar content into the viewport.
+// The sidebar content is derived purely from the snapshot, so it must be refreshed when either the snapshot or the size changes.
 func (m *Model) refreshStateViewport() {
 	leftW := m.sidebarWidth()
 	if leftW <= 4 {
@@ -283,34 +283,34 @@ func (m *Model) refreshStateViewport() {
 	m.stateVP.SetContent(renderStateContent(m.snapshot, leftW-4))
 }
 
-// updateViewportSize 根据当前窗口尺寸更新 viewport 大小。
+// updateViewportSize updates the viewport sizes from the current window size.
 func (m *Model) updateViewportSize() {
 	centerW := m.eventFlowWidth()
 	rightW := m.detailWidth()
 	bodyH := m.bodyHeight()
 	eventH, streamH := m.splitHeights(bodyH)
 	m.viewport.Width = centerW - 2
-	m.viewport.Height = eventH - 1 // -1 为 event panel header 行
+	m.viewport.Height = eventH - 1 // -1 for the event panel header row
 	m.streamVP.Width = centerW - 2
-	m.streamVP.Height = streamH - 1 // -1 为 stream panel header 行
+	m.streamVP.Height = streamH - 1 // -1 for the stream panel header row
 	m.detailVP.Width = rightW - 2
 	m.detailVP.Height = bodyH
 	leftW := m.sidebarWidth()
 	m.stateVP.Width = max(1, leftW-2)
-	m.stateVP.Height = max(1, bodyH-1) // -1 为顶部留白，底行直接显示内容
-	// 高度或内容变短后，自由滚动的左右两栏可能停在越界偏移上（bubbles 的
-	// SetContent 只防越过末行），viewport 会用空行补满底部。SetYOffset 自钳。
+	m.stateVP.Height = max(1, bodyH-1) // -1 for the top margin; the bottom row shows content directly
+	// After the height or content shrinks, the freely scrolling left and right columns may sit at an out-of-range offset (bubbles'
+	// SetContent only guards against going past the last line), and the viewport pads the bottom with blank lines. SetYOffset clamps itself.
 	m.stateVP.SetYOffset(m.stateVP.YOffset)
 	m.detailVP.SetYOffset(m.detailVP.YOffset)
 }
 
-// splitHeights 计算事件流和流式输出的高度分配。
+// splitHeights computes the height allocation between the event stream and the streaming output.
 func (m *Model) splitHeights(bodyH int) (eventH, streamH int) {
 	eventH = bodyH * 40 / 100
 	if eventH < 3 {
 		eventH = 3
 	}
-	streamH = bodyH - eventH - 1 // -1 为分隔线
+	streamH = bodyH - eventH - 1 // -1 for the separator line
 	if streamH < 3 {
 		streamH = 3
 	}
@@ -321,7 +321,7 @@ func (m *Model) inputWidth() int {
 	if m.width == 0 {
 		return 60
 	}
-	return m.width - 6 // border + padding + 提示符 "❯ "
+	return m.width - 6 // border + padding + prompt "❯ "
 }
 
 func (m *Model) currentInputWidth() int {
@@ -331,17 +331,17 @@ func (m *Model) currentInputWidth() int {
 	return m.inputWidth()
 }
 
-// refitTextareaHeight 按当前内容估算视觉行数，动态 SetHeight。
-// 视觉行 = 逻辑行（\n 切分）每段按宽度 wrap 后的总和。配合 MaxHeight=6
-// 实现"超长内容/主动换行自动多行展示，最多 6 行"。
+// refitTextareaHeight estimates the number of visual rows from the current content and dynamically calls SetHeight.
+// Visual rows = the sum of each logical line (split on \n) after wrapping by width. Together with MaxHeight=6
+// this gives "overlong content / explicit newlines auto-expand to multiple lines, at most 6".
 func (m *Model) refitTextareaHeight() {
 	w := m.textarea.Width()
 	if w <= 0 {
 		return
 	}
-	// 共创模式下 input 固定 1 行：textarea 多行内容会被 textarea 自身按光标
-	// 滚动展示。否则 inputBox 高度跟着内容变，会让左栏 conversation 收缩、
-	// input 在垂直方向漂移，破坏布局稳定性。
+	// In co-create mode the input is fixed to 1 row: multi-line textarea content is scrolled by the textarea itself
+	// following the cursor. Otherwise the inputBox height would follow the content, shrinking the left conversation column and
+	// making the input drift vertically, breaking layout stability.
 	if m.cocreate != nil {
 		m.textarea.SetHeight(1)
 		return
@@ -351,7 +351,7 @@ func (m *Model) refitTextareaHeight() {
 		m.textarea.SetHeight(1)
 		return
 	}
-	// 扣 2 列冗余（textarea 内部 prompt symbol + cursor），偏多 1 行可接受。
+	// Subtract 2 redundant columns (the textarea's internal prompt symbol + cursor); being off by one extra row is acceptable.
 	contentW := w - 2
 	if contentW < 1 {
 		contentW = 1
@@ -368,20 +368,20 @@ func (m *Model) refitTextareaHeight() {
 	if total < 1 {
 		total = 1
 	}
-	m.textarea.SetHeight(total) // SetHeight 内部按 MaxHeight clamp
+	m.textarea.SetHeight(total) // SetHeight clamps by MaxHeight internally
 }
 
-// resizeTextarea 同步设置宽度与基于内容的高度。
-// 替代散落各处的 SetWidth(currentInputWidth()) 调用，保证宽度变化时高度跟随。
+// resizeTextarea sets the width and the content-based height together.
+// Replaces the scattered SetWidth(currentInputWidth()) calls, ensuring the height follows when the width changes.
 func (m *Model) resizeTextarea() {
 	m.textarea.SetWidth(m.currentInputWidth())
 	m.refitTextareaHeight()
 }
 
-// maxInputHistory 限制历史长度，避免长会话内存增长。
+// maxInputHistory limits the history length, avoiding memory growth in long sessions.
 const maxInputHistory = 200
 
-// pushInputHistory 把成功提交的内容追加到历史，相邻去重。同步重置浏览索引。
+// pushInputHistory appends a successfully submitted entry to the history, deduplicating adjacent entries. It also resets the browse index.
 func (m *Model) pushInputHistory(text string) {
 	if text == "" {
 		return
@@ -396,9 +396,9 @@ func (m *Model) pushInputHistory(text string) {
 	m.historyDraft = ""
 }
 
-// tryHistoryUp 向更早一条历史走；返回是否处理了按键。
-// 首次进入历史浏览时把当前 textarea 内容存为 draft，回到末端时恢复。
-// 调用方需自行判断多行场景下是否应该绕开（让 textarea 处理光标行内移动）。
+// tryHistoryUp moves to an older history entry; it returns whether the key was handled.
+// On first entering history browsing it saves the current textarea content as the draft, and restores it when returning to the end.
+// The caller must decide for itself whether to bypass this in multi-line cases (letting the textarea handle in-line cursor movement).
 func (m *Model) tryHistoryUp() bool {
 	if len(m.inputHistory) == 0 || m.historyIdx <= 0 {
 		return false
@@ -414,7 +414,7 @@ func (m *Model) tryHistoryUp() bool {
 	return true
 }
 
-// tryHistoryDown 向更新一条历史走；走到末端恢复 draft。
+// tryHistoryDown moves to a newer history entry; reaching the end restores the draft.
 func (m *Model) tryHistoryDown() bool {
 	if m.historyIdx >= len(m.inputHistory) {
 		return false
@@ -432,14 +432,14 @@ func (m *Model) tryHistoryDown() bool {
 	return true
 }
 
-// textareaIsMultiline 当前 textarea 内容是否含主动换行；用于决定 ↑↓ 是走历史还是行内移动。
+// textareaIsMultiline reports whether the current textarea content contains explicit newlines; used to decide whether ↑↓ walks history or moves within the text.
 func (m *Model) textareaIsMultiline() bool {
 	return strings.Contains(m.textarea.Value(), "\n")
 }
 
-// inputHints 根据当前状态生成底部提示文本。
-// 末尾统一追加 copySuffix，让用户在任何非紧急状态都能看到选中复制方法；
-// 鼠标已关时显示醒目红字提示，提醒再次按键恢复鼠标交互。
+// inputHints generates the bottom hint text from the current state.
+// copySuffix is always appended at the end, so the user can see how to select and copy in any non-urgent state;
+// when the mouse is off, a prominent red hint reminds them to press the key again to restore mouse interaction.
 func (m *Model) inputHints() string {
 	dimStyle := lipgloss.NewStyle().Foreground(colorDim)
 	if m.quitPending {
@@ -626,7 +626,7 @@ func (m Model) View() string {
 		return renderReportModal(m.width, m.height, m.report)
 	}
 	if m.importer != nil {
-		// 导入不依赖 Engine 运行态，动画帧直接取 spinnerIdx（currentSpinnerFrame 在引擎停机时返回空）。
+		// Import does not depend on the Engine run state; the animation frame takes spinnerIdx directly (currentSpinnerFrame returns empty when the engine is stopped).
 		return renderImportModal(m.width, m.height, m.importer, m.spinnerIdx)
 	}
 	if m.simulator != nil {
@@ -652,11 +652,11 @@ func (m Model) View() string {
 
 		if m.viewport.Width != centerW-2 || m.viewport.Height != eventH-1 {
 			m.viewport.Width = centerW - 2
-			m.viewport.Height = eventH - 1 // -1 为 event panel header 行
+			m.viewport.Height = eventH - 1 // -1 for the event panel header row
 		}
 		if m.streamVP.Width != centerW-2 || m.streamVP.Height != streamH-1 {
 			m.streamVP.Width = centerW - 2
-			m.streamVP.Height = streamH - 1 // -1 为 stream panel header 行
+			m.streamVP.Height = streamH - 1 // -1 for the stream panel header row
 		}
 
 		eventFlow := renderEventFlowViewport(m.viewport, centerW, eventH, m.paneHighlighted(focusEvents))
@@ -670,7 +670,7 @@ func (m Model) View() string {
 
 	view := lipgloss.JoinVertical(lipgloss.Left, topBar, body, inputBox)
 
-	// 弹窗覆盖叠加：浮在 body 底部上方，不影响布局
+	// Popup overlay: floats above the bottom of body without affecting the layout
 	if m.modelSwitch != nil {
 		commandBar := renderModelSwitchBar(m.width, m.modelSwitch)
 		view = overlayAboveInput(view, commandBar, inputH)
@@ -683,7 +683,7 @@ func (m Model) View() string {
 	return view
 }
 
-// sendCoCreate 发起一轮共创请求，统一处理 reqID、textarea、placeholder。
+// sendCoCreate starts one round of co-create request, handling reqID, textarea and placeholder in one place.
 func (m *Model) sendCoCreate() tea.Cmd {
 	m.cocreateSeq++
 	m.cocreate.reqID = m.cocreateSeq
@@ -700,9 +700,9 @@ func (m Model) handleCoCreateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	state := m.cocreate
 
-	// 键盘 ↑↓/PgUp/PgDn/Home/End 滚动；Tab 在左对话栏 ↔ 右创作指令栏间切换滚动焦点
-	// （默认左栏，用户回看主体）。欢迎页已关鼠标上报以保留原生复制，右栏溢出时靠 Tab
-	// 切焦点后用键盘滚。左栏：上滚关 follow，滚到底重开 follow（流式跟随）。
+	// Keys ↑↓/PgUp/PgDn/Home/End scroll; Tab switches the scroll focus between the left conversation column ↔ the right creation-instruction column
+	// (default left column, where the user reviews the main content). The welcome screen has mouse reporting off to keep native copy, so when the right column overflows, press Tab
+	// to switch focus and scroll with the keyboard. Left column: scrolling up turns follow off, and scrolling to the bottom turns follow back on (streaming follow).
 	switch msg.Type {
 	case tea.KeyTab:
 		state.focusPrompt = !state.focusPrompt
@@ -749,9 +749,9 @@ func (m Model) handleCoCreateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.exitCoCreate()
 	}
 
-	// 等待 AI 回复时编辑类（字符输入/退格/光标/Ctrl+U/多行换行）放行——
-	// 用户能在 AI 思考期间预输入下一句。提交类的屏蔽下沉到各 case 内部，
-	// 让 Enter 节流先于 awaiting 屏蔽——这样粘贴的 \n 残片仍能补空格。
+	// While waiting for the AI reply, editing keys (character input / backspace / cursor / Ctrl+U / multi-line newline) are let through --
+	// so the user can pre-type the next sentence while the AI is thinking. Blocking of submit keys is pushed down into each case,
+	// so that the Enter throttle runs before the awaiting block -- that way a pasted \n fragment can still be turned into a space.
 
 	switch msg.Type {
 	case tea.KeyCtrlS:
@@ -761,7 +761,7 @@ func (m Model) handleCoCreateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !state.canStart() {
 			return m, nil
 		}
-		// 阶段共创：把"后续方向 brief"注入并恢复创作，回到运行台。
+		// Phase co-create: inject the "next-direction brief" and resume creation, returning to the running workbench.
 		if state.stage {
 			draft := state.draftPrompt()
 			m.cocreate = nil
@@ -770,7 +770,7 @@ func (m Model) handleCoCreateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.textarea.Placeholder = defaultSteerPlaceholder()
 			return m, tea.Batch(resumeFromCoCreate(m.runtime, draft), m.textarea.Focus())
 		}
-		// 冷启动共创：用整理好的创作指令开始创作。
+		// Cold-start co-create: start creation with the organized creation instructions.
 		prompt, err := state.buildPrompt()
 		if err != nil {
 			m.err = err
@@ -779,13 +779,13 @@ func (m Model) handleCoCreateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		cmd := m.enterStarting(prompt)
 		return m, tea.Batch(startRuntime(m.runtime, prompt), cmd)
 	case tea.KeyEnter:
-		// Alt+Enter → 主动换行，让 textarea.Update 接管（KeyMap.InsertNewline 已绑此键）
+		// Alt+Enter -> explicit newline, handed to textarea.Update (KeyMap.InsertNewline is bound to this key)
 		if msg.Alt {
 			break
 		}
-		// 与上一次字符按键间隔过短 → 视为粘贴流的 \n 残片：补空格代替提交。
-		// 必须在 awaiting 屏蔽之前判断——否则 awaiting 期间粘贴 \n 残片会被屏蔽，
-		// 导致 "abc\ndef" 被吞成 "abcdef"，与 base 路径语义不一致。
+		// Interval since the last character key is too short -> treat as a \n fragment of a paste stream: insert a space instead of submitting.
+		// This must be decided before the awaiting block -- otherwise a pasted \n fragment during awaiting would be blocked,
+		// swallowing "abc\ndef" into "abcdef", inconsistent with the base path semantics.
 		if !m.lastKeyAt.IsZero() && time.Since(m.lastKeyAt) < 50*time.Millisecond {
 			var cmd tea.Cmd
 			state.resetSuggestionInput()
@@ -793,7 +793,7 @@ func (m Model) handleCoCreateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.refitTextareaHeight()
 			return m, cmd
 		}
-		// 真正的提交意图：awaiting 期间屏蔽（不能并发发请求）
+		// A genuine submit intent: blocked during awaiting (requests cannot be sent concurrently)
 		if state.awaiting {
 			return m, nil
 		}
@@ -814,8 +814,8 @@ func (m Model) handleCoCreateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// 数字键 1/2/3 可连续组合建议：首次填入，后续用分号追加，重复选择忽略。
-	// 任意手动编辑都会退出快捷组合状态，之后的数字保持普通输入语义。
+	// Number keys 1/2/3 can combine suggestions in sequence: the first fills in, later ones append with a semicolon, and repeated picks are ignored.
+	// Any manual edit exits the quick-combine state, and later digits keep normal input semantics.
 	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && !state.awaiting {
 		if r := msg.Runes[0]; r >= '1' && r <= '3' {
 			if value, handled := state.appendSuggestion(int(r-'1'), m.textarea.Value()); handled {
@@ -827,7 +827,7 @@ func (m Model) handleCoCreateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// 常规输入转发给 textarea
+	// Forward regular input to the textarea
 	if msg.Type == tea.KeyRunes && (containsSGRFragment(string(msg.Runes)) || isCSILeak(msg.Runes)) {
 		return m, nil
 	}
@@ -845,7 +845,7 @@ func (m Model) handleCoCreateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// exitCoCreate 退出共创模式，取消进行中的 LLM 请求，恢复输入框状态。
+// exitCoCreate exits co-create mode, cancels the in-flight LLM request, and restores the input box state.
 func (m Model) exitCoCreate() (tea.Model, tea.Cmd) {
 	if m.cocreate.cancel != nil {
 		m.cocreate.cancel()
@@ -854,7 +854,7 @@ func (m Model) exitCoCreate() (tea.Model, tea.Cmd) {
 	initial := m.cocreate.initialInput()
 	m.cocreate = nil
 	m.resizeTextarea()
-	// 阶段共创取消：清占用标记、保持暂停，回到运行台输入态（不回填合成开场）。
+	// Phase co-create cancelled: clear the occupancy marker, stay paused, and return to the running workbench input state (do not refill the synthesized opener).
 	if stage {
 		m.textarea.SetValue("")
 		m.textarea.Placeholder = defaultSteerPlaceholder()
@@ -865,8 +865,8 @@ func (m Model) exitCoCreate() (tea.Model, tea.Cmd) {
 	return m, m.textarea.Focus()
 }
 
-// overlayAboveInput 将 overlay 浮动叠加在 base 视图的底部（inputBox 上方），
-// 不改变整体布局高度。仅覆盖 overlay 卡片自身宽度，右侧透出底层内容。
+// overlayAboveInput floats the overlay on top of the bottom of the base view (above the inputBox)
+// without changing the overall layout height. It covers only the overlay card's own width, letting the underlying content show through on the right.
 func overlayAboveInput(base, overlay string, inputLineCount int) string {
 	baseLines := strings.Split(base, "\n")
 	overLines := strings.Split(strings.TrimRight(overlay, "\n"), "\n")
@@ -881,7 +881,7 @@ func overlayAboveInput(base, overlay string, inputLineCount int) string {
 		y := startY + i
 		if y >= 0 && y < endY {
 			olW := lipgloss.Width(ol)
-			// 截掉基线左侧 olW 个可见字符，拼接 overlay + 剩余右侧内容
+			// Cut off the leftmost olW visible characters of the base, then concatenate the overlay + the remaining right-side content
 			right := ansi.TruncateLeft(baseLines[y], olW, "")
 			baseLines[y] = ol + right
 		}
@@ -889,9 +889,9 @@ func overlayAboveInput(base, overlay string, inputLineCount int) string {
 	return strings.Join(baseLines, "\n")
 }
 
-// isCSILeak 检测 KeyRunes 是否为 CSI 转义序列泄漏的残片。
-// 终端发送方向键 \x1b[A 时，快速按键可能导致序列拆分：
-// \x1b 被解析为 Escape，"[" 或 "[A" 作为 KeyRunes 泄漏到 textarea。
+// isCSILeak detects whether KeyRunes are a leaked fragment of a CSI escape sequence.
+// When the terminal sends the arrow key \x1b[A, fast key presses may split the sequence:
+// \x1b is parsed as Escape, and "[" or "[A" leaks into the textarea as KeyRunes.
 func isCSILeak(runes []rune) bool {
 	if len(runes) == 0 || runes[0] != '[' {
 		return false
@@ -906,7 +906,7 @@ func isCSILeak(runes []rune) bool {
 	return true
 }
 
-// containsSGRFragment 检测文本是否包含 SGR 鼠标序列残片（"<数字;数字;" 模式）。
+// containsSGRFragment detects whether the text contains a fragment of an SGR mouse sequence (the "<digits;digits;" pattern).
 func containsSGRFragment(s string) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] != '<' {

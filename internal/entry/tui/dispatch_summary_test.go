@@ -8,7 +8,7 @@ import (
 func TestRenderDispatchSummarySplitsAgentFromTask(t *testing.T) {
 	cases := []struct{ summary, wantTask string }{
 		{"writer (Viết chương 5)", "(Viết chương 5)"},
-		{"writer（写第 5 章）", "（写第 5 章）"}, // han:keep sự kiện cũ được replay từ log
+		{"writer（写第 5 章）", "（写第 5 章）"}, // old event replayed from the log, han:keep
 	}
 	for _, c := range cases {
 		out := renderDispatchSummary(c.summary, 80)

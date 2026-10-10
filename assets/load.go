@@ -24,42 +24,42 @@ var stylesFS embed.FS
 //go:embed voice.md voice_zh.md
 var voiceFS embed.FS
 
-// Prompts biểu thị tập hợp các prompt được nhúng.
+// Prompts holds the embedded set of prompts.
 type Prompts struct {
 	ArchitectShort   string
 	ArchitectLong    string
-	Writer           string // Giao thức khuôn mẫu, chứa placeholder {{VOICE}}; bản cuối ráp qua BuildWriterPrompt
+	Writer           string // Template protocol with a {{VOICE}} placeholder; the final text is assembled by BuildWriterPrompt
 	Editor           string
-	ImportSegment    string // Phân tách ngữ nghĩa: nhận diện ranh giới chương/tập/phần phụ
-	ImportAnalyze    string // Trích xuất sự thật từng chương
-	ImportSynthesize string // Tổng hợp phân tầng và phân chia tập/cung toàn sách (BookSynthesis)
-	ImportRange      string // Tóm tắt khoảng liên tục giai đoạn Map (RangeDigest)
+	ImportSegment    string // Semantic segmentation: recognizes chapter/volume/auxiliary-section boundaries
+	ImportAnalyze    string // Per-chapter facts extraction
+	ImportSynthesize string // Layered synthesis and volume/arc division of the whole book (BookSynthesis)
+	ImportRange      string // Digest of a contiguous range in the Map phase (RangeDigest)
 	SimulationSource string
 	SimulationMerge  string
 	RevisionAnalyze  string
 
-	// Arbiter phân xử (LLM-as-function, không bọc simulation guidance)
+	// Arbiter adjudication (LLM-as-function, not wrapped with simulation guidance)
 	ArbiterPlanStart    string
 	ArbiterIntervention string
 	ArbiterFailure      string
 }
 
-// Bundle biểu thị tập hợp tài nguyên tĩnh cần thiết khi chạy.
+// Bundle holds the static resources needed at runtime.
 type Bundle struct {
 	References tools.References
 	Prompts    Prompts
 	Styles     map[string]string
-	Voice      string // Tiêu chuẩn hành văn, ráp qua 3 tầng ghi đè
-	Language   string // "vi" hoặc "zh"
+	Voice      string // Writing standard, assembled through 3 override tiers
+	Language   string // "vi" or "zh"
 }
 
-// LoadOptions khai báo nguồn ghi đè tầng văn phong.
+// LoadOptions declares the override sources of the style tier.
 type LoadOptions struct {
 	BookStyleDir string // <outputDir>/style
 	HomeStyleDir string // ~/.ainovel/style
 }
 
-// DefaultLoadOptions khởi tạo nguồn ghi đè dựa trên thư mục sách.
+// DefaultLoadOptions builds the override sources from the book directory.
 func DefaultLoadOptions(outputDir string) LoadOptions {
 	var opts LoadOptions
 	if outputDir != "" {
@@ -71,12 +71,12 @@ func DefaultLoadOptions(outputDir string) LoadOptions {
 	return opts
 }
 
-// Load trả về tài nguyên tương ứng với style và ngôn ngữ truyện (mặc định vi).
+// Load returns the resources for the given style and story language (default vi).
 func Load(style string, opts LoadOptions) Bundle {
 	return LoadWithLanguage("vi", style, opts)
 }
 
-// LoadWithLanguage nạp tài nguyên theo ngôn ngữ ("vi" hoặc "zh") và phong cách chỉ định.
+// LoadWithLanguage loads resources for the given language ("vi" or "zh") and style.
 func LoadWithLanguage(language, style string, opts LoadOptions) Bundle {
 	lang := strings.ToLower(strings.TrimSpace(language))
 	if lang != "zh" && lang != "chinese" && lang != "cn" {
@@ -93,7 +93,7 @@ func LoadWithLanguage(language, style string, opts LoadOptions) Bundle {
 
 const voicePlaceholder = "{{VOICE}}"
 
-// BuildWriterPrompt là cổng ráp prompt duy nhất của Writer.
+// BuildWriterPrompt is the single prompt-assembly gate of the Writer.
 func BuildWriterPrompt(writerPrompt, voice, style string) string {
 	out := strings.Replace(writerPrompt, voicePlaceholder, strings.TrimSpace(voice), 1)
 	if style != "" {
@@ -102,7 +102,7 @@ func BuildWriterPrompt(writerPrompt, voice, style string) string {
 	return out
 }
 
-// OverrideVoice thay thế đoạn văn phong đã ráp (phục vụ thử nghiệm A/B).
+// OverrideVoice replaces the assembled voice section (for A/B experiments).
 func (b *Bundle) OverrideVoice(raw string) {
 	b.Voice = raw
 }
@@ -226,7 +226,7 @@ func loadPrompts(languages ...string) Prompts {
 	}
 }
 
-// WithSimulationGuidance nối thêm hướng dẫn mô phỏng văn phong theo vai trò và ngôn ngữ.
+// WithSimulationGuidance appends voice-simulation guidance by role and language.
 func WithSimulationGuidance(prompt, role string, language ...string) string {
 	lang := "vi"
 	if len(language) > 0 && language[0] == "zh" {
@@ -239,7 +239,7 @@ func WithSimulationGuidance(prompt, role string, language ...string) string {
 	return prompt + "\n\n" + strings.ReplaceAll(guidance, "{{role}}", role)
 }
 
-// OverridePrompt ghi đè prompt của vai trò cụ thể.
+// OverridePrompt overrides the prompt of a specific role.
 func (b *Bundle) OverridePrompt(file, raw string) error {
 	role, ok := promptRole[file]
 	if !ok {
@@ -272,7 +272,7 @@ Khi trong planning_memory hoặc working_memory của novel_context xuất hiệ
 
 Nguyên tắc sử dụng: Học hỏi cấu trúc, nhịp điệu, hook, cách giải phóng thông tin và thủ pháp cuốn hút độc giả; tuyệt đối không sao chép câu văn nguyên văn, tên nhân vật, địa danh, thiết lập độc quyền hay phân đoạn cố định. Nếu simulation_profile xung đột với yêu cầu rõ ràng của người dùng, ưu tiên tuân thủ yêu cầu của người dùng.`
 
-// han:keep hướng dẫn mô phỏng văn phong bản zh (simulationGuidanceZH)
+// Voice-simulation guidance for the zh edition (simulationGuidanceZH). han:keep
 const simulationGuidanceZH = `## 仿写画像
 
 当 novel_context 的 planning_memory 或 working_memory 中存在 simulation_profile 时，必须把它视为当前作品的仿写方向约束。{{role}} 应读取其中的 style、lexicon、plot_design、hook_design、pacing_density、reader_engagement 和 role_guidance。

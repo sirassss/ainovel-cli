@@ -792,16 +792,16 @@ func TestContextToolSelectedMemoryRecallsStoryThreadsAndReviewLessons(t *testing
 	}
 }
 
-// 久挂未回收的伏笔即使与当前章关键词无关，也应被账龄回填进 story_threads——
-// 这正是相关性召回的盲区（独自悬挂太久、却没在本章撞上关键词的那根线）。
-// 近期埋下的伏笔（账龄 < 阈值）不应被误标为"chưa thu"。
+// A long-unresolved foreshadowing, even when unrelated to the current chapter's keywords, should be backfilled into story_threads by its age;
+// this is exactly the blind spot of relevance recall (a thread that dangles alone for too long without hitting a keyword in this chapter).
+// A recently planted foreshadowing (age < threshold) must not be wrongly tagged as unresolved.
 func TestContextToolSelectedMemorySurfacesAgingForeshadow(t *testing.T) {
 	dir := t.TempDir()
 	s := store.NewStore(dir)
 	if err := s.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	// 当前章主题与所有伏笔都不沾边，确保相关性召回为空，只剩账龄回填生效。
+	// The current chapter's theme has nothing to do with any foreshadowing, so relevance recall is guaranteed empty and only the age backfill takes effect.
 	if err := s.Outline.SaveOutline([]domain.OutlineEntry{
 		{Chapter: 50, Title: "瘟疫", CoreEvent: "林砚在城南医馆救治瘟疫病患", Scenes: []string{"熬药", "封锁街巷"}},
 	}); err != nil {
@@ -810,7 +810,7 @@ func TestContextToolSelectedMemorySurfacesAgingForeshadow(t *testing.T) {
 	if err := s.Progress.Init(60); err != nil {
 		t.Fatalf("InitProgress: %v", err)
 	}
-	// 6 条满足召回阈值；前两条账龄 ≥30（久挂），后四条账龄 <30（近期）。
+	// 6 entries meet the recall threshold; the first two have age >= 30 (long-dangling), the last four have age < 30 (recent).
 	if err := s.World.SaveForeshadowLedger([]domain.ForeshadowEntry{
 		{ID: "ancient_seal", Description: "上古封印的裂隙", PlantedAt: 3, Status: "planted"},
 		{ID: "lost_bloodline", Description: "主角失落的血脉来历", PlantedAt: 5, Status: "advanced"},
@@ -841,7 +841,7 @@ func TestContextToolSelectedMemorySurfacesAgingForeshadow(t *testing.T) {
 		t.Fatalf("Unmarshal: %v", err)
 	}
 
-	// 两条久挂伏笔应被回填，且带"chưa thu"账龄标注。
+	// The two long-dangling foreshadowings should be backfilled, carrying the unresolved age annotation.
 	if !containsRecallSummary(payload.Selected.StoryThreads, "上古封印的裂隙") {
 		t.Fatalf("expected aging foreshadow to surface despite no relevance, got %+v", payload.Selected.StoryThreads)
 	}
@@ -851,7 +851,7 @@ func TestContextToolSelectedMemorySurfacesAgingForeshadow(t *testing.T) {
 	if !containsRecallSummary(payload.Selected.StoryThreads, "chưa thu") {
 		t.Fatalf("expected aging item to carry overdue annotation, got %+v", payload.Selected.StoryThreads)
 	}
-	// 近期伏笔（账龄 <30 且不相关）不应被回填。
+	// Recent foreshadowing (age < 30 and unrelated) must not be backfilled.
 	if containsRecallSummary(payload.Selected.StoryThreads, "昨夜集市的口角") {
 		t.Fatalf("recent foreshadow must not be labeled overdue, got %+v", payload.Selected.StoryThreads)
 	}
@@ -1145,8 +1145,8 @@ func TestContextToolLoadsArcReviewAffectingEarlierChapter(t *testing.T) {
 }
 
 func TestContextToolDoesNotInjectUserDirectives(t *testing.T) {
-	// save_directive 已移除：novel_context 不再注入 working_memory.user_directives，
-	// 长期写作要求统一走 user_rules。锁死这条，防止回归。
+	// save_directive has been removed: novel_context no longer injects working_memory.user_directives,
+	// and long-term writing requirements all go through user_rules. Lock this in to prevent regressions.
 	dir := t.TempDir()
 	s := store.NewStore(dir)
 	if err := s.Init(); err != nil {
@@ -1174,16 +1174,16 @@ func TestContextToolDoesNotInjectUserDirectives(t *testing.T) {
 		if _, exists := working["user_directives"]; exists {
 			t.Errorf("[%s] working_memory 不应再有 user_directives（已统一到 user_rules）", name)
 		}
-		// user_rules 仍应稳定注入
+		// user_rules should still be injected stably
 		if _, ok := working["user_rules"].(map[string]any); !ok {
 			t.Errorf("[%s] working_memory.user_rules 应稳定注入", name)
 		}
 	}
 }
 
-// TestContextToolInjectsRuleViolations 违规事实管道契约(第五轮评审):
-// commit 落盘的机械违规必须经 novel_context(chapter=N) 真实注入——
-// editor.md §机械检查映射消费的就是这个字段,管道断了 prompt 就成空头支票。
+// TestContextToolInjectsRuleViolations is the violation-facts pipeline contract (round 5 review):
+// mechanical violations landed by commit must be genuinely injected via novel_context(chapter=N);
+// what the editor.md mechanical-check mapping consumes is this field, and if the pipeline breaks the prompt becomes an empty promise.
 func TestContextToolInjectsRuleViolations(t *testing.T) {
 	dir := t.TempDir()
 	st := store.NewStore(dir)
@@ -1214,7 +1214,7 @@ func TestContextToolInjectsRuleViolations(t *testing.T) {
 		t.Fatalf("rule_violations 必须注入章节上下文, got %v", result["rule_violations"])
 	}
 
-	// 无违规章节:字段缺省(editor.md 约定)
+	// A chapter with no violations: the field is omitted (editor.md convention)
 	args3, _ := json.Marshal(map[string]any{"chapter": 3})
 	raw3, err := tool.Execute(context.Background(), args3)
 	if err != nil {

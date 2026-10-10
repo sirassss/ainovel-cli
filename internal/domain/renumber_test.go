@@ -2,7 +2,7 @@ package domain
 
 import "testing"
 
-// Tái hiện đúng outline mà model đã lưu trong lần chạy hỏng: cả bốn cung đều index 0.
+// Reproduces exactly the outline the model saved in the broken run: all four arcs have index 0.
 func TestRenumberVolumesFixesDuplicateZeroIndices(t *testing.T) {
 	volumes := []VolumeOutline{
 		{Index: 0, Arcs: []ArcOutline{{Index: 0}, {Index: 0}, {Index: 0}, {Index: 0}}},

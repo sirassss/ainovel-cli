@@ -7,34 +7,34 @@ import (
 	"github.com/voocel/ainovel-cli/internal/utils"
 )
 
-// handleSubagentDelta 分流 subagent 的文本与工具调用参数：
-// - DeltaText 直接作为 markdown 流出
-// - DeltaToolCall 只对已知的长内容工具（如 draft_chapter.content）抽取字段流出；其他工具的参数 JSON 全部丢弃
+// handleSubagentDelta routes a subagent's text and tool-call arguments:
+// - DeltaText flows out directly as markdown
+// - DeltaToolCall only extracts and streams fields for known long-content tools (such as draft_chapter.content); the argument JSON of other tools is discarded entirely
 func (o *observer) handleSubagentDelta(p *agentcore.ProgressPayload) {
 	if p.DeltaKind != agentcore.DeltaToolCall {
 		o.emitStreamDelta(p.Delta, false)
 		return
 	}
 	if p.Tool == "" {
-		return // 工具名未就绪，下一个 delta 再试
+		return // tool name not ready; try again on the next delta
 	}
 
-	// 流式识别到工具名时提前发 TOOL 进行中事件，让 spinner 覆盖整段 LLM 生成期间
-	// （否则 draft_chapter 这类工具的"进行中"只在真实 Execute 的几十毫秒里显示）。
-	// 真正的 ProgressToolStart 到来时识别到 toolStarts 已有记录，只会补齐 summary。
+	// When the tool name is recognized in the stream, emit a TOOL in-progress event early so the spinner covers the whole LLM generation period
+	// (otherwise the "in progress" state of tools like draft_chapter would only show during the few dozen milliseconds of the real Execute).
+	// When the real ProgressToolStart arrives it finds an existing toolStarts record and only fills in the summary.
 	o.ensureSubagentToolStarted(p.Agent, p.Tool)
 	o.updateToolCallSummaryFromDelta(p.Agent, p.Tool, p.Delta)
 
 	cur, ok := o.streamExtractors[p.Agent]
-	// 同工具调用 args 已闭合（顶层 } 命中）后，仍可能收到 trailing delta：
-	// 某些 provider（deepseek-v4-flash 实测）会把单次 args 拆成多个 chunk，
-	// 最末一个 chunk 在 `}` 之后还跟着空白或重复字符。此时若按"工具名匹配 +
-	// Done 即重建"处理，新 extractor 又会 emit 一次 ✻ header 并把尾段 token
-	// 当作新 args 解析。这些 delta 是冗余尾巴，丢弃即可。
+	// After the same tool call's args have closed (top-level } hit), trailing deltas may still arrive:
+	// some providers (observed with deepseek-v4-flash) split a single args into several chunks,
+	// and the very last chunk carries whitespace or repeated characters after the `}`. If this were handled as
+	// "tool name matches + rebuild once Done", the new extractor would emit a ✻ header again and parse the tail
+	// tokens as new args. These deltas are redundant tails and can simply be discarded.
 	if ok && cur.tool == p.Tool && cur.ext.Done() {
 		return
 	}
-	// 工具名变了或还没建过：新建。
+	// Tool name changed or never built: create a new one.
 	if !ok || cur.tool != p.Tool {
 		ext := newToolExtractor(p.Tool)
 		if ext == nil {
@@ -47,16 +47,16 @@ func (o *observer) handleSubagentDelta(p *agentcore.ProgressPayload) {
 	if emitted := cur.ext.Feed(p.Delta); emitted != "" {
 		if !cur.emittedAny {
 			cur.emittedAny = true
-			// streamClear 让 extractor 的 ✻ header 落在新 round 起点，配合
-			// renderStreamContent 的 HasPrefix("✻") 检查走 renderAgentBlock 高亮
-			// 路径；用 ensureStreamParagraphBreak 只插空行不开 round，✻ 仍会被
-			// 前面的 thinking/正文包住，落到 renderChapterBlock 用默认色画掉。
+			// streamClear makes the extractor's ✻ header land at the start of the new round, so that
+			// renderStreamContent's HasPrefix("✻") check takes the renderAgentBlock highlight
+			// path; using ensureStreamParagraphBreak only inserts a blank line without opening a round, so ✻ would still be
+			// wrapped by the preceding thinking/body text and fall into renderChapterBlock, drawn in the default color.
 			o.streamClear()
-			// streamClear 防御性清空了 streamExtractors。当前 cur 还要继续 Feed
-			// 本工具调用后续的 delta，必须立刻把它重新登记回去；否则下一段 delta
-			// 来时会新建 extractor，从 args 中段开始解析（在嵌套对象的 `{` 处
-			// 才进入 psBeforeKey），把 timeline_events.time / foreshadow_updates.id
-			// 等当成顶层字段，TUI 上重复出现 ✻ header。
+			// streamClear defensively cleared streamExtractors. The current cur must keep being Fed
+			// the later deltas of this tool call, so it must be registered back immediately; otherwise when the next delta
+			// arrives a new extractor would be created and start parsing from the middle of args (entering psBeforeKey only
+			// at the `{` of a nested object), treating timeline_events.time / foreshadow_updates.id
+			// and the like as top-level fields, so the ✻ header shows up repeatedly in the TUI.
 			o.streamExtractors[p.Agent] = cur
 		}
 		o.emitStreamDelta(emitted, false)
@@ -76,23 +76,23 @@ func (o *observer) emitStreamDelta(delta string, thinking bool) {
 	o.streamLastByte = delta[len(delta)-1]
 }
 
-// ensureSubagentToolStarted 在流式识别到 tool_call 首次出现时，提前为该 agent
-// 登记一次进行中的 TOOL 调用，使事件流的 spinner 覆盖"LLM 流式生成 tool_call
-// 参数"这一段时间（通常占调用总耗时的 99%）。args 此时尚不完整，暂以纯工具名
-// 为 summary；等真正的 ProgressToolStart 到来时会补齐带参数的 summary。
+// ensureSubagentToolStarted registers an in-progress TOOL call for the agent in advance when a tool_call is first recognized in the stream,
+// so the event-stream spinner covers the period in which "the LLM streams the tool_call
+// arguments" (usually 99% of the call's total time). The args are not complete yet, so the plain tool name is used as the
+// summary for now; when the real ProgressToolStart arrives the summary with arguments is filled in.
 func (o *observer) ensureSubagentToolStarted(agent, tool string) {
 	if agent == "" || tool == "" {
 		return
 	}
 	if _, ok := o.toolStarts[agent]; ok {
-		return // 已有进行中调用，幂等
+		return // an in-progress call already exists; idempotent
 	}
 	o.resetStreamArgLabel(agent, tool)
 	id := nextEventID()
 	o.toolStarts[agent] = &activeCall{
 		id:      id,
 		start:   time.Now(),
-		summary: tool, // 先用纯工具名，ProgressToolStart 到来时可能更新为 tool(第N章)
+		summary: tool, // start with the plain tool name; it may be updated to tool(chapter N) when ProgressToolStart arrives
 		depth:   1,
 	}
 	o.emitAndLog(Event{
@@ -117,44 +117,44 @@ func (o *observer) resetStreamArgLabel(agent, tool string) {
 	delete(o.streamArgLabels, key)
 }
 
-// emitFallbackStreamHeader 给未配置 extractor 的工具补一行 ✻ 标题到流面板。
-// 两条路径都要调用以保证一致：
-//  1. ensureSubagentToolStarted —— subagent 流式 tool args（DeltaToolCall）
-//  2. handleToolUpdate ProgressToolStart —— subagent 非流式 tool args
+// emitFallbackStreamHeader adds a ✻ title line to the stream panel for tools with no configured extractor.
+// Both paths must call it to stay consistent:
+//  1. ensureSubagentToolStarted — subagent streamed tool args (DeltaToolCall)
+//  2. handleToolUpdate ProgressToolStart — subagent non-streamed tool args
 //
-// 缺任何一条，流式与非流式模型的工具标题就会表现不一致。
+// If either is missing, the tool titles of streaming and non-streaming models will behave inconsistently.
 func (o *observer) emitFallbackStreamHeader(tool string) {
 	if _, has := toolDisplays[tool]; has {
-		return // 有 extractor，header 由 extractor 自行输出
+		return // there is an extractor; it emits the header itself
 	}
 	o.streamClear()
 	o.emitStreamDelta(streamHeaderFallback(tool)+"\n", false)
 }
 
-// streamHeaderFallback 为未配置 extractor 的工具生成流式 header 文本，
-// 让用户即使对轻量读取类工具也能看到"在调用什么"。
+// streamHeaderFallback generates the streaming header text for tools with no configured extractor,
+// so users can see "what is being called" even for lightweight read-type tools.
 //
-// 前缀 "✻ " 是约定的"agent 调度块"标记 — TUI 的 renderStreamContent 见到这个
-// 前缀会走 renderAgentBlock 路径渲染（图标 + 高亮 label + 分隔线），
-// 否则会落到正文块路径用终端默认色，header 看起来就是普通正文不醒目。
+// The prefix "✻ " is the agreed "agent dispatch block" marker — when the TUI's renderStreamContent sees this
+// prefix it renders through the renderAgentBlock path (icon + highlighted label + divider line);
+// otherwise it falls to the body-block path with the terminal default color, and the header looks like ordinary body text, not eye-catching.
 func streamHeaderFallback(tool string) string {
 	return "✻ " + tool
 }
 
-// streamClear 通知 TUI 开启新一轮 streamRound，同时重置与段落分隔相关的状态。
-// 逻辑上新 round 是"空 stream"，否则下一次首个 extractor emit 会误补前导空行。
+// streamClear tells the TUI to open a new streamRound and resets the state related to paragraph separation.
+// Logically a new round is an "empty stream"; otherwise the first extractor emit next time would wrongly pad a leading blank line.
 //
-// streamThinking 必须一并重置：emitStreamDelta 用 streamThinking 跨调用追踪
-// 上一段是不是思考。新 round 内还没输出过任何内容，下一次 emit(thinking=false)
-// 不应该再插入 ThinkingSep。否则 fallback header（如 ✻ 读章节）会被 \x02
-// 抢先占头，renderStreamContent 的 HasPrefix("✻") 失配，整段落到正文路径
-// 再被 ThinkingSep 切分为思考段，title 颜色被画成思考色。
+// streamThinking must be reset along with it: emitStreamDelta uses streamThinking to track across calls
+// whether the previous segment was thinking. No content has been output in the new round yet, so the next emit(thinking=false)
+// should not insert a ThinkingSep again. Otherwise the fallback header (such as ✻ read chapter) would be
+// taken at the head by \x02, the HasPrefix("✻") of renderStreamContent would fail to match, the whole segment would fall to the body path
+// and then be split into thinking segments by ThinkingSep, and the title color would be drawn in the thinking color.
 func (o *observer) streamClear() {
 	o.emitC()
 	o.streamHasContent = false
 	o.streamLastByte = 0
 	o.streamThinking = false
-	// 上一轮的 subagent 结束前 ProgressToolEnd 已 delete，这里防御性清空。
+	// The previous round's subagent had ProgressToolEnd deleted before it ended; clear defensively here.
 	if len(o.streamExtractors) > 0 {
 		o.streamExtractors = make(map[string]*agentExtractor)
 	}

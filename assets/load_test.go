@@ -30,7 +30,7 @@ func TestBuildWriterPrompt_AssemblesProperly(t *testing.T) {
 	}
 }
 
-// TestLoad_NoOverrides 零覆盖时 Voice/AntiAITone 与内置逐字节一致。
+// TestLoad_NoOverrides checks that with zero overrides Voice/AntiAITone are byte-for-byte identical to the built-in ones.
 func TestLoad_NoOverrides(t *testing.T) {
 	b := Load("default", LoadOptions{})
 	if b.Voice != mustRead(voiceFS, "voice.md") {
@@ -84,7 +84,7 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-// TestLoad_ThreeTierAppendAndReplace kiểm tra 3 tầng ưu tiên ghi đè.
+// TestLoad_ThreeTierAppendAndReplace checks the 3-tier override priority.
 func TestLoad_ThreeTierAppendAndReplace(t *testing.T) {
 	home := t.TempDir()
 	book := t.TempDir()
@@ -197,9 +197,9 @@ func TestVietnamesePromptsHaveNoHan(t *testing.T) {
 	}
 }
 
-// Bản prompt tiếng Việt từng bị cắt cụt so với bản gốc (thiếu cả các mục hướng dẫn tool như
-// expand_arc, update_compass, chuẩn chấm verdict). Test này chặn tái phát: cùng số tiêu đề mục
-// và mọi định danh (tên tool, tên trường) trong bản zh phải xuất hiện trong bản vi.
+// The Vietnamese prompt was once truncated relative to the original (even missing the tool guidance sections such as
+// expand_arc, update_compass, and the verdict grading criteria). This test prevents a recurrence: the same number of section headings
+// and every identifier (tool names, field names) in the zh version must appear in the vi version.
 func TestVietnamesePromptsCoverSameSectionsAsZh(t *testing.T) {
 	ident := regexp.MustCompile("`([A-Za-z_][A-Za-z0-9_.\\[\\]]*)`")
 	entries, err := promptsFS.ReadDir("prompts/zh")

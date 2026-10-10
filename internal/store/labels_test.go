@@ -7,9 +7,9 @@ import (
 	"github.com/voocel/ainovel-cli/internal/domain"
 )
 
-// Nhãn khuôn mẫu phải theo ngôn ngữ tác phẩm: các file .md này được đọc ngược
-// vào ngữ cảnh model, nên nhãn tiếng Trung trong truyện tiếng Việt là nguồn kéo
-// model trôi ngôn ngữ, không chỉ là chuyện hiển thị.
+// Boilerplate labels must follow the work language: these .md files are read back into the
+// model context, so Chinese labels in a Vietnamese story are a source of language drift for the model,
+// not just a display issue.
 func TestRenderersFollowLanguage(t *testing.T) {
 	entries := []domain.OutlineEntry{
 		{Chapter: 1, Title: "Vô Căn Dược Giả", CoreEvent: "Mở sạp bán thuốc", Hook: "Cây mai rung lên"},
@@ -37,7 +37,7 @@ func TestRenderersFollowLanguage(t *testing.T) {
 		}
 	}
 
-	// Chế độ tiếng Trung phải giữ nguyên hành vi cũ.
+	// Chinese mode must keep the old behavior unchanged.
 	zh := renderOutline(entries, labelsZH)
 	if !strings.Contains(zh, "# 大纲") || !strings.Contains(zh, "## 第 1 章：") {
 		t.Errorf("chế độ zh bị đổi: %q", zh)

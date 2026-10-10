@@ -8,19 +8,19 @@ import (
 	"strings"
 )
 
-// RawSource 是一个待归一化的原始来源（rules 文件的整段文本）。
+// RawSource is a raw source awaiting normalization (the whole text of a rules file).
 //
-// 砍 YAML 后，rules 文件就是普通自然语言提示词；归一化只需要原文，不再做 front matter 解析。
+// After cutting YAML, a rules file is just a plain natural-language prompt; normalization only needs the original text and no longer parses front matter.
 type RawSource struct {
-	Label string     // 来源标签，进入 Snapshot.Sources（如 global:my-style.md）
-	Kind  SourceKind // 优先级层级
-	Text  string     // 文件原始内容
+	Label string     // source label, enters Snapshot.Sources (e.g. global:my-style.md)
+	Kind  SourceKind // priority tier
+	Text  string     // raw file content
 }
 
-// RawFileSources 按 Global → Project 顺序枚举 rules 目录下的 .md 文件并返回原始文本。
+// RawFileSources enumerates the .md files under the rules directories in Global -> Project order and returns their raw text.
 //
-// 与 readDirFromDisk 同样的扫描约定（顶层 .md、字典序、跳过隐藏文件），但不解析 YAML，
-// 整段文本原样交给归一化器。System defaults / 启动 prompt / 运行中要求由 service 另行提供。
+// Same scanning conventions as readDirFromDisk (top-level .md, lexicographic order, hidden files skipped), but YAML is not parsed;
+// the whole text is handed to the normalizer as-is. System defaults / startup prompt / in-run requirements are provided separately by the service.
 func RawFileSources(opts LoadOptions) []RawSource {
 	var out []RawSource
 	out = append(out, rawDir(opts.HomeRulesDir, SourceGlobal)...)
@@ -34,8 +34,8 @@ func rawDir(dir string, kind SourceKind) []RawSource {
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		// 目录不存在是常态，静默跳过；但权限/路径其实是文件这类错误必须留痕——
-		// 否则用户写了规则却完全没生效、零反馈，排查成本极高（见 known_rules_path_stale_readme）。
+		// A missing directory is the normal case and is silently skipped; but errors such as permissions or a path that is actually a file must leave a trace -
+		// otherwise the user writes rules that take no effect at all with zero feedback, which is very costly to debug (see known_rules_path_stale_readme).
 		if !os.IsNotExist(err) {
 			slog.Warn("reading rules directory failed, skipped", "module", "rules", "dir", dir, "err", err)
 		}

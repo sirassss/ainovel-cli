@@ -12,7 +12,7 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
-// 支持的源编码标签，写入 Manifest 与进度事件，不做无声兜底（RFC §7.1）。
+// Supported source encoding labels, written to the Manifest and progress events; no silent fallback (RFC §7.1).
 const (
 	encodingUTF8    = "utf-8"
 	encodingUTF8BOM = "utf-8-bom"
@@ -21,14 +21,14 @@ const (
 
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
-// decoded 是一次解码结果：文本 + 实际所选编码。
+// decoded is the result of one decode: the text plus the encoding actually chosen.
 type decoded struct {
 	text     string
 	encoding string
 }
 
-// decodeSource 按 UTF-8 / UTF-8 BOM / GB18030 顺序解码，返回所选编码。
-// 无法可靠解码或出现替换字符时直接失败，错误包含检测结果，不把「尝试 GB18030」藏成无声兜底。
+// decodeSource decodes in the order UTF-8 / UTF-8 BOM / GB18030 and returns the chosen encoding.
+// If decoding cannot be done reliably or a replacement character appears, it fails outright and the error includes the detection result; "trying GB18030" is never hidden as a silent fallback.
 func decodeSource(raw []byte) (decoded, error) {
 	if bytes.HasPrefix(raw, utf8BOM) {
 		body := raw[len(utf8BOM):]
@@ -53,17 +53,17 @@ func decodeSource(raw []byte) (decoded, error) {
 	return decoded{text: string(out), encoding: encodingGB18030}, nil
 }
 
-// normalize 只做不改变文学内容的转换：CRLF/CR 统一为 LF。
-// 保留空行、缩进、标题行与正文字符；不删除首部文本、空章、广告或所谓尾部噪声（RFC §7.2）。
-// BOM 已在 decodeSource 阶段剥离。
+// normalize performs only conversions that do not change literary content: CRLF/CR are unified to LF.
+// Blank lines, indentation, title lines and body characters are preserved; leading text, empty chapters, ads and so-called trailing noise are not removed (RFC §7.2).
+// The BOM was already stripped in the decodeSource stage.
 func normalize(text string) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	return text
 }
 
-// Ingest 读取源文件，解码、归一化，并以目录 rename 原子创建 meta/import/ 工作区快照。
-// 返回工作区句柄与 Manifest；调用方据此发出进度事件。
+// Ingest reads the source file, decodes and normalizes it, and atomically creates the meta/import/ workspace snapshot via a directory rename.
+// It returns the workspace handle and the Manifest; the caller emits progress events from them.
 func Ingest(bookDir, sourcePath string, in Intent) (*Workspace, *Manifest, error) {
 	raw, err := os.ReadFile(sourcePath)
 	if err != nil {
@@ -98,18 +98,18 @@ func Ingest(bookDir, sourcePath string, in Intent) (*Workspace, *Manifest, error
 	return ws, &m, nil
 }
 
-// SourceUnit 是模型可引用的稳定坐标（RFC §7.3）。
-// ID 仅用于展示与模型引用；所有顺序/包含/递增判断一律按 (Line, Part) 数值序，禁止对 ID 字符串做字典序比较。
+// SourceUnit is a stable coordinate the model can reference (RFC §7.3).
+// ID is only for display and model references; all ordering/containment/increment checks use the numeric (Line, Part) order, and lexicographic comparison of ID strings is forbidden.
 type SourceUnit struct {
-	ID        string `json:"id"`   // L1257；超预算行拆为 L1257.1、L1257.2
-	Line      int    `json:"line"` // 1 起
-	Part      int    `json:"part"` // 0=整行；虚拟分片 1..N
+	ID        string `json:"id"`   // L1257; an over-budget line is split into L1257.1, L1257.2
+	Line      int    `json:"line"` // 1-based
+	Part      int    `json:"part"` // 0=whole line; virtual slices 1..N
 	StartByte int    `json:"start_byte"`
 	EndByte   int    `json:"end_byte"`
 	Text      string `json:"text"`
 }
 
-// unitLess 定义 SourceUnit 的全序：先 Line 后 Part，均为数值比较（A1 修订）。
+// unitLess defines the total order of SourceUnit: Line first, then Part, both compared numerically (A1 revision).
 func unitLess(a, b SourceUnit) bool {
 	if a.Line != b.Line {
 		return a.Line < b.Line
@@ -117,9 +117,9 @@ func unitLess(a, b SourceUnit) bool {
 	return a.Part < b.Part
 }
 
-// buildSourceUnits 从归一化文本建立稳定坐标表。
-// 正常行一个 unit；单行字节超过 maxUnitBytes 时只在 UTF-8 字符边界生成多个虚拟 unit，
-// 不写回 source.txt、不插入软换行、不改变任何源字符（RFC §7.3）。maxUnitBytes<=0 表示不分片。
+// buildSourceUnits builds the stable coordinate table from normalized text.
+// A normal line is one unit; when a single line's bytes exceed maxUnitBytes, multiple virtual units are generated only at UTF-8 character boundaries,
+// without writing back to source.txt, inserting soft line breaks or changing any source character (RFC §7.3). maxUnitBytes<=0 means no slicing.
 func buildSourceUnits(normalized []byte, maxUnitBytes int) []SourceUnit {
 	var units []SourceUnit
 	n := len(normalized)
@@ -143,7 +143,7 @@ func buildSourceUnits(normalized []byte, maxUnitBytes int) []SourceUnit {
 					for e > s && !utf8.RuneStart(normalized[e]) {
 						e--
 					}
-					if e == s { // 单个超长 rune 的极端兜底
+					if e == s { // extreme fallback for a single over-long rune
 						e = s + maxUnitBytes
 					}
 				}
@@ -168,8 +168,8 @@ func buildSourceUnits(normalized []byte, maxUnitBytes int) []SourceUnit {
 	return units
 }
 
-// resolveBoundaryByte 把一条边界决策映射为精确字节位置：
-// 无 anchor 取 unit 起点；有 anchor 要求在该 unit 内唯一逐字命中，再映射为字节偏移（RFC §8.3）。
+// resolveBoundaryByte maps a boundary decision to an exact byte position:
+// with no anchor it takes the unit start; with an anchor it requires a unique verbatim hit inside that unit, then maps it to a byte offset (RFC §8.3).
 func resolveBoundaryByte(unitByID map[string]SourceUnit, unitID, anchor string) (int, error) {
 	u, ok := unitByID[unitID]
 	if !ok {

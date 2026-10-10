@@ -12,7 +12,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/tools"
 )
 
-// testDeps 构造三个语义函数同用一个 mock 档位的最小 Deps。
+// testDeps builds a minimal Deps in which all three semantic functions share one mock tier.
 func testDeps(st *store.Store, m callModel) Deps {
 	c := Caller{Model: m}
 	return Deps{
@@ -25,8 +25,8 @@ func testDeps(st *store.Store, m callModel) Deps {
 	}
 }
 
-// TestRunEndToEnd 用 mock 模型驱动完整管线 ingest→segment→analyze→synthesize→publish，
-// 经真实 commit_chapter 落盘，验证正式 Foundation 与全部章节就绪。
+// TestRunEndToEnd drives the full pipeline ingest->segment->analyze->synthesize->publish with a mock model,
+// persisting through the real commit_chapter, and verifies the formal Foundation and all chapters are ready.
 func TestRunEndToEnd(t *testing.T) {
 	dir := t.TempDir()
 	st := store.NewStore(dir)
@@ -66,7 +66,7 @@ func TestRunEndToEnd(t *testing.T) {
 	if !doneSeen {
 		t.Fatal("未收到 StageDone")
 	}
-	// 正式状态就绪：作品信息、premise 与覆盖全章的扁平大纲已落盘（world_rules 合法为空，不做要求）。
+	// Formal state is ready: work info, premise and a flat outline covering all chapters are persisted (world_rules may legitimately be empty and is not required).
 	if book, _ := st.Book.Load(); book == nil || book.Synopsis == "" {
 		t.Fatalf("作品信息未落盘: %+v", book)
 	}
@@ -83,14 +83,14 @@ func TestRunEndToEnd(t *testing.T) {
 	if active, done, err := ResumeStatus(st); err != nil || !active || !done {
 		t.Fatalf("ResumeStatus 应为 active&done，得 active=%v done=%v", active, done)
 	}
-	// --continue：不设导入完成 Hold（交由 host 自动接力）。
+	// --continue: do not set the import-complete Hold (left to the host's automatic relay).
 	if meta, _ := st.RunMeta.Load(); meta != nil && meta.AdvanceHold != nil {
 		t.Fatalf("--continue 不应留下导入完成 Hold：%+v", meta.AdvanceHold)
 	}
 }
 
-// TestRunSetsCompletionHold 验证非 --continue 导入完成后设置 boundary Hold（RFC §12.4）。
-// Hold 是"导入后不误续写"的唯一保障，必须在发布路径持久化。
+// TestRunSetsCompletionHold verifies that after a non---continue import completes, a boundary Hold is set (RFC §12.4).
+// The Hold is the only guarantee of "do not wrongly continue writing after import" and must be persisted on the publish path.
 func TestRunSetsCompletionHold(t *testing.T) {
 	dir := t.TempDir()
 	st := store.NewStore(dir)
@@ -109,7 +109,7 @@ func TestRunSetsCompletionHold(t *testing.T) {
 	syn := synthesisFixtureJSON(2, storyClosed)
 	m := &mockModel{responses: []string{seg, ana, syn}}
 
-	ch, err := Run(context.Background(), testDeps(st, m), Options{SourcePath: src, AutoConfirm: true}) // 无 --continue
+	ch, err := Run(context.Background(), testDeps(st, m), Options{SourcePath: src, AutoConfirm: true}) // no --continue
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -127,9 +127,9 @@ func TestRunSetsCompletionHold(t *testing.T) {
 	}
 }
 
-// TestRunRejectsDifferentSource 守护换源拦截（RFC §12.1/§18.2）：工作区进行中传入不同
-// 内容的源文件必须明确报错——ingest 只在无工作区时执行，不比对会静默从旧书断点继续、
-// 把旧书发布完毕而新文件一个字节都没读。同一文件重复传路径是常见恢复习惯，按内容摘要比对放行。
+// TestRunRejectsDifferentSource guards the different-source block (RFC §12.1/§18.2): passing a source file with different
+// content while a workspace is in progress must report an explicit error - ingest runs only when there is no workspace, and without a comparison it would silently continue from the old book's breakpoint,
+// finish publishing the old book without reading a single byte of the new file. Passing the same file path again is a common resume habit and is let through by comparing content digests.
 func TestRunRejectsDifferentSource(t *testing.T) {
 	dir := t.TempDir()
 	st := store.NewStore(dir)
@@ -162,9 +162,9 @@ func TestRunRejectsDifferentSource(t *testing.T) {
 	}
 }
 
-// TestConfirmNotesGate 守护 --yes 的容错门槛：语义容错（Notes 非空）发生过的切分结构
-// 被确定性改写过，不由未看预览的 --yes 盲放行；TUI 预览后按 y（AcceptSegmentation）放行，
-// 确认方法记 user_confirmed 溯源。
+// TestConfirmNotesGate guards the --yes tolerance threshold: a segmentation structure where semantic tolerance (non-empty Notes) occurred
+// was deterministically rewritten and is not blindly let through by --yes, which did not see the preview; pressing y after the TUI preview (AcceptSegmentation) lets it through,
+// and the confirmation method is recorded as user_confirmed for provenance.
 func TestConfirmNotesGate(t *testing.T) {
 	newRunner := func(opts Options, notes []string) *runner {
 		ws := &Workspace{dir: t.TempDir()}
@@ -200,8 +200,8 @@ func TestConfirmNotesGate(t *testing.T) {
 	}
 }
 
-// TestStoryChoiceIgnoresStaleResolution 守护 #5：重新综合后旧故事裁定失效，
-// storyChoice 不得把旧 open/closed 静默套到新 synthesis 上（否则用户不会被重新征询）。
+// TestStoryChoiceIgnoresStaleResolution guards #5: after re-synthesis the old story ruling is invalid,
+// and storyChoice must not silently apply an old open/closed to the new synthesis (otherwise the user would not be asked again).
 func TestStoryChoiceIgnoresStaleResolution(t *testing.T) {
 	ws := OpenWorkspace(t.TempDir())
 	if err := ws.writeJSON(fileIntent, Intent{}); err != nil {
@@ -218,7 +218,7 @@ func TestStoryChoiceIgnoresStaleResolution(t *testing.T) {
 	if got, err := r.storyChoice(); err != nil || got != storyClosed {
 		t.Fatalf("绑定当前 synthesis 的裁定应返回 closed，得 %q", got)
 	}
-	// 重新综合：改写 synthesis → 旧裁定 InputDigest 失配，应被忽略，回到"需重新征询"（返回空）。
+	// Re-synthesis: rewrite synthesis -> the old ruling's InputDigest mismatches and should be ignored, back to "needs to ask again" (returns empty).
 	if err := writeArtifact(ws, fileSynthesis, "d", BookSynthesis{Premise: "p2", StoryStatus: storyUncertain}); err != nil {
 		t.Fatal(err)
 	}
@@ -227,8 +227,8 @@ func TestStoryChoiceIgnoresStaleResolution(t *testing.T) {
 	}
 }
 
-// TestBudgetsFromDepsPerTier 守护档位旋钮（RFC §13.1）：各语义函数预算按各自档位派生，
-// 廉价档位的小窗口只约束它自己的函数，不拖累其它阶段。
+// TestBudgetsFromDepsPerTier guards the tier knob (RFC §13.1): each semantic function's budget is derived from its own tier,
+// and the small window of a cheap tier constrains only its own function and does not drag down other stages.
 func TestBudgetsFromDepsPerTier(t *testing.T) {
 	small := ModelRuntime{ContextTokens: 32000, MaxOutputTokens: 4000}
 	big := ModelRuntime{ContextTokens: 200000, MaxOutputTokens: 16000}
@@ -245,8 +245,8 @@ func TestBudgetsFromDepsPerTier(t *testing.T) {
 	}
 }
 
-// TestRunSavesFailureOnContractViolation 守护 §14.2：原生 Schema 契约违约
-// 必须立即暴露，并把原始响应与元数据落 failures/。
+// TestRunSavesFailureOnContractViolation guards §14.2: a native Schema contract violation
+// must be surfaced immediately, with the raw response and metadata written to failures/.
 func TestRunSavesFailureOnContractViolation(t *testing.T) {
 	dir := t.TempDir()
 	st := store.NewStore(dir)
@@ -284,8 +284,8 @@ func TestRunSavesFailureOnContractViolation(t *testing.T) {
 	}
 }
 
-// TestRunGuidanceResegments 守护 §18.3：恢复时携带 --guide 使旧切分自然失配，
-// 按新指导重新识别并再次停在确认处；新切分 InputDigest 绑定指导文本。
+// TestRunGuidanceResegments guards §18.3: resuming with --guide naturally mismatches the old segmentation,
+// re-identifies under the new guidance and stops at confirmation again; the new segmentation's InputDigest binds the guidance text.
 func TestRunGuidanceResegments(t *testing.T) {
 	dir := t.TempDir()
 	st := store.NewStore(dir)
@@ -307,7 +307,7 @@ func TestRunGuidanceResegments(t *testing.T) {
 		}
 		return awaiting
 	}
-	// 首次交互导入：模型把全书切成 1 章，停在确认。
+	// First interactive import: the model splits the whole book into 1 chapter, stopping at confirmation.
 	one := boundariesJSON(boundaryFixture("L1", "", kindChapter, "第一章"))
 	ch, err := Run(context.Background(), testDeps(st, &mockModel{responses: []string{one}}), Options{SourcePath: src})
 	if err != nil {
@@ -316,7 +316,7 @@ func TestRunGuidanceResegments(t *testing.T) {
 	if !drain(ch) {
 		t.Fatal("首次导入应停在切分确认")
 	}
-	// 带指导恢复：旧切分失配 → 重识别为 2 章，再次停在确认。
+	// Resume with guidance: the old segmentation mismatches -> re-identified as 2 chapters, stopping at confirmation again.
 	two := boundariesJSON(
 		boundaryFixture("L1", "", kindChapter, "第一章"),
 		boundaryFixture("L3", "", kindChapter, "第二章"),
@@ -343,7 +343,7 @@ func TestRunGuidanceResegments(t *testing.T) {
 	}
 }
 
-// TestBudgetsFromRuntime 验证双预算随模型真实容量放大，能力未知时回退保守默认（RFC §9.2/§21）。
+// TestBudgetsFromRuntime verifies the dual budget grows with the model's real capacity and falls back to the conservative defaults when capability is unknown (RFC §9.2/§21).
 func TestBudgetsFromRuntime(t *testing.T) {
 	if got := budgetsFromRuntime(ModelRuntime{}); got != DefaultRunBudgets() {
 		t.Fatal("能力未知应回退保守默认")
@@ -358,9 +358,9 @@ func TestBudgetsFromRuntime(t *testing.T) {
 	}
 }
 
-// TestProfileForKeyPolicy 守护事件合并范围：请求退避（带截止时刻）同 Key 原地跳动；
-// 校验重问是跨调用的语义事件，不带 Key 各自成行——切分逐块调用，共用 Key 会让后块覆盖前块，
-// 面板只剩一条 unit_id 不断变化的行，排查线索全丢；step 是普通进度事件（无警示级别）。
+// TestProfileForKeyPolicy guards the event merge scope: request backoff (with a deadline) ticks in place under the same Key;
+// a validation re-ask is a cross-call semantic event and carries no Key so each gets its own line - segmentation calls chunk by chunk, a shared Key would let a later chunk overwrite an earlier one,
+// leaving the panel a single line whose unit_id keeps changing and losing all troubleshooting clues; step is an ordinary progress event (no warning level).
 func TestProfileForKeyPolicy(t *testing.T) {
 	r := &runner{events: make(chan Event, 3)}
 	prof := r.profileFor(Caller{}, StageSegmenting)
@@ -379,8 +379,8 @@ func TestProfileForKeyPolicy(t *testing.T) {
 	}
 }
 
-// TestCallProfileOptions 验证 callProfile 只负责输出预算与 thinking；response_format
-// 由 callStructured 根据模型事实和 Contract 选择，不能在 Profile 中重复组装。
+// TestCallProfileOptions verifies callProfile is responsible only for the output budget and thinking; response_format
+// is chosen by callStructured from model facts and the Contract and must not be assembled again in the Profile.
 func TestCallProfileOptions(t *testing.T) {
 	if got := (callProfile{}).callOptions(100); len(got) != 1 {
 		t.Fatalf("零值只应带 maxTokens，得 %d 个 option", len(got))

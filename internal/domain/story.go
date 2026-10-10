@@ -5,21 +5,21 @@ import (
 	"strings"
 )
 
-// BookMetadata 是面向读者和出版物的作品信息。
-// 创作设定属于 Foundation，运行进度属于 Progress，二者都不承载这份数据。
+// BookMetadata is the work information aimed at readers and publications.
+// Creative settings belong to Foundation and run progress belongs to Progress; neither carries this data.
 type BookMetadata struct {
 	Title    string `json:"title"`
 	Synopsis string `json:"synopsis"`
 }
 
-// Normalized 返回可持久化、可比较的规范值。
+// Normalized returns the canonical value that is persistable and comparable.
 func (b BookMetadata) Normalized() BookMetadata {
 	b.Title = strings.TrimSpace(b.Title)
 	b.Synopsis = strings.TrimSpace(b.Synopsis)
 	return b
 }
 
-// Validate 检查作品信息的必填字段。
+// Validate checks the required fields of the work information.
 func (b BookMetadata) Validate() error {
 	b = b.Normalized()
 	if b.Title == "" {
@@ -31,7 +31,7 @@ func (b BookMetadata) Validate() error {
 	return nil
 }
 
-// OutlineEntry 大纲条目，对应一章。
+// OutlineEntry is an outline entry, corresponding to one chapter.
 type OutlineEntry struct {
 	Chapter   int      `json:"chapter"`
 	Title     string   `json:"title"`
@@ -40,33 +40,33 @@ type OutlineEntry struct {
 	Scenes    []string `json:"scenes"`
 }
 
-// Character 角色档案。
+// Character is a character profile.
 type Character struct {
 	Name        string   `json:"name"`
-	Aliases     []string `json:"aliases,omitempty"` // 别名/称号/绰号（如"废物少年"、"炎哥"）
+	Aliases     []string `json:"aliases,omitempty"` // Aliases / titles / nicknames (e.g. "the Useless Boy", "Brother Yan")
 	Role        string   `json:"role"`
 	Description string   `json:"description"`
 	Arc         string   `json:"arc"`
 	Traits      []string `json:"traits"`
-	Tier        string   `json:"tier,omitempty"` // core / important / secondary / decorative（默认 important）
+	Tier        string   `json:"tier,omitempty"` // core / important / secondary / decorative (default important)
 }
 
-// VolumeOutline 卷级大纲（长篇分层模式）。
+// VolumeOutline is a volume-level outline (long-form layered mode).
 type VolumeOutline struct {
 	Index int          `json:"index"`
 	Title string       `json:"title"`
-	Theme string       `json:"theme"`           // 本卷核心冲突/主题
-	Final bool         `json:"final,omitempty"` // 收官卷：全书在本卷收束（架构师 append_volume 时宣告）
+	Theme string       `json:"theme"`           // Core conflict / theme of this volume
+	Final bool         `json:"final,omitempty"` // Finale volume: the whole book wraps up in this volume (declared by the Architect at append_volume)
 	Arcs  []ArcOutline `json:"arcs"`
 }
 
-// IsExpanded 判断卷是否已展开（有弧级结构）。
+// IsExpanded reports whether the volume has been expanded (has arc-level structure).
 func (v *VolumeOutline) IsExpanded() bool { return len(v.Arcs) > 0 }
 
-// FinaleVolume 返回已宣告的收官卷序号，未宣告返回 0。
-// 收官事实 = "最后一卷带 Final 标记"：宣告后全书进入收束态（规划收线、终卷结构
-// 写完即完结）；若此后又追加了未标记的新卷，新卷成为最后一卷，收束态自然解除——
-// 因此无需撤销工具，状态永远可从大纲数据推导。
+// FinaleVolume returns the number of the declared finale volume, or 0 if none has been declared.
+// The finale fact = "the last volume carries the Final marker": once declared, the whole book enters the wrap-up state (planning closes threads, and the final volume's structure
+// completes the book as soon as it is written); if an unmarked new volume is appended afterwards, the new volume becomes the last volume and the wrap-up state lifts naturally -
+// so no revoke tool is needed, and the state can always be derived from the outline data.
 func FinaleVolume(volumes []VolumeOutline) int {
 	if n := len(volumes); n > 0 && volumes[n-1].Final {
 		return volumes[n-1].Index
@@ -74,38 +74,38 @@ func FinaleVolume(volumes []VolumeOutline) int {
 	return 0
 }
 
-// StoryCompass 终局方向指南针，替代固定的骨架卷列表。
-// Architect 在每次卷边界时可更新，允许故事方向随创作演化。
+// StoryCompass is the ending-direction compass, replacing the fixed skeleton volume list.
+// The Architect may update it at each volume boundary, allowing the story's direction to evolve as writing proceeds.
 type StoryCompass struct {
-	EndingDirection string   `json:"ending_direction"`          // 终局方向（主题性描述）
-	OpenThreads     []string `json:"open_threads,omitempty"`    // 活跃长线（需收束才能结局）
-	EstimatedScale  string   `json:"estimated_scale,omitempty"` // 模糊规模（如"预计 4-6 卷"）
-	LastUpdated     int      `json:"last_updated,omitempty"`    // 更新时的已完成章节数
+	EndingDirection string   `json:"ending_direction"`          // Ending direction (a thematic description)
+	OpenThreads     []string `json:"open_threads,omitempty"`    // Active long-running threads (must be wrapped up before the ending)
+	EstimatedScale  string   `json:"estimated_scale,omitempty"` // Fuzzy scale (e.g. "expected 4-6 volumes")
+	LastUpdated     int      `json:"last_updated,omitempty"`    // Number of completed chapters at the time of the update
 }
 
-// ArcOutline 弧级大纲。
+// ArcOutline is an arc-level outline.
 type ArcOutline struct {
-	Index             int            `json:"index"` // 卷内弧序号
+	Index             int            `json:"index"` // Arc index within the volume
 	Title             string         `json:"title"`
-	Goal              string         `json:"goal"`                         // 弧目标（起承转合）
-	EstimatedChapters int            `json:"estimated_chapters,omitempty"` // 骨架弧的预估章数（展开后清零）
+	Goal              string         `json:"goal"`                         // Arc goal (setup, development, turn, resolution)
+	EstimatedChapters int            `json:"estimated_chapters,omitempty"` // Estimated chapter count of a skeleton arc (cleared once expanded)
 	Chapters          []OutlineEntry `json:"chapters"`
 }
 
-// IsExpanded 判断弧是否已展开（有详细章节）。
+// IsExpanded reports whether the arc has been expanded (has detailed chapters).
 func (a *ArcOutline) IsExpanded() bool { return len(a.Chapters) > 0 }
 
-// ArcExpansion 是 Architect 在结构边界对一个未写弧作出的完整规划。
-// Title/Goal 不是骨架的机械副本：模型可依据已完成正文修订尚未发生的计划。
+// ArcExpansion is the complete plan the Architect makes at a structure boundary for an arc not yet written.
+// Title/Goal are not mechanical copies of the skeleton: the model may revise plans that have not happened yet based on the content already written.
 type ArcExpansion struct {
 	Title    string         `json:"title"`
 	Goal     string         `json:"goal"`
 	Chapters []OutlineEntry `json:"chapters"`
 }
 
-// EstimatedChapterCapacity 计算分层大纲的内部容量估算：已展开弧按真实章节数，
-// 骨架弧按 EstimatedChapters。它只用于上下文策略，不是全书总章数；真正已细化、
-// 可写的章节始终来自 FlattenOutline，禁止把本值暴露给用户或模型。
+// EstimatedChapterCapacity computes the internal capacity estimate of a layered outline: expanded arcs count by their real chapter count,
+// and skeleton arcs by EstimatedChapters. It is used only for context strategy and is not the book's total chapter count; the chapters that are truly detailed
+// and writable always come from FlattenOutline, and this value must not be exposed to users or models.
 func EstimatedChapterCapacity(volumes []VolumeOutline) int {
 	n := 0
 	for _, v := range volumes {
@@ -120,7 +120,7 @@ func EstimatedChapterCapacity(volumes []VolumeOutline) int {
 	return n
 }
 
-// FlattenOutline 将分层大纲展开为扁平章节列表，保持全局章节号连续。
+// FlattenOutline expands the layered outline into a flat chapter list, keeping global chapter numbers contiguous.
 func FlattenOutline(volumes []VolumeOutline) []OutlineEntry {
 	var result []OutlineEntry
 	ch := 1
@@ -136,20 +136,20 @@ func FlattenOutline(volumes []VolumeOutline) []OutlineEntry {
 	return result
 }
 
-// WorldRule 世界观规则条目。
+// WorldRule is a world-building rule entry.
 type WorldRule struct {
 	Category string `json:"category"` // magic / technology / geography / society / other
-	Rule     string `json:"rule"`     // 规则描述
-	Boundary string `json:"boundary"` // 不可违反的边界
+	Rule     string `json:"rule"`     // Rule description
+	Boundary string `json:"boundary"` // Boundary that must not be violated
 }
 
-// RenumberVolumes 按位置重排卷与弧的序号，从 1 开始。
+// RenumberVolumes renumbers volumes and arcs by position, starting from 1.
 //
-// 规划模型写 index 时并不可靠：常见从 0 起算，甚至给同一卷内每个弧都写 0。
-// 而 ExpandArc / ArcScope 是按 index 值查找的，重复或 0 值会让弧永远无法寻址——
-// 症状要到几步之后 expand_arc 报「参数无效」才浮现，且报错完全指错方向。
+// Planning models are unreliable when writing index: they often count from 0, or even write 0 for every arc within the same volume.
+// ExpandArc / ArcScope look arcs up by index value, so duplicate or 0 values make an arc permanently unaddressable -
+// the symptom only surfaces several steps later when expand_arc reports an "invalid parameters" error, and the error points in completely the wrong direction.
 //
-// 数组顺序才是事实，index 只是它的名字，因此在落盘前统一以位置改写。
+// The array order is the fact and index is merely its name, so indexes are rewritten uniformly by position before being persisted.
 func RenumberVolumes(volumes []VolumeOutline) {
 	for vi := range volumes {
 		volumes[vi].Index = vi + 1
@@ -159,20 +159,20 @@ func RenumberVolumes(volumes []VolumeOutline) {
 	}
 }
 
-// 同一钩子/核心事件重复到此次数即判为大纲空转。2 次可能是有意的两段式，
-// 3 次起没有正当写法：读者被同一个悬念挂三章而无人兑现。
+// Once the same hook / core event repeats this many times it is judged a stalled outline. Twice may be a deliberate two-part structure,
+// but from three times on there is no legitimate way to write it: the reader is left hanging on the same suspense for three chapters and nobody pays it off.
 const (
 	maxHookRepeat      = 3
 	maxCoreEventRepeat = 2
 )
 
-// StalledOutline 检出「原地打转」的大纲：章节标题各异，但钩子或核心事件是同一句
-// 复制多份。此时 Writer 会忠实执行——每章重述上章、再添一点，读起来像改写而非续写。
+// StalledOutline detects an outline that is "spinning in place": the chapter titles differ, but the hook or core event is one sentence
+// copied several times. The Writer then executes faithfully - each chapter restates the previous one and adds a little, reading like a rewrite rather than a continuation.
 //
-// 这类缺陷 Writer 与 Editor 都察觉不到：两者都只看单章，而单章本身自洽。
-// 必须在大纲落盘处按整本比对才拦得住。
+// Neither the Writer nor the Editor can notice this kind of defect: both look at a single chapter, and a single chapter is self-consistent on its own.
+// It can only be caught by comparing the whole book at the point where the outline is persisted.
 //
-// 返回空串表示通过；否则为可直接回给规划师的中文诊断。
+// An empty string means it passed; otherwise it is a diagnostic that can be returned directly to the planner.
 func StalledOutline(entries []OutlineEntry) string {
 	hooks := map[string]int{}
 	events := map[string]int{}
@@ -214,13 +214,13 @@ func truncateRunes(s string, n int) string {
 	return string(r[:n]) + "…"
 }
 
-// SkeletonArcs 统计尚未展开的骨架弧，用于完本前置校验。
+// SkeletonArcs counts the skeleton arcs not yet expanded, for the pre-completion check.
 //
-// 完本校验只比对扁平大纲，而扁平大纲由 FlattenOutline 从「已展开的弧」派生——
-// 骨架弧贡献 0 章，对该校验完全隐形。实测事故：第 1 卷两个骨架弧共 38 章从未展开，
-// 架构师直接跳到第 2 卷写完 15 章后宣告完本，校验因 next(16) > len(flat)(15) 而放行。
+// The completion check compares only the flat outline, and the flat outline is derived by FlattenOutline from the "expanded arcs" -
+// skeleton arcs contribute 0 chapters and are completely invisible to that check. Observed incident: two skeleton arcs of Volume 1 totaling 38 chapters were never expanded,
+// the Architect jumped straight to Volume 2 and declared the book complete after writing 15 chapters, and the check let it through because next(16) > len(flat)(15).
 //
-// 想提前收束仍有正当出口：append_volume 带 "final": true 宣告收官卷。
+// A legitimate exit remains for wrapping up early: append_volume with "final": true declares the finale volume.
 func SkeletonArcs(volumes []VolumeOutline) []string {
 	var out []string
 	for vi := range volumes {
@@ -233,21 +233,21 @@ func SkeletonArcs(volumes []VolumeOutline) []string {
 	return out
 }
 
-// maxArcChapters 是单弧详细章节数的上限。
+// maxArcChapters is the upper limit on the number of detailed chapters in a single arc.
 //
-// 约束来自弧末评审，不是叙事口味：Editor 在弧边界必须读完整弧才能出审阅意见。
-// 实测一弧 20 章 = 113792 字 ≈ 37k token 的正文，叠加大纲/快照/提示后没有任何
-// 可用模型吃得下——本地 32k 窗口装不进，云端免费档在 8 tok/s 下反复断流 14 次，
-// 最终整条流水线卡死在弧边界。8 章 ≈ 45k 字 ≈ 15k token，两侧都留有余量。
+// The constraint comes from the end-of-arc review, not from narrative taste: at an arc boundary the Editor must read the whole arc to give review comments.
+// Measured: one arc of 20 chapters = 113792 characters ≈ 37k tokens of content, which with the outline / snapshots / prompts on top fits no
+// usable model - it does not fit a local 32k window, and the free cloud tier at 8 tok/s broke the stream 14 times in a row,
+// finally freezing the whole pipeline at the arc boundary. 8 chapters ≈ 45k characters ≈ 15k tokens leaves headroom on both sides.
 //
-// 这也是结构上的好事：把 20 章塞进一弧，本身就说明弧目标没有收敛。
+// This is also structurally a good thing: cramming 20 chapters into one arc already shows that the arc's goal has not converged.
 const maxArcChapters = 8
 
-// OversizedArc 检查一个弧的规模是否超限，超限返回可直接回给规划师的诊断。
-// 返回空串表示通过。
+// OversizedArc checks whether an arc's size exceeds the limit; if it does, it returns a diagnostic that can be returned directly to the planner.
+// An empty string means it passed.
 //
-// chapters 取"详细章节数"与"骨架预估章数"的较大者：骨架阶段就写下 estimated=20 的弧，
-// 到 expand_arc 时必然撞上同一道墙，而那已是二十章之后——结构问题要在结构落盘时就报。
+// chapters takes the larger of the "detailed chapter count" and the "skeleton estimated chapter count": an arc that wrote estimated=20 at the skeleton stage
+// will inevitably hit the same wall at expand_arc, and by then twenty chapters have already gone by - structural problems should be reported when the structure is persisted.
 func OversizedArc(label string, chapters int) string {
 	if chapters <= maxArcChapters {
 		return ""

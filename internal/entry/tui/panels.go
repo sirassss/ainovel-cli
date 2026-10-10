@@ -8,7 +8,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/host"
 )
 
-// renderTopBar hiển thị thanh trạng thái trên cùng.
+// renderTopBar renders the top status bar.
 func renderTopBar(snap host.UISnapshot, width int, spinnerFrame, version string) string {
 	bookTitle := snap.BookTitle
 	if bookTitle == "" {

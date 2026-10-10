@@ -2,7 +2,7 @@ package rules
 
 import "testing"
 
-// Văn tiếng Việt sạch: luật cũ bắn 1021 lần trên chương 1 thật. Phải im.
+// Clean Vietnamese prose: the old rule fired 1021 times on real chapter 1. It must stay silent.
 func TestScriptMixingSilentOnCleanVietnamese(t *testing.T) {
 	text := "Giả Mộc cúi xuống bên luống thuốc, ngón tay lần theo sống lá.\n\nHắn biết cây này ưa nắng sớm."
 	for _, v := range appendScriptMixing(nil, text) {
@@ -10,7 +10,7 @@ func TestScriptMixingSilentOnCleanVietnamese(t *testing.T) {
 	}
 }
 
-// Chữ Hán lọt vào văn Việt — đúng lỗi đã thấy trong log: "dùng根系之力 ổn định".
+// A Han character slipped into Vietnamese prose - exactly the error seen in the log.
 func TestScriptMixingCatchesHanLeakInVietnamese(t *testing.T) {
 	text := "Lữ Cầm buộc phải dùng根系之力 để ổn định làng quê trước cơn lũ đang tràn tới."
 	vs := appendScriptMixing(nil, text)
@@ -19,7 +19,7 @@ func TestScriptMixingCatchesHanLeakInVietnamese(t *testing.T) {
 	}
 }
 
-// Văn Trung lẫn tiếng Anh: hành vi cũ phải giữ nguyên.
+// Chinese prose mixed with English: the old behavior must be preserved.
 func TestScriptMixingKeepsChineseBehaviour(t *testing.T) {
 	text := "他在院中练剑，忽然想起那个 pattern 的用法，心神一乱。"
 	vs := appendScriptMixing(nil, text)
@@ -28,7 +28,7 @@ func TestScriptMixingKeepsChineseBehaviour(t *testing.T) {
 	}
 }
 
-// Dấu câu Trung lọt vào văn Việt — DeepSeek tìm ra, luật chỉ bắt chữ Hán đã bỏ sót.
+// Chinese punctuation slipped into Vietnamese prose - found by DeepSeek; the rule that only caught Han characters missed it.
 func TestScriptMixingCatchesCJKPunctuation(t *testing.T) {
 	text := "Hắn muốn được tự mình chứng kiến。Gió thổi qua luống thuốc, lá lay động nhẹ."
 	vs := appendScriptMixing(nil, text)
@@ -37,7 +37,7 @@ func TestScriptMixingCatchesCJKPunctuation(t *testing.T) {
 	}
 }
 
-// Tên riêng bị cắt đôi qua dấu xuống đoạn — nguyên văn từ chương 4.
+// A proper name split in two across a paragraph break - verbatim from chapter 4.
 func TestBrokenWordCatchesSplitName(t *testing.T) {
 	text := "Hắn bước ra khỏi Thanh Vân Tông, Ng\n\nọc Lâm dừng bước.\n\nTrước mặt là vực sâu."
 	vs := appendBrokenWords(nil, text)

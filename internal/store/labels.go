@@ -1,11 +1,11 @@
 package store
 
-// mdLabels 是派生 Markdown 视图里的固定标签。
+// mdLabels are the fixed labels in the derived Markdown views.
 //
-// 这些 .md 会被 novel_context 读回模型上下文，因此标签语种不只是显示问题：
-// 越南语正文里每章顶着「第 N 章」「核心事件」，等于持续暗示模型当前是中文语境，
-// 实测导致正文夹带汉字（quan sát草木 / Bạo虐 / 顿号）。标签跟随作品语种，
-// 才不会和模型的输出语种互相拉扯。
+// These .md files are read back into the model context by novel_context, so the label language is not just a display issue:
+// a Vietnamese manuscript whose every chapter carries the Chinese labels 「第 N 章」「核心事件」 (han:keep) constantly hints that the current context is Chinese,
+// and in testing this led to Han characters leaking into the prose (quan sát草木 / Bạo虐 / 顿号). Labels follow the work language,
+// so they do not pull against the model's output language.
 type mdLabels struct {
 	bookTitleFmt string
 	synopsis     string
@@ -41,31 +41,31 @@ type mdLabels struct {
 }
 
 var labelsZH = mdLabels{
-	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
+	// Markdown label table of zh mode (labelsZH). han:keep
 	bookTitleFmt: "《%s》", synopsis: "简介", charProfiles: "角色档案", charArc: "角色弧线", traits: "特征",
-	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
+	// Markdown label table of zh mode (labelsZH). han:keep
 	listSep: "、", openParen: "（", closeParen: "）", colon: "：",
 
-	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
+	// Markdown label table of zh mode (labelsZH). han:keep
 	outline: "大纲", layeredOutline: "分层大纲",
-	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
+	// Markdown label table of zh mode (labelsZH). han:keep
 	volumeFmt: "第 %d 卷", arcFmt: "第 %d 弧", chapterFmt: "第 %d 章",
-	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
+	// Markdown label table of zh mode (labelsZH). han:keep
 	theme: "主题", goal: "目标", pendingArcFmt: "（待展开，预估 %d 章）",
-	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
+	// Markdown label table of zh mode (labelsZH). han:keep
 	coreEvent: "核心事件", hook: "钩子", scenes: "场景",
 
-	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
+	// Markdown label table of zh mode (labelsZH). han:keep
 	timeline: "时间线", foreshadow: "伏笔账本",
-	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
+	// Markdown label table of zh mode (labelsZH). han:keep
 	resolvedAtFmt: "已回收（第 %d 章）", plantedAtFmt: "埋设于第 %d 章，状态：%s",
-	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
+	// Markdown label table of zh mode (labelsZH). han:keep
 	relationships: "人物关系", atChapterFmt: "（第 %d 章）",
-	// han:keep bảng nhãn Markdown của chế độ zh (labelsZH)
+	// Markdown label table of zh mode (labelsZH). han:keep
 	worldRules: "世界观规则", rule: "规则", boundary: "边界",
 }
 
-// labelsVI 用项目既定译名：tập / cung / chương / dàn ý / hook / chi tiết gài trước。
+// labelsVI uses the project's established Vietnamese terms: tập (volume) / cung (arc) / chương (chapter) / dàn ý (outline) / hook / chi tiết gài trước (foreshadowing detail). han:keep
 var labelsVI = mdLabels{
 	bookTitleFmt: "%s", synopsis: "Giới thiệu", charProfiles: "Hồ sơ nhân vật", charArc: "Cung nhân vật",
 	traits: "Đặc điểm", listSep: ", ", openParen: " (", closeParen: ")", colon: ": ",

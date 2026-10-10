@@ -11,11 +11,11 @@ import (
 	"time"
 )
 
-// DecisionStore 审计运行时的 LLM 语义裁定(meta/decisions.jsonl,append-only)。
+// DecisionStore audits the runtime's LLM semantic rulings (meta/decisions.jsonl, append-only).
 //
-// 定位(docs/engine-arbiter.md §4.3):审计与离线重放的数据源——记录"当时看到什么
-// 事实、做了什么裁定",供 eval 回归与未来 Arbiter 的 A/B 对照。它**不是**事件溯源,
-// 也**不是**恢复数据源(恢复只依赖 Progress/Checkpoint/RunMeta 等事实层)。
+// Purpose (docs/engine-arbiter.md §4.3): the data source for auditing and offline replay — it records "which facts were seen
+// and what ruling was made at the time", for eval regression and future A/B comparison of the Arbiter. It is **not** event sourcing,
+// and it is **not** a recovery data source either (recovery depends only on the fact layer: Progress/Checkpoint/RunMeta, etc.).
 type DecisionStore struct{ io *IO }
 
 func NewDecisionStore(io *IO) *DecisionStore { return &DecisionStore{io: io} }
@@ -23,31 +23,31 @@ func NewDecisionStore(io *IO) *DecisionStore { return &DecisionStore{io: io} }
 const (
 	decisionSchemaVersion = 1
 	decisionsFile         = "meta/decisions.jsonl"
-	// maxDecisionInputBytes 单条 input 上限;超限截断并标记,防止长粘贴撑爆审计文件。
+	// maxDecisionInputBytes is the per-record input limit; anything over it is truncated and flagged, so a long paste cannot blow up the audit file.
 	maxDecisionInputBytes = 8 << 10
 )
 
-// DecisionRecord 一次语义裁定的审计记录。facts 只存结构化事实与引用,不复制正文。
-// input 保留在记录内(离线重放必需);脱敏发生在 diag export 边界,不在落盘时。
+// DecisionRecord is the audit record of one semantic ruling. facts holds only structured facts and references, never a copy of the prose.
+// input is kept inside the record (required for offline replay); redaction happens at the diag export boundary, not when writing to disk.
 type DecisionRecord struct {
 	SchemaVersion  int             `json:"schema_version"`
 	ID             string          `json:"id"`
 	At             string          `json:"at"`
 	Kind           string          `json:"kind"`    // intervention | plan_start | volume_end | ...
-	Decider        string          `json:"decider"` // arbiter | architect（卷末评审）
+	Decider        string          `json:"decider"` // arbiter | architect (end-of-volume review)
 	CheckpointSeq  int64           `json:"checkpoint_seq,omitempty"`
 	Input          string          `json:"input,omitempty"`
 	InputTruncated bool            `json:"input_truncated,omitempty"`
 	Facts          json.RawMessage `json:"facts,omitempty"`
 	Decision       json.RawMessage `json:"decision,omitempty"`
 	Reason         string          `json:"reason,omitempty"`
-	Error          string          `json:"error,omitempty"` // 裁定失败时的错误文本——失败也是审计事实,没有它排障只能靠推理
+	Error          string          `json:"error,omitempty"` // Error text when the ruling fails — a failure is also an audit fact; without it, troubleshooting can only rely on guesswork
 	Model          string          `json:"model,omitempty"`
 	DurationMs     int64           `json:"duration_ms,omitempty"`
 }
 
-// Append 落盘一条裁定记录;SchemaVersion/At/ID 由本方法补齐,input 超限截断。
-// 返回补齐后的记录(ID 供调用方关联,如 PlanStartRecord.DecisionID)。
+// Append writes one ruling record to disk; SchemaVersion/At/ID are filled in by this method, and input is truncated if over the limit.
+// Returns the completed record (the ID lets callers correlate, e.g. PlanStartRecord.DecisionID).
 func (s *DecisionStore) Append(rec DecisionRecord) (DecisionRecord, error) {
 	rec.SchemaVersion = decisionSchemaVersion
 	if rec.At == "" {
@@ -66,8 +66,8 @@ func (s *DecisionStore) Append(rec DecisionRecord) (DecisionRecord, error) {
 	}
 	s.io.mu.Lock()
 	defer s.io.mu.Unlock()
-	// 上一次追加可能在换行写入前崩溃。先删除协议上可证明未提交的尾部，避免把新 JSON
-	// 直接拼到残行后面；完整换行记录绝不自动修改。
+	// The previous append may have crashed before the newline was written. First remove the tail that the protocol can prove is uncommitted, to avoid concatenating the new JSON
+	// directly onto a partial line; a complete newline-terminated record is never modified automatically.
 	if _, err := s.committedDataUnlocked(); err != nil {
 		return rec, fmt.Errorf("repair decision tail: %w", err)
 	}
@@ -77,11 +77,11 @@ func (s *DecisionStore) Append(rec DecisionRecord) (DecisionRecord, error) {
 	return rec, nil
 }
 
-// Recent 返回最近 n 条记录(旧→新);文件缺失返回空。
+// Recent returns the most recent n records (old to new); returns empty if the file is missing.
 //
-// 已提交损坏行必须显式返回错误——Arbiter 不能在缺失部分历史的事实包上继续裁定。
-// 崩溃打断的尾部残行（末字节非 '\n'）由 committedDataUnlocked 截断并显式告警；这不是
-// 猜测式修复，因为本文件协议规定只有换行结束的记录才算提交。
+// A committed corrupt line must be returned as an explicit error — the Arbiter must not keep ruling on a fact pack with part of the history missing.
+// A partial tail line interrupted by a crash (last byte not '\n') is truncated by committedDataUnlocked with an explicit warning; this is not
+// guess-based repair, because the protocol of this file states that only newline-terminated records count as committed.
 func (s *DecisionStore) Recent(n int) ([]DecisionRecord, error) {
 	s.io.mu.Lock()
 	defer s.io.mu.Unlock()
@@ -99,8 +99,8 @@ func (s *DecisionStore) Recent(n int) ([]DecisionRecord, error) {
 	return all, nil
 }
 
-// committedDataUnlocked 返回完整换行记录，并把换行之后的残留字节从磁盘截断。调用方
-// 必须持有 io.mu 写锁。截断是幂等的，失败时原文件保留，错误明确上抛。
+// committedDataUnlocked returns the complete newline-terminated records and truncates the leftover bytes after the last newline from disk. The caller
+// must hold the io.mu write lock. Truncation is idempotent; on failure the original file is kept and the error is propagated explicitly.
 func (s *DecisionStore) committedDataUnlocked() ([]byte, error) {
 	data, err := s.io.ReadFileUnlocked(decisionsFile)
 	if os.IsNotExist(err) {

@@ -10,17 +10,17 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// ChapterCommitter 是发布章节所需的最小接口，由 tools.CommitChapterTool 满足。
-// 复用其 PendingCommit saga、checkpoint 与完成章节幂等检查，不复制第二套提交逻辑（RFC §12.3）。
+// ChapterCommitter is the minimal interface needed to publish chapters, satisfied by tools.CommitChapterTool.
+// It reuses the PendingCommit saga, checkpoint and completed-chapter idempotency check, without duplicating a second commit logic (RFC §12.3).
 type ChapterCommitter interface {
 	Execute(ctx context.Context, args json.RawMessage) (json.RawMessage, error)
 }
 
-// publishFoundation 按正式依赖顺序发布 Foundation，与 Architect 长篇落盘顺序一致（RFC §12.2）。
-// 重复发布相同内容是幂等的（Store 覆盖同内容 + checkpoint 去重）。
+// publishFoundation publishes the Foundation in the formal dependency order, consistent with the Architect's long-form persistence order (RFC §12.2).
+// Publishing identical content again is idempotent (Store overwrite of identical content + checkpoint dedup).
 func publishFoundation(st *store.Store, f *Foundation) error {
-	// 发布前冲突对账：已存在且不同的正式工件拒绝覆盖（§12.2 / 不变量 6）。
-	// 相同内容按幂等继续写（Store 覆盖同内容 + checkpoint 去重）。
+	// Pre-publish conflict reconciliation: an existing formal artifact that differs is refused overwrite (§12.2 / invariant 6).
+	// Identical content continues to be written idempotently (Store overwrite of identical content + checkpoint dedup).
 	if err := checkFoundationConflicts(st, f); err != nil {
 		return err
 	}
@@ -57,12 +57,12 @@ func publishFoundation(st *store.Store, f *Foundation) error {
 	if _, err := st.Checkpoints.AppendArtifact(domain.GlobalScope(), "world_rules", "world_rules.json"); err != nil {
 		return fmt.Errorf("checkpoint world_rules: %w", err)
 	}
-	// layered outline 是唯一来源，Store 同步重建 flat outline。
+	// The layered outline is the only source; the Store rebuilds the flat outline in sync.
 	if err := st.Outline.SaveLayeredOutline(f.Volumes); err != nil {
 		return fmt.Errorf("layered outline: %w", err)
 	}
-	// 大纲阶段的进度是引擎重算路由的依据（章节容量/分层/当前卷弧），写入失败会留下不一致的
-	// 已发布状态，必须暴露而非吞掉（RFC §12.2）。
+	// Outline-stage progress is what the engine uses to recompute routing (chapter capacity / layering / current volume and arc); a failed write would leave an inconsistent
+	// published state, which must be surfaced rather than swallowed (RFC §12.2).
 	if err := st.Progress.UpdatePhase(domain.PhaseOutline); err != nil {
 		return fmt.Errorf("phase outline: %w", err)
 	}
@@ -87,9 +87,9 @@ func publishFoundation(st *store.Store, f *Foundation) error {
 	if _, err := st.Checkpoints.AppendArtifact(domain.GlobalScope(), "compass", "meta/compass.json"); err != nil {
 		return fmt.Errorf("checkpoint compass: %w", err)
 	}
-	// 导入 Foundation 的全部正式写入均已成功，可以显式进入 writing。
-	// 不能复用普通创作流程的 FoundationMissing：导入允许 world_rules 为空，
-	// 把“合法空值”当成缺失会令进度永远停在 outline，随后 StartChapter 被阶段门禁拒绝。
+	// All formal writes of the imported Foundation succeeded, so it may explicitly enter writing.
+	// FoundationMissing of the ordinary creation flow cannot be reused: an import allows world_rules to be empty,
+	// and treating a "legitimately empty value" as missing would leave progress stuck at outline forever, after which StartChapter is rejected by the phase gate.
 	p, err := st.Progress.Load()
 	if err != nil {
 		return fmt.Errorf("load progress: %w", err)
@@ -105,11 +105,11 @@ func publishFoundation(st *store.Store, f *Foundation) error {
 	return nil
 }
 
-// checkFoundationConflicts 校验待发布 Foundation 与既有正式工件的一致性：
-// 既有为空视为首次发布；相同视为幂等；不同则报冲突不覆盖（RFC §12.2 / 不变量 6）。
-// compass 与扁平大纲由分层大纲派生，分层一致即派生一致，故不单独检查派生工件。
-// 读错误不得吞成"文件不存在"：store 加载器对缺失返回 (零值, nil)，故任何非 nil 都是真实错误
-// （损坏/权限/JSON 非法），若当作空值继续会覆盖无法读取的正式工件（RFC §12.2）。
+// checkFoundationConflicts verifies the Foundation to be published against existing formal artifacts for consistency:
+// existing empty counts as a first publish; identical counts as idempotent; different reports a conflict and does not overwrite (RFC §12.2 / invariant 6).
+// The compass and the flat outline are derived from the layered outline; if the layering is consistent the derivation is consistent, so derived artifacts are not checked separately.
+// A read error must not be swallowed into "file does not exist": the store loader returns (zero value, nil) for a missing file, so any non-nil is a real error
+// (corrupt / permission / invalid JSON); continuing as if it were empty would overwrite a formal artifact that cannot be read (RFC §12.2).
 func checkFoundationConflicts(st *store.Store, f *Foundation) error {
 	wantBook := f.Book.Normalized()
 	book, err := st.Book.Load()
@@ -150,24 +150,24 @@ func checkFoundationConflicts(st *store.Store, f *Foundation) error {
 	return nil
 }
 
-// jsonEqual 按规范化 JSON 字节比较两个值是否等价。
+// jsonEqual compares two values for equivalence by their normalized JSON bytes.
 func jsonEqual(a, b any) bool {
 	ab, _ := json.Marshal(a)
 	bb, _ := json.Marshal(b)
 	return bytes.Equal(ab, bb)
 }
 
-// publishChapter 复用 commit_chapter 发布单章；已完成章节由其幂等检查跳过（RFC §12.3）。
+// publishChapter reuses commit_chapter to publish a single chapter; completed chapters are skipped by its idempotency check (RFC §12.3).
 func publishChapter(ctx context.Context, st *store.Store, commit ChapterCommitter, chapter int, content string, f ImportedChapterFacts) error {
 	completed, err := st.Progress.IsChapterCompleted(chapter)
 	if err != nil {
 		return fmt.Errorf("load progress ch%d: %w", chapter, err)
 	}
 	if completed {
-		// 崩溃可能落在 MarkChapterComplete 与 ClearPendingCommit 之间：pending_commit 残留
-		// 指向本章。直接跳过会绕开 commit 工具专为此窗口准备的清理分支（补 checkpoint+清残留），
-		// 下一章 Execute 将以「存在未恢复的章节提交」拒绝，导入每次重跑都死在同一处且
-		// 需手工删 meta/pending_commit.json 才能解锁。命中残留时仍走工具幂等路径完成清理。
+		// A crash may land between MarkChapterComplete and ClearPendingCommit: a leftover pending_commit
+		// points at this chapter. Skipping directly would bypass the cleanup branch the commit tool prepared for exactly this window (backfill checkpoint + clear the leftover),
+		// and the next chapter's Execute would reject with "an unrecovered chapter commit exists"; every rerun of the import would die at the same place and
+		// meta/pending_commit.json would have to be deleted by hand to unblock it. When a leftover is hit, still take the tool's idempotent path to finish the cleanup.
 		pending, err := st.Signals.LoadPendingCommit()
 		if err != nil {
 			return fmt.Errorf("load pending commit ch%d: %w", chapter, err)
@@ -199,11 +199,11 @@ func publishChapter(ctx context.Context, st *store.Store, commit ChapterCommitte
 	return nil
 }
 
-// commitArgs 把逐章事实映射为 commit_chapter 入参。
+// commitArgs maps per-chapter facts to commit_chapter arguments.
 func commitArgs(chapter int, f ImportedChapterFacts) map[string]any {
 	keyEvents := f.KeyEvents
 	if len(keyEvents) == 0 {
-		keyEvents = []string{f.CoreEvent} // core_event 已校验非空
+		keyEvents = []string{f.CoreEvent} // core_event already validated non-empty
 	}
 	args := map[string]any{
 		"chapter":         chapter,
@@ -229,10 +229,10 @@ func commitArgs(chapter int, f ImportedChapterFacts) map[string]any {
 	return args
 }
 
-// isPublished 判断正式状态是否已反映完整导入：Foundation 已落盘且已完成章节达到预期。
-// 只对账导入真正产出的工件——book、premise、覆盖全章的扁平大纲、完成章节——而不复用
-// FoundationMissing()：后者是普通创作流程的“可写作”门禁，会把合法为空的 world_rules
-// 误判为未完成，导致发布对账永不收敛（RFC §12.3）。
+// isPublished decides whether the formal state already reflects a complete import: the Foundation is persisted and the completed chapters reach the expectation.
+// It reconciles only the artifacts the import actually produces - book, premise, a flat outline covering all chapters, completed chapters - and does not reuse
+// FoundationMissing(): the latter is the ordinary creation flow's "ready to write" gate, which would
+// misjudge a legitimately empty world_rules as incomplete, so publish reconciliation would never converge (RFC §12.3).
 func isPublished(st *store.Store, expected int) (bool, error) {
 	if expected == 0 {
 		return false, nil

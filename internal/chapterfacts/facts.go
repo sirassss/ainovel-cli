@@ -9,7 +9,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/llmcontract"
 )
 
-// Properties 返回完整章节事实共用的 JSON Schema 字段。
+// Properties returns the JSON Schema fields shared by complete chapter facts.
 func Properties(includeFeedback bool) []schema.Prop {
 	textList := func(description string) map[string]any {
 		return schema.Array(description, schema.String(description))
@@ -63,7 +63,7 @@ func Properties(includeFeedback bool) []schema.Prop {
 	return props
 }
 
-// Validate 校验普通提交与人工修订共用的确定性约束。
+// Validate checks the deterministic constraints shared by normal commits and manual revisions.
 func Validate(facts domain.ChapterFacts) error {
 	if strings.TrimSpace(facts.Title) == "" {
 		return fmt.Errorf("title is required")
@@ -148,9 +148,9 @@ func validateTextItems(name string, items []string) error {
 	return nil
 }
 
-// placeholderForeshadowIDs 是模型常写进 id 字段的占位词。它们本身没有标识作用，
-// 而伏笔 id 必须跨章稳定——实测模型把每条新伏笔都命名为 "new"，第二条起就撞上
-// 第一条，被静默丢弃：22 章里 plant 了 6 次，最终只入账 2 条。
+// placeholderForeshadowIDs are placeholder words models often write into the id field. They carry no identity,
+// while a foreshadowing id must be stable across chapters - in practice the model named every new foreshadowing "new", and from the second one on it collided with
+// the first and was silently dropped: 22 chapters planted 6 times, yet only 2 were recorded.
 var placeholderForeshadowIDs = map[string]struct{}{
 	"new": {}, "none": {}, "null": {}, "nil": {}, "tbd": {}, "todo": {},
 	"auto": {}, "id": {}, "-": {}, "n/a": {}, "na": {}, "unknown": {}, "?": {},

@@ -7,10 +7,10 @@ import (
 	storepkg "github.com/voocel/ainovel-cli/internal/store"
 )
 
-// LoadState 从 Store 读取 Route 所需的全部事实。
-// 这是路由的"IO 边界"：所有读取集中在这里，Route 保持纯。
-// 任何读取失败都返回错误；损坏的工件与“尚未生成”是两种不同事实，Router 不得
-// 在不完整快照上继续派单。
+// LoadState reads from the Store all the facts that Route needs.
+// This is the routing "IO boundary": all reads are concentrated here so that Route stays pure.
+// Any read failure returns an error; a corrupted artifact and "not generated yet" are two different facts, and the Router must not
+// keep dispatching on an incomplete snapshot.
 func LoadState(store *storepkg.Store) (State, error) {
 	var s State
 	missing, err := store.FoundationMissing()
@@ -18,8 +18,8 @@ func LoadState(store *storepkg.Store) (State, error) {
 		return s, fmt.Errorf("load foundation state: %w", err)
 	}
 	s.FoundationMissing = missing
-	// 规划级别:save_foundation 落 scale 时写入 RunMeta,补齐分支据此推导规划师。
-	// 读失败按未知处理(tier 空 → 补齐交 LLM 裁定),与其余事实的保守默认一致。
+	// Planning tier: save_foundation writes it into RunMeta when it persists scale; the completion branch derives the planner from it.
+	// A read failure is treated as unknown (empty tier -> completion is left to the LLM to adjudicate), consistent with the conservative defaults of the other facts.
 	meta, err := store.RunMeta.Load()
 	if err != nil {
 		return s, fmt.Errorf("load run meta: %w", err)
@@ -47,8 +47,8 @@ func LoadState(store *storepkg.Store) (State, error) {
 
 	s.LastCompleted = progress.LatestCompleted()
 
-	// 返工队首若还没有 chapter_contract，先让规划师补一份再派 writer。
-	// 读失败按"已有指令"处理：这是引导性分支，不能让一次读盘失败卡住返工。
+	// If the head of the rewrite queue still has no chapter_contract, let the planner add one first and then dispatch the writer.
+	// A read failure is treated as "instruction already present": this is a guidance branch and must not let one failed disk read stall the rewrite.
 	if len(progress.PendingRewrites) > 0 {
 		head := progress.PendingRewrites[0]
 		plan, err := store.Drafts.LoadChapterPlan(head)
@@ -57,7 +57,7 @@ func LoadState(store *storepkg.Store) (State, error) {
 		}
 	}
 
-	// 弧边界仅在分层模式且有已完成章节时才计算
+	// The arc boundary is computed only in layered mode when there are completed chapters
 	if progress.Layered && s.LastCompleted > 0 {
 		boundaries, err := store.Outline.CompletedArcBoundaries(s.LastCompleted)
 		if err != nil {
@@ -118,7 +118,7 @@ func LoadState(store *storepkg.Store) (State, error) {
 		}
 	}
 
-	// 非分层全局审阅事实:仅在触发点读盘(其余组合 Route 不消费该字段)。
+	// Non-layered global review fact: read from disk only at the trigger point (in other combinations Route does not consume this field).
 	if !progress.Layered && s.LastCompleted > 0 {
 		for completed := domain.ReviewInterval; completed <= len(progress.CompletedChapters); completed += domain.ReviewInterval {
 			chapter := progress.CompletedChapters[completed-1]

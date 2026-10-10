@@ -9,11 +9,11 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// ChapterAdvanceGate 是 Host 唯一的创作前进政策组件：
-//   - AdvanceHold：执行本次干预签署的一次性暂停；
-//   - review permit：阻止未获许可的正向新章。
+// ChapterAdvanceGate is the Host's only creative-advance policy component:
+//   - AdvanceHold: executes the one-shot pause signed off by this intervention;
+//   - review permit: blocks forward new chapters that have not been permitted.
 //
-// 它不参与 Route，不解释 Task/Reason，也不做文学判断。
+// It does not take part in Route, does not interpret Task/Reason, and makes no literary judgment.
 type ChapterAdvanceGate struct {
 	store  *store.Store
 	pause  func(reason string)
@@ -24,8 +24,8 @@ func NewChapterAdvanceGate(s *store.Store, pause func(reason string), report fun
 	return &ChapterAdvanceGate{store: s, pause: pause, report: report}
 }
 
-// HandleBoundary 消费命中的 hold，并对账章节许可。返回 true 表示 Engine 必须停止。
-// auto 且无 hold 时只读一次 RunMeta，不触碰 Progress/PendingCommit/checkpoint。
+// HandleBoundary consumes a matching hold and reconciles chapter permits. Returning true means the Engine must stop.
+// In auto mode with no hold it reads RunMeta once and does not touch Progress/PendingCommit/checkpoint.
 func (g *ChapterAdvanceGate) HandleBoundary() bool {
 	if g == nil || g.store == nil {
 		return false
@@ -48,7 +48,7 @@ func (g *ChapterAdvanceGate) HandleBoundary() bool {
 		if g.handleHold(*meta.AdvanceHold) {
 			return true
 		}
-		// handleHold 可能消费完本 hold；继续对账 permit。
+		// handleHold may have consumed this hold; keep reconciling the permit.
 	}
 	if meta.AdvanceMode == domain.ChapterAdvanceAuto {
 		return false
@@ -158,7 +158,7 @@ func (g *ChapterAdvanceGate) reconcilePermit(permit int) bool {
 	return false
 }
 
-// Allow 在 Worker 派发前执行最终许可检查。
+// Allow performs the final permit check before the Worker is dispatched.
 func (g *ChapterAdvanceGate) Allow(inst *flow.Instruction) (bool, error) {
 	if g == nil || g.store == nil {
 		return true, nil

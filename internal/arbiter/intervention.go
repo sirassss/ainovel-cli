@@ -12,9 +12,9 @@ import (
 	storepkg "github.com/voocel/ainovel-cli/internal/store"
 )
 
-// InterventionFacts 干预分诊的事实包(Collect 时刻快照)。
-// Engine 在边界执行 Dispatch 前用 Phase/QueueHead 做对账(咨询与执行之间隔着
-// worker 运行,事实可能已推进;不符 → 丢弃并以新事实重询)。
+// InterventionFacts is the fact pack for intervention triage (a snapshot at Collect time).
+// Before executing a Dispatch at a boundary, the Engine reconciles using Phase/QueueHead (a worker run sits between
+// the consultation and the execution, so the facts may have advanced; on mismatch → discard and re-consult with fresh facts).
 type InterventionFacts struct {
 	Phase                    string           `json:"phase,omitempty"`
 	Flow                     string           `json:"flow,omitempty"`
@@ -24,7 +24,7 @@ type InterventionFacts struct {
 	DynamicPlanning          bool             `json:"dynamic_planning"`
 	NextChapter              int              `json:"next_chapter,omitempty"`
 	PendingRewrites          []int            `json:"pending_rewrites,omitempty"`
-	ReopenCount              int              `json:"reopen_count,omitempty"` // 用户显式 /reopen 重开完结书的累计次数
+	ReopenCount              int              `json:"reopen_count,omitempty"` // cumulative number of times the user explicitly reopened a finished book with /reopen
 	FoundationMissing        []string         `json:"foundation_missing,omitempty"`
 	PlanningTier             string           `json:"planning_tier,omitempty"`
 	AdvanceMode              string           `json:"advance_mode,omitempty"`
@@ -32,19 +32,19 @@ type InterventionFacts struct {
 	AdvanceHoldAfter         string           `json:"advance_hold_after,omitempty"`
 	AdvanceHoldTargetChapter int              `json:"advance_hold_target_chapter,omitempty"`
 	AdvanceHoldReason        string           `json:"advance_hold_reason,omitempty"`
-	Running                  bool             `json:"running"`                  // 干预到达时是否有 run 在进行
-	CheckpointSeq            int64            `json:"checkpoint_seq,omitempty"` // Collect 时刻最新 checkpoint;Engine 对账用
+	Running                  bool             `json:"running"`                  // whether a run is in progress when the intervention arrives
+	CheckpointSeq            int64            `json:"checkpoint_seq,omitempty"` // latest checkpoint at Collect time; used by the Engine for reconciliation
 	RecentDecisions          []RecentDecision `json:"recent_decisions,omitempty"`
 }
 
-// RecentDecision 是干预记忆:最近几次裁定的摘要,覆盖"上次改的怎么样了"类跨干预引用。
+// RecentDecision is intervention memory: a summary of the last few adjudications, covering cross-intervention references such as "how did the last change turn out".
 type RecentDecision struct {
 	At     string `json:"at"`
 	Input  string `json:"input"`
 	Reason string `json:"reason,omitempty"`
 }
 
-// QueueHead 返回重写队列头(无则 0),Engine 对账用。
+// QueueHead returns the head of the rewrite queue (0 if none); used by the Engine for reconciliation.
 func (f InterventionFacts) QueueHead() int {
 	if len(f.PendingRewrites) > 0 {
 		return f.PendingRewrites[0]
@@ -52,8 +52,8 @@ func (f InterventionFacts) QueueHead() int {
 	return 0
 }
 
-// CollectInterventionFacts 从 store 读齐分诊事实。任何控制事实读取失败都显式
-// 返回错误，禁止 Arbiter 在零值拼成的不完整快照上做语义决策。
+// CollectInterventionFacts reads all triage facts from the store. Any failure to read a control fact explicitly
+// returns an error; the Arbiter is forbidden from making semantic decisions on an incomplete snapshot assembled from zero values.
 func CollectInterventionFacts(st *storepkg.Store) (InterventionFacts, error) {
 	var f InterventionFacts
 	if st == nil {
@@ -125,7 +125,7 @@ func CollectInterventionFacts(st *storepkg.Store) (InterventionFacts, error) {
 	return f, nil
 }
 
-// AdvanceHoldOp 一次性暂停动作：在工作边界、返工排空或目标章节完成后暂停，也可取消。
+// AdvanceHoldOp is a one-shot pause action: pause at a work boundary, after the rewrite queue drains, or when the target chapter completes; it can also be canceled.
 type AdvanceHoldOp struct {
 	Cancel        bool                    `json:"cancel,omitempty"`
 	After         domain.AdvanceHoldAfter `json:"after,omitempty"`
@@ -133,14 +133,14 @@ type AdvanceHoldOp struct {
 	Reason        string                  `json:"reason,omitempty"`
 }
 
-// ReopenOp 完本返工:把全书重开进返工态并把目标章入队(仅 phase=complete 合法)。
+// ReopenOp reopens a finished book for rework: puts the whole book back into the rework state and enqueues the target chapter (legal only when phase=complete).
 type ReopenOp struct {
 	Chapters []int  `json:"chapters"`
 	Reason   string `json:"reason,omitempty"`
 }
 
-// InterventionDecision 干预裁定。动作组合自由,执行顺序由 Engine 固定:
-// answer → rules → hold → reopen → dispatch;至多一个 dispatch(类型事实)。
+// InterventionDecision is the intervention adjudication. Actions may be combined freely, and the Engine fixes the execution order:
+// answer → rules → hold → reopen → dispatch; at most one dispatch (a type-level fact).
 type InterventionDecision struct {
 	Answer   string         `json:"answer,omitempty"`
 	Rules    string         `json:"rules,omitempty"`
@@ -171,7 +171,7 @@ var interventionContract = llmcontract.Contract{
 	),
 }
 
-// ValidateAgainst 按事实做机械校验(场景内合法性;类型已排除跨场景动作)。
+// ValidateAgainst performs mechanical validation against the facts (validity within the scenario; the type already excludes cross-scenario actions).
 func (d *InterventionDecision) ValidateAgainst(f InterventionFacts) error {
 	if strings.TrimSpace(d.Reason) == "" {
 		return fmt.Errorf("reason không được để trống")
@@ -221,8 +221,8 @@ func (d *InterventionDecision) ValidateAgainst(f InterventionFacts) error {
 	return nil
 }
 
-// validateDispatchAgainst 把提示词中的阶段纪律落实为机械防线。Architect 可在规划期
-// 与写作期维护结构；Writer/Editor 只能消费已经完整且进入 writing 的作品事实。
+// validateDispatchAgainst turns the phase discipline in the prompt into a mechanical safeguard. The Architect may maintain structure during both the planning phase
+// and the writing phase; the Writer/Editor may only consume work facts that are already complete and have entered writing.
 func validateDispatchAgainst(dispatch *DispatchOp, phase string) error {
 	if dispatch == nil {
 		return nil
@@ -242,8 +242,8 @@ func validateDispatchAgainst(dispatch *DispatchOp, phase string) error {
 	return nil
 }
 
-// DecideIntervention 干预分诊。失败语义:返回 error → 调用方显式回显
-// 真实失败原因,且不产生任何写入(宁可不动,不可误动)。
+// DecideIntervention performs intervention triage. Failure semantics: returning an error → the caller explicitly echoes
+// the real failure reason, and no writes occur (better to do nothing than to act wrongly).
 func DecideIntervention(ctx context.Context, model agentcore.ChatModel, systemPrompt string, facts InterventionFacts, text string) (InterventionDecision, error) {
 	payload, err := marshalPayload(struct {
 		Intervention string            `json:"intervention"`

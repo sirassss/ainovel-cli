@@ -1,9 +1,9 @@
 package host
 
-// Bản tiếng Trung của prompt đồng sáng tác, dùng khi language=zh (giữ nguyên bản gốc của upstream).
+// Chinese version of the co-creation prompts, used when language=zh (kept verbatim from upstream).
 
-// 冷启动共创：从零澄清需求，产出整本书的创作指令。
-// han:keep bản zh của prompt đồng sáng tác
+// Cold-start co-creation: clarify requirements from scratch and produce the creative directive for the whole book.
+// han:keep zh version of the co-creation prompt
 const coCreateSystemPromptZH = `你是一个小说共创助手。你的任务不是直接开始写小说，而是通过多轮简短对话帮助用户澄清创作需求，并持续整理出一段可直接交给创作引擎的中文创作指令。
 
 每一轮回复严格按以下 XML 格式输出，包含四个标签，依次出现，每个标签都必须有正确的开闭标签：
@@ -17,9 +17,9 @@ const coCreateSystemPromptZH = `你是一个小说共创助手。你的任务不
 </draft>
 ` + coCreateProtocolTailZH
 
-// 阶段共创：小说已写了一部分，规划"后续阶段"的走向。调用方需把当前故事状态摘要
-// 追加到本 prompt 之后（"## 当前故事状态" 段），让模型在已写内容的基础上规划。
-// han:keep bản zh của prompt đồng sáng tác theo giai đoạn
+// Stage co-creation: part of the novel is already written, and this plans the direction of the "next stage". The caller must append a summary of the current story state
+// to this prompt (the "## 当前故事状态" section), so the model plans on top of what is already written. // han:keep names a zh-mode section heading
+// han:keep zh version of the stage co-creation prompt
 const stageCoCreateSystemPromptZH = `你是一个小说"阶段共创"助手。这本小说已经写了一部分（进度见下方"当前故事状态"）。用户暂停下来，想和你一起规划"后续阶段"的走向，再继续创作。
 
 你的任务不是续写正文，而是通过多轮简短对话帮用户想清楚后面这一段（接下来若干章 / 下一弧 / 下一卷）要往哪走，并持续整理出一段"后续方向 brief"，供创作引擎据此推进。
@@ -37,9 +37,9 @@ const stageCoCreateSystemPromptZH = `你是一个小说"阶段共创"助手。�
 </draft>
 ` + coCreateProtocolTailZH
 
-// coCreateProtocolTail 是两种共创模式共用的输出协议尾部（<ready> / <suggestions> + 输出规范）。
-// 两模式只在开场语境与 <draft> 语义上不同，协议完全一致。
-// han:keep bản zh của phần đuôi giao thức
+// coCreateProtocolTail is the output-protocol tail shared by both co-creation modes (<ready> / <suggestions> + output rules).
+// The two modes differ only in the opening context and the semantics of <draft>; the protocol is identical.
+// han:keep zh version of the protocol tail
 const coCreateProtocolTailZH = `
 <ready>false</ready>
 
@@ -61,4 +61,4 @@ const coCreateProtocolTailZH = `
 - <ready> 只写 true 或 false。信息已足够时填 true。
 - <ready>true</ready> 时 <suggestions> 可以为空（保留空标签 <suggestions></suggestions> 即可）。`
 
-// CoCreateProgressKind 标识流式回调的内容类型。
+// CoCreateProgressKind identifies the content type of a streaming callback.

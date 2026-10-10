@@ -13,7 +13,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// SaveFoundationTool 保存基础设定（premise/outline/characters），Architect 专用。
+// SaveFoundationTool saves the foundation settings (premise/outline/characters); Architect only.
 type SaveFoundationTool struct {
 	store *store.Store
 }
@@ -28,7 +28,7 @@ func (t *SaveFoundationTool) Description() string {
 }
 func (t *SaveFoundationTool) Label() string { return "Lưu thiết lập" }
 
-// 写工具（跨域更新 Outline/Progress/Characters），禁止并发。
+// Write tool (updates Outline/Progress/Characters across domains); concurrency is forbidden.
 func (t *SaveFoundationTool) ReadOnly(_ json.RawMessage) bool        { return false }
 func (t *SaveFoundationTool) ConcurrencySafe(_ json.RawMessage) bool { return false }
 
@@ -71,8 +71,8 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 
 	result := map[string]any{"saved": true, "type": a.Type, "scale": a.Scale}
 
-	// 全量大纲只属于规划期。写作期必须用受保护的增量操作，完结后必须先重开；
-	// 否则会绕过已完成章节保护，破坏 Progress 与章节事实的一致性。
+	// A full outline belongs to the planning phase only. While writing, the protected incremental operations must be used, and after completion the book must be reopened first;
+	// otherwise the protection of completed chapters would be bypassed and the consistency between Progress and chapter facts broken.
 	progress, err := t.store.Progress.Load()
 	if err != nil {
 		return nil, fmt.Errorf("check foundation phase: %w: %w", errs.ErrStoreRead, err)
@@ -95,9 +95,9 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 		}
 	}
 
-	// 卷末三选一（续卷/收官/完结）是全书最重的语义判断，理由必须成为审计事实
-	// （decisions.jsonl，与 plan_start/intervention 同一条流水），否则收官过早/
-	// 续卷失当只能翻会话日志排障。事实快照取判定时刻（变更落盘前）的进度。
+	// The end-of-volume three-way choice (continue volume / finale / complete) is the heaviest semantic judgment of the whole book, and its rationale must become an audit fact
+	// (decisions.jsonl, the same stream as plan_start/intervention); otherwise a premature finale or
+	// a misjudged continuation could only be debugged by digging through session logs. The fact snapshot takes the progress at the moment of the decision (before the change lands).
 	volumeEnd := a.Type == "append_volume" || a.Type == "complete_book"
 	if volumeEnd && strings.TrimSpace(a.Reason) == "" {
 		return nil, fmt.Errorf("%s bắt buộc kèm tham số reason: đối chiếu danh sách kiểm tra kết thúc truyện, một câu nói rõ lần này vì sao viết tiếp tập, tuyên bố tập cuối hay kết thúc truyện: %w", a.Type, errs.ErrToolArgs)
@@ -286,7 +286,7 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 		if vol.Final {
 			result["final_volume"] = true
 		} else if domain.FinaleVolume(prior) > 0 {
-			// 事实回显：此前宣告的收官态因追加普通新卷而解除（新卷成为末卷）
+			// Fact echo: the previously declared finale state is lifted by appending an ordinary new volume (the new volume becomes the last volume)
 			result["finale_released"] = true
 		}
 		result["arcs"] = len(vol.Arcs)
@@ -302,9 +302,9 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 		}
 
 	case "complete_book":
-		// 全书完结的唯一入口：直接推 Phase=Complete。
-		// 仅 Writing 阶段允许，防止规划阶段误调跳过整本写作。
-		// 拒绝有返工队列时调用——保证 PendingRewrites 跑完才能结束。
+		// The only entry point for completing the whole book: push Phase=Complete directly.
+		// Allowed only in the Writing phase, to prevent a mistaken call during planning from skipping the entire writing.
+		// Rejected when called with a rewrite queue pending, guaranteeing PendingRewrites finishes before the book can end.
 		progress, perr := t.store.Progress.Load()
 		if perr != nil {
 			return nil, fmt.Errorf("load progress: %w: %w", errs.ErrStoreRead, perr)
@@ -318,9 +318,9 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 		if len(progress.PendingRewrites) > 0 {
 			return nil, fmt.Errorf("Còn %d chương trong hàng đợi viết lại, xử lý xong rồi mới gọi complete_book: %w", len(progress.PendingRewrites), errs.ErrToolPrecondition)
 		}
-		// 可枚举的完本前置校验必须在代码层(三分法),不能只依赖提示词里的
-		// "完结判定清单"——真实事故:规划刚落盘 phase 翻到 writing,弱模型顺手
-		// 误调 complete_book,0/68 章被直接标记完本。
+		// Enumerable pre-completion checks must live in the code layer (the three-way split), and cannot rely only on
+		// the "completion checklist" in the prompt. Real incident: right after planning landed and phase flipped to writing, a weak model
+		// mistakenly called complete_book, and 0/68 chapters were directly marked complete.
 		if len(progress.CompletedChapters) == 0 {
 			return nil, fmt.Errorf("Chưa viết chương nào thì không thể kết thúc truyện; sau khi lập kế hoạch xong hệ thống tự đẩy phần viết, không cần gọi complete_book: %w", errs.ErrToolPrecondition)
 		}
@@ -333,8 +333,8 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 			if next <= len(outline) {
 				return nil, fmt.Errorf("Dàn ý chi tiết hiện còn chương chưa viết (chương kế %d/hiện đã chi tiết hóa %d), không thể kết thúc truyện; muốn kết sớm hãy dùng append_volume với JSON tập có \"final\": true ở cấp cao nhất để tuyên bố tập cuối: %w", next, len(outline), errs.ErrToolPrecondition)
 			}
-			// 扁平大纲只含已展开的弧，骨架弧对上面的比对完全隐形；不单独拦一次，
-			// 整卷未展开也能宣告完本。
+			// The flat outline contains only expanded arcs, so skeleton arcs are completely invisible to the comparison above; without a separate guard,
+			// a book could be declared complete even with a whole volume unexpanded.
 			volumes, volErr := t.store.Outline.LoadLayeredOutline()
 			if volErr != nil {
 				return nil, fmt.Errorf("load layered outline: %w: %w", errs.ErrStoreRead, volErr)
@@ -347,10 +347,10 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 		} else if progress.TotalChapters > 0 && next <= progress.TotalChapters {
 			return nil, fmt.Errorf("Dàn ý còn chương chưa viết (chương kế %d/tổng %d), không thể kết thúc truyện; muốn kết sớm hãy dùng append_volume với JSON tập có \"final\": true ở cấp cao nhất để tuyên bố tập cuối: %w", next, progress.TotalChapters, errs.ErrToolPrecondition)
 		}
-		// 活跃长线未收束不可完本——OpenThreads 的字段契约即"需收束才能结局"。这不是
-		// 语义复判：真认为已全部收束，先 update_compass 清空 open_threads 再完本，把
-		// "论述里豁免"变成可审计的落盘动作（实测导入完本书续写时，架构师引经据典绕过
-		// 完结清单第 3 条直接完本，用户的续写诉求被完本规则锁死）。
+		// Active long-running threads that are not resolved block completion; the field contract of OpenThreads is "must be resolved before the story can end". This is not a
+		// semantic re-judgment: if the model truly believes everything is resolved, it should first update_compass to clear open_threads and then complete the book, turning an
+		// "exemption in the argument" into an auditable on-disk action (in practice, when continuing an imported finished book, the architect cited chapter and verse to bypass
+		// item 3 of the completion checklist and completed the book directly, locking the user's continuation request behind the completion rule).
 		compass, err := t.store.Outline.LoadCompass()
 		if err != nil {
 			return nil, fmt.Errorf("load compass: %w: %w", errs.ErrStoreRead, err)
@@ -370,8 +370,8 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 		if err := decode("compass", &compass); err != nil {
 			return nil, err
 		}
-		// 工具层强制覆盖 LastUpdated 为当前已完成章节数，不信任 LLM 自填。
-		// LLM 通常忘填或留 0，会让 diag.CompassDrift 误报、Router 路由失真。
+		// The tool layer forcibly overwrites LastUpdated with the current number of completed chapters, and does not trust LLM self-reporting.
+		// The LLM usually forgets to fill it or leaves 0, which would make diag.CompassDrift raise false alarms and distort the Router's routing.
 		p, err := t.store.Progress.Load()
 		if err != nil {
 			return nil, fmt.Errorf("load progress: %w: %w", errs.ErrStoreRead, err)
@@ -407,8 +407,8 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 		t.recordVolumeEndDecision(a.Type, a.Reason, volumeEndFacts, result)
 	}
 
-	// 返回剩余未完成项。初始工件齐全后仍会剩 foundation_audit；只有
-	// audit_foundation 对实际落盘版本给出 ready=true，才允许进入 writing。
+	// Return the remaining unfinished items. Even when the initial artifacts are complete, foundation_audit remains; entering writing is allowed only after
+	// audit_foundation gives ready=true for the version actually on disk.
 	remaining, err := t.store.FoundationMissing()
 	if err != nil {
 		return nil, fmt.Errorf("load foundation state: %w: %w", errs.ErrStoreRead, err)
@@ -440,8 +440,8 @@ func foundationArtifact(t string) string {
 	}
 }
 
-// decodeFoundationJSON 解析 save_foundation 的 content 字段，失败时附上行列位置
-// 和最常见的修复提示，让 LLM 下一次重试能直接定位而不是盲猜。
+// decodeFoundationJSON parses the content field of save_foundation; on failure it attaches the line/column position
+// and the most common fix hint, so the LLM's next retry can pinpoint the problem instead of guessing blindly.
 func decodeFoundationJSON(typeName, content string, out any) error {
 	err := json.Unmarshal([]byte(content), out)
 	if err == nil {
@@ -490,9 +490,9 @@ func normalizeFoundationContent(raw json.RawMessage) (string, error) {
 	return string(raw), nil
 }
 
-// recordVolumeEndDecision 把卷末三选一（续卷/收官/完结）的判定理由落进裁定审计。
-// best-effort：结构变更已落盘，审计失败只告警不回滚——报错会让模型重试已完成
-// 的操作（重复追加卷）。
+// recordVolumeEndDecision writes the rationale of the end-of-volume three-way choice (continue volume / finale / complete) into the arbiter audit.
+// Best-effort: the structural change is already on disk, so an audit failure only warns and does not roll back; reporting an error would make the model retry an
+// already completed operation (appending the volume twice).
 func (t *SaveFoundationTool) recordVolumeEndDecision(action, reason string, facts json.RawMessage, result map[string]any) {
 	decision := map[string]any{"action": action}
 	if v, ok := result["volume"]; ok {
@@ -517,7 +517,7 @@ func (t *SaveFoundationTool) recordVolumeEndDecision(action, reason string, fact
 	}
 }
 
-// consumeWriterFeedback 在结构操作成功后清除已处理的规划反馈。
+// consumeWriterFeedback clears the processed planning feedback after a structural operation succeeds.
 func (t *SaveFoundationTool) consumeWriterFeedback() error {
 	if err := t.store.Outline.ClearOutlineFeedback(); err != nil {
 		return fmt.Errorf("clear outline feedback: %w: %w", errs.ErrStoreWrite, err)
@@ -525,7 +525,7 @@ func (t *SaveFoundationTool) consumeWriterFeedback() error {
 	return nil
 }
 
-// arcPlannedSize 取弧的实际规模：已展开用详细章节数，仍是骨架则用预估章数。
+// arcPlannedSize gets the actual size of an arc: the detailed chapter count if expanded, or the estimated chapter count if it is still a skeleton.
 func arcPlannedSize(arc *domain.ArcOutline) int {
 	if n := len(arc.Chapters); n > 0 {
 		return n

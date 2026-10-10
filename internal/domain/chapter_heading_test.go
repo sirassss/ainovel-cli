@@ -3,7 +3,7 @@ package domain
 import "strings"
 import "testing"
 
-// Bốn dạng đầu chương đã gặp thật trong 15 chương của lần chạy vừa rồi.
+// Four chapter-heading shapes that were really encountered in the 15 chapters of the last run.
 func TestApplyChapterHeadingNormalisesRealCases(t *testing.T) {
 	const title = "Chương 4: Bí Mật Về Linh Thảo"
 	cases := map[string]string{
@@ -23,7 +23,7 @@ func TestApplyChapterHeadingNormalisesRealCases(t *testing.T) {
 	}
 }
 
-// Số chương trong tiêu đề phải theo số thật, không theo trí nhớ của model.
+// The chapter number in a title must follow the real number, not the model's memory.
 func TestFixChapterNumber(t *testing.T) {
 	cases := []struct {
 		in   string
@@ -42,7 +42,7 @@ func TestFixChapterNumber(t *testing.T) {
 	}
 }
 
-// Câu văn mở đầu bằng chữ in đậm không được nuốt nhầm thành tiêu đề.
+// A sentence that opens with bold text must not be swallowed by mistake as a heading.
 func TestApplyChapterHeadingKeepsBoldProse(t *testing.T) {
 	content := "**Không ai** ngờ rằng đêm ấy cả thôn đều thức trắng chờ tin dữ."
 	got := ApplyChapterHeading(content, "Chương 9: Đêm Trắng", 9)

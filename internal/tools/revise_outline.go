@@ -12,7 +12,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// ReviseOutlineTool 让 Architect 用完整替换内容修订尚未发生的大纲尾段。
+// ReviseOutlineTool lets the Architect revise the not-yet-happened tail of the outline with fully replaced content.
 type ReviseOutlineTool struct {
 	store *store.Store
 }

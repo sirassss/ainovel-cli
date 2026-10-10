@@ -2,16 +2,16 @@ package domain
 
 import "time"
 
-// UsageSchemaVersion 是 meta/usage.json 的兼容版本号。
-// 未来若 AgentUsageTotals 字段语义变化，递增此值；UsageStore.Load 见到不同版本应忽略并触发 replay 重建。
+// UsageSchemaVersion is the compatibility version number of meta/usage.json.
+// If the semantics of the AgentUsageTotals fields change in the future, increment this value; when UsageStore.Load sees a different version it should ignore the file and trigger a replay rebuild.
 const UsageSchemaVersion = 2
 
-// UsageState 是累计 token / cost 用量的可持久化快照。
-// 内存中由 UsageTracker 维护，定期 debounce 落盘到 meta/usage.json。
+// UsageState is a persistable snapshot of cumulative token / cost usage.
+// It is maintained in memory by UsageTracker and periodically written to meta/usage.json with a debounce.
 //
-// 注意：UsageTracker 内部的滑动窗 samples（"近 N 次命中率"）**不持久化**——
-// 它只服务 UI 短期诊断，进程重启从空开始重新积累几轮即可恢复语义。
-// MissingAssistantUsage 保留持久化，跨重启累积更有诊断价值。
+// Note: the sliding-window samples inside UsageTracker ("hit rate of the last N calls") are **not persisted** -
+// they serve only short-term UI diagnostics, and after a process restart the semantics recover once a few rounds have accumulated from empty.
+// MissingAssistantUsage stays persisted, since accumulating across restarts has more diagnostic value.
 type UsageState struct {
 	Schema       int                         `json:"schema"`
 	UpdatedAt    time.Time                   `json:"updated_at"`
@@ -21,7 +21,7 @@ type UsageState struct {
 	MissingUsage int                         `json:"missing_assistant_usage"`
 }
 
-// AgentUsageTotals 是单个角色（或 overall）累计计数的可持久化形态。
+// AgentUsageTotals is the persistable form of the cumulative counts for a single role (or overall).
 type AgentUsageTotals struct {
 	Input        int     `json:"input"`
 	Output       int     `json:"output"`
@@ -30,7 +30,7 @@ type AgentUsageTotals struct {
 	Cost         float64 `json:"cost_usd"`
 	Saved        float64 `json:"saved_usd"`
 	CacheCapable bool    `json:"cache_capable"`
-	// CacheBreaks 是 live 检测到的缓存链断裂次数（前缀未缩短而命中骤降）。
-	// 只在实时路径累计，session replay 不重放检测。
+	// CacheBreaks is the number of cache-chain breaks detected live (the prefix did not shrink but the hit rate dropped sharply).
+	// Accumulated only on the live path; session replay does not replay the detection.
 	CacheBreaks int `json:"cache_breaks,omitempty"`
 }

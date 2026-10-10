@@ -18,7 +18,7 @@ func TestCommandInputHighlightsOnlyRegisteredCommands(t *testing.T) {
 	m := Model{textarea: textarea.New()}
 	m.textarea.Focus()
 
-	for _, input := range []string{"/config", "/model writer", "/plan"} { // /plan 是 /cocreate 别名
+	for _, input := range []string{"/config", "/model writer", "/plan"} { // /plan is an alias of /cocreate
 		m.textarea.SetValue(input)
 		m.syncCommandInputHighlight()
 		if m.commandToken == "" {

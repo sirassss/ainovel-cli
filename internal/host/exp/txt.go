@@ -8,7 +8,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/domain"
 )
 
-// chapterTitleIndex 给定章号查标题，缺失返回空串。
+// chapterTitleIndex looks up a title by chapter number; it returns an empty string if missing.
 type chapterTitleIndex map[int]string
 
 func buildTitleIndex(outline []domain.OutlineEntry) chapterTitleIndex {
@@ -21,18 +21,18 @@ func buildTitleIndex(outline []domain.OutlineEntry) chapterTitleIndex {
 	return idx
 }
 
-// chapterLocation 是某章在分层大纲中的归属。只保留导出版式需要的卷信息——
-// 弧不进导出（读者视角下弧是过细的内部结构）。
+// chapterLocation is a chapter's placement in the layered outline. It keeps only the volume info the export layout needs:
+// arcs do not enter the export (from the reader's view an arc is an overly fine internal structure).
 type chapterLocation struct {
 	VolumeIdx       int
 	VolumeTitle     string
 	IsFirstOfVolume bool
 }
 
-// buildLocations 按分层大纲的全局章节顺序构造 {chapter -> location}。
-// 章号按 FlattenOutline 同样的规则重建（卷内弧内顺序累加），
-// 以保持与 Progress.CompletedChapters 的章号一致。弧层仍要遍历（算全局章号必经），
-// 但不落入 location——导出只在卷首插分隔。
+// buildLocations builds {chapter -> location} following the global chapter order of the layered outline.
+// Chapter numbers are rebuilt by the same rule as FlattenOutline (accumulated in order within arcs within volumes),
+// to stay consistent with the chapter numbers in Progress.CompletedChapters. The arc level still has to be traversed (it is required to compute global chapter numbers),
+// but it does not go into location: the export inserts dividers only at the start of a volume.
 func buildLocations(volumes []domain.VolumeOutline) map[int]chapterLocation {
 	if len(volumes) == 0 {
 		return nil
@@ -56,17 +56,17 @@ func buildLocations(volumes []domain.VolumeOutline) map[int]chapterLocation {
 	return locs
 }
 
-// chapterHeaderRe 匹配带章号的 Markdown 标题首行（# 第N章 / ## 第 12 章 ...）。
-var chapterHeaderRe = regexp.MustCompile(`^#+\s+(?:第.+?章|(?i:chương)\s*\d+)`) // han:keep tiêu đề chương zh/vi trong nội dung chương
+// chapterHeaderRe matches the first line of a Markdown heading that carries a chapter number (# 第N章 / ## 第 12 章 ...). // han:keep
+var chapterHeaderRe = regexp.MustCompile(`^#+\s+(?:第.+?章|(?i:chương)\s*\d+)`) // han:keep chapter headings in zh/vi chapter content
 
-// atxTitleRe 提取 ATX 标题（# 标题）的文字部分。
+// atxTitleRe extracts the text part of an ATX heading (# title).
 var atxTitleRe = regexp.MustCompile(`^#{1,6}\s+(.+?)\s*$`)
 
-// stripChapterTitleHeader 若首行是会与导出器统一标题重复的章节标题则剥掉。
-// 两种情形：① "# 第N章 …"（带章号）；② markdown 标题且其文字恰是本章标题
-// （writer 常把纯章节名当标题写进正文首行，如 "# 边村浮生"，与导出器生成的
-// "第 N 章 边村浮生" 重复）。其它 h1（如 "# 序章"）视为正文一部分，保留。
-// 调用方负责先 TrimSpace，因此前导空行不在考虑范围内。
+// stripChapterTitleHeader strips the first line if it is a chapter heading that would duplicate the exporter's unified heading.
+// Two cases: (1) "# 第N章 …" (with a chapter number); (2) a markdown heading whose text is exactly this chapter's title // han:keep
+// (the writer often writes the bare chapter name as a heading on the first body line, such as "# 边村浮生", duplicating the exporter-generated // han:keep
+// "第 N 章 边村浮生"). Other h1s (such as "# 序章") are treated as part of the body and kept. // han:keep examples are zh headings
+// The caller is responsible for TrimSpace first, so leading blank lines are out of consideration.
 func stripChapterTitleHeader(content, title string) string {
 	first, rest, hasNewline := strings.Cut(content, "\n")
 	if !isChapterTitleLine(first, title) {
@@ -89,10 +89,10 @@ func isChapterTitleLine(line, title string) bool {
 	return len(m) == 2 && strings.TrimSpace(m[1]) == title
 }
 
-// renderTXT 拼接最终文本。
+// renderTXT assembles the final text.
 //
-// 章节顺序由 chapters 决定（调用方已按章号升序去重）。bodies/titleIdx/locations
-// 都按"缺失即降级"处理：标题缺失只输出 "第 N 章"；分层定位缺失就当扁平大纲。
+// Chapter order is determined by chapters (the caller has already deduplicated in ascending chapter number). bodies/titleIdx/locations
+// all follow "degrade when missing": a missing title outputs only "第 N 章"; a missing layered location is treated as a flat outline. // han:keep
 func renderTXT(
 	lb labels,
 	novelName string,

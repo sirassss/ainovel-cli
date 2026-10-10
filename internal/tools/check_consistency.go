@@ -11,8 +11,8 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// CheckConsistencyTool 返回章节内容和全部状态数据，供 Agent 自行对照判断。
-// 纯 IO 工具：只负责加载数据，不注入指令。
+// CheckConsistencyTool returns chapter content and all state data for the Agent to cross-check on its own.
+// Pure IO tool: it only loads data and injects no instructions.
 type CheckConsistencyTool struct {
 	store *store.Store
 }
@@ -27,7 +27,7 @@ func (t *CheckConsistencyTool) Description() string {
 }
 func (t *CheckConsistencyTool) Label() string { return "Kiểm tra nhất quán" }
 
-// 只读工具（仅追加 checkpoint 事件，不改状态），可被并发调度。
+// Read-only tool (only appends a checkpoint event, does not change state); may be scheduled concurrently.
 func (t *CheckConsistencyTool) ReadOnly(_ json.RawMessage) bool        { return true }
 func (t *CheckConsistencyTool) ConcurrencySafe(_ json.RawMessage) bool { return true }
 
@@ -56,7 +56,7 @@ func (t *CheckConsistencyTool) Execute(_ context.Context, args json.RawMessage) 
 		}
 	}
 
-	// 章节内容
+	// Chapter content
 	content, wordCount, err := t.store.Drafts.LoadChapterContent(a.Chapter)
 	if err != nil {
 		return nil, fmt.Errorf("load chapter content: %w: %w", errs.ErrStoreRead, err)
@@ -67,7 +67,7 @@ func (t *CheckConsistencyTool) Execute(_ context.Context, args json.RawMessage) 
 	result["content"] = content
 	result["word_count"] = wordCount
 
-	// 对照数据：保留全局性的一致性检查数据，避免重复加载 novel_context 已有的窗口数据
+	// Cross-check data: keep the global consistency-check data and avoid reloading the window data novel_context already has
 	if rules, err := t.store.World.LoadWorldRules(); len(rules) > 0 {
 		result["world_rules"] = rules
 	} else {

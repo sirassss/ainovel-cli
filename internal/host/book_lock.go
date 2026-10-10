@@ -11,11 +11,11 @@ import (
 
 const bookLockFile = ".ainovel.lock"
 
-// ErrBookInUse 表示同一小说目录已被另一个进程占用。
+// ErrBookInUse means the same novel directory is already held by another process.
 var ErrBookInUse = errors.New("Thư mục tiểu thuyết đang bị một tiến trình ainovel-cli khác chiếm giữ")
 
-// bookLease 在 Host 的完整生命周期内持有小说目录的跨进程独占权。
-// 锁文件会保留在目录中；真正的占用状态由操作系统管理，进程异常退出也会自动释放。
+// bookLease holds cross-process exclusive ownership of the novel directory for the Host's whole lifecycle.
+// The lock file stays in the directory; the actual occupancy state is managed by the operating system and is released automatically even if the process exits abnormally.
 type bookLease struct {
 	lock *flock.Flock
 }

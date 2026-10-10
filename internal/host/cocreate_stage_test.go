@@ -10,15 +10,15 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// newFlagTestHost 造一个最小 Host，只够驱动 cocreating 标记状态机与并发守卫。
-// emitEvent 使用非阻塞通道，缓冲 events 即可，无需 observer。
-// PauseForCoCreate 的运行态分支会调 Engine Abort（复用已验证的 Esc 暂停路径），
-// 不在此单测；这里只覆盖非运行态与标记/守卫逻辑。
+// newFlagTestHost builds a minimal Host, just enough to drive the cocreating flag state machine and the concurrency guards.
+// emitEvent uses a non-blocking channel, so buffering events is enough and no observer is needed.
+// The running-state branch of PauseForCoCreate calls Engine Abort (reusing the already verified Esc pause path),
+// which is not unit-tested here; this only covers the non-running state and the flag/guard logic.
 func newFlagTestHost(lc lifecycle, cocreating bool) *Host {
 	return &Host{
 		lifecycle:  lc,
 		cocreating: cocreating,
-		engine:     &engine{}, // acquireExclusive 查 engine.isRunning()（停止窗口门禁）
+		engine:     &engine{}, // acquireExclusive checks engine.isRunning() (stop-window gate)
 		events:     make(chan Event, 16),
 	}
 }
@@ -66,7 +66,7 @@ func TestCancelCoCreate_ClearsFlag(t *testing.T) {
 
 func TestCancelCoCreate_NoopWhenNotCocreating(t *testing.T) {
 	h := newFlagTestHost(lifecycleRunning, false)
-	h.CancelCoCreate() // 不应 panic，不应改状态
+	h.CancelCoCreate() // should not panic, should not change state
 	if h.cocreating || h.lifecycle != lifecycleRunning {
 		t.Error("非共创态 CancelCoCreate 应为 no-op")
 	}
@@ -96,7 +96,7 @@ func TestAcquireExclusive(t *testing.T) {
 		lc         lifecycle
 		cocreating bool
 		exclusive  string
-		wantErr    string // 空=期望放行
+		wantErr    string // empty = expect it to be let through
 	}{
 		{"running", lifecycleRunning, false, "", "đang chạy"},
 		{"cocreating", lifecyclePaused, true, "", "Đồng sáng tác theo giai đoạn"},
@@ -104,8 +104,8 @@ func TestAcquireExclusive(t *testing.T) {
 		{"idle free", lifecycleIdle, false, "", ""},
 		{"paused free", lifecyclePaused, false, "", ""},
 	}
-	// Abort 停止窗口：lifecycle 已置 paused 但引擎 goroutine 尚未退净，仍须拒绝——
-	// 否则导入会与引擎收尾并发写同一 store。
+	// Abort stop window: lifecycle is already set to paused but the engine goroutine has not fully exited, so it must still be refused —
+	// otherwise an import would write the same store concurrently with the engine wrap-up.
 	drain := newFlagTestHost(lifecyclePaused, false)
 	drain.engine.running = true
 	if err := drain.acquireExclusive("导入"); err == nil {
@@ -139,9 +139,9 @@ func TestAcquireExclusive(t *testing.T) {
 	}
 }
 
-// TestExclusiveBlocksCreationEntries 守护 #2：后台独占作业（导入/仿写）进行中时，
-// 不仅第二个后台作业被堵，创作写入口（Continue/Resume）与新后台作业也必须被堵，
-// 否则 Continue 会在引擎被门禁拦下前就让 Arbiter 改状态、Resume/next 期间引擎可抢跑。
+// TestExclusiveBlocksCreationEntries guards #2: while a background exclusive job (import/simulate) is in progress,
+// not only is a second background job blocked, but the creative-write entry points (Continue/Resume) and new background jobs must also be blocked,
+// otherwise Continue would let the Arbiter change state before the engine is stopped by the gate, and the engine could race ahead during Resume/next.
 func TestExclusiveBlocksCreationEntries(t *testing.T) {
 	h := newFlagTestHost(lifecycleIdle, false)
 	h.exclusive = "导入"
@@ -156,8 +156,8 @@ func TestExclusiveBlocksCreationEntries(t *testing.T) {
 	}
 }
 
-// TestStageCoCreate_OccupancyBlocksConcurrentEntries 验证共创窗口内独占性入口全部被堵：
-// import/start/resume/continue 在 cocreating 期间都应被拒，补上 paused 期只查 ==running 的缺口。
+// TestStageCoCreate_OccupancyBlocksConcurrentEntries verifies that all exclusive entry points are blocked within the co-creation window:
+// import/start/resume/continue should all be refused while cocreating, closing the gap where the paused phase only checked ==running.
 func TestStageCoCreate_OccupancyBlocksConcurrentEntries(t *testing.T) {
 	h := newFlagTestHost(lifecycleIdle, false)
 	if !h.PauseForCoCreate() {
@@ -177,7 +177,7 @@ func TestStageCoCreate_OccupancyBlocksConcurrentEntries(t *testing.T) {
 		t.Error("共创窗口内 Continue 应被拒")
 	}
 
-	// 退出共创后占用解除（这里走 Cancel；Resume 干预路径归集成验证）
+	// Occupancy is released after leaving co-creation (this goes through Cancel; the Resume intervention path is covered by integration verification)
 	h.CancelCoCreate()
 	if h.cocreating {
 		t.Fatal("退出后占用标记应解除")

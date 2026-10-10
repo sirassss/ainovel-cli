@@ -31,9 +31,9 @@ type legacyCommitArgs struct {
 	domain.ChapterFacts
 }
 
-// MigrateLegacyBaseline 为 chapter_records 出现前创建的作品补齐接纳基线。
-// 成功提交会话保存完整章节事实，草稿保存当时的正文；只使用这两份历史事实，
-// 不会把可能已被用户修改的 chapters/*.md 静默当成已接纳版本。
+// MigrateLegacyBaseline fills in the accepted baseline for works created before chapter_records existed.
+// A successfully committed session holds the complete chapter facts and a draft holds the body text at that time; only these two historical facts are used,
+// so chapters/*.md, which the user may have modified, is never silently treated as the accepted version.
 func MigrateLegacyBaseline(st *store.Store) error {
 	progress, err := st.Progress.Load()
 	if err != nil {

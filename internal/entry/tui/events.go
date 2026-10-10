@@ -10,22 +10,22 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// 消息类型
+// Message types
 type (
 	eventMsg       host.Event
 	snapshotMsg    host.UISnapshot
-	doneMsg        struct{ complete bool } // complete=true 全书完成，false 出错停止
+	doneMsg        struct{ complete bool } // complete=true means the whole book is finished, false means it stopped on an error
 	abortResultMsg struct{ stopped bool }
 	bootstrapMsg   struct {
-		existing  bool // 已有作品；无论恢复是否成功都应进入工作台
+		existing  bool // An existing work; enter the workbench whether or not the resume succeeded
 		resumed   bool
-		completed bool // 目录里是本已完结的书：落完成态工作台而非欢迎页
+		completed bool // The directory holds an already completed book: land on the completed-state workbench rather than the welcome screen
 		err       error
 	}
 	reportLoadedMsg struct {
 		reqID      int
 		report     diag.Report
-		exportPath string // 脱敏诊断文件绝对路径；空 = 导出失败
+		exportPath string // Absolute path of the redacted diagnostic file; empty = export failed
 		exportErr  error
 		finishedAt time.Time
 	}
@@ -35,7 +35,7 @@ type (
 		kind  string // host.CoCreateProgressThinking | host.CoCreateProgressReply
 		text  string
 	}
-	// cocreateStreamItem 是 deltaCh 内部载荷，把流式 kind 与累积文本一起送达 TUI。
+	// cocreateStreamItem is the internal payload of deltaCh, delivering the streaming kind together with the accumulated text to the TUI.
 	cocreateStreamItem struct {
 		kind string
 		text string
@@ -48,14 +48,14 @@ type (
 	steerResultMsg     struct{ err error }
 	continueResultMsg  struct{ err error }
 	spinnerTickMsg     time.Time
-	toolSpinnerTickMsg time.Time // 事件流工具 spinner 独立 tick（更快、独立于顶栏/星星）
-	streamDeltaMsg     string    // 流式 token 增量
-	streamClearMsg     struct{}  // 清空流式缓冲（新消息开始）
-	streamFlushTickMsg struct{}  // 流式刷新节流（仅有待刷数据时调度）
-	quitResetMsg       struct{}  // 双次 Ctrl+C 超时重置
+	toolSpinnerTickMsg time.Time // Independent tick for the event-stream tool spinner (faster, independent of the top bar / stars)
+	streamDeltaMsg     string    // Streaming token delta
+	streamClearMsg     struct{}  // Clear the streaming buffer (a new message begins)
+	streamFlushTickMsg struct{}  // Streaming flush throttle (scheduled only when there is pending data)
+	quitResetMsg       struct{}  // Reset timeout for double Ctrl+C
 )
 
-// --- Cmd 函数 ---
+// --- Cmd functions ---
 
 func listenEvents(rt *host.Host) tea.Cmd {
 	return func() tea.Msg {
@@ -113,10 +113,10 @@ func bootstrapRuntime(rt *host.Host) tea.Cmd {
 	}
 }
 
-// resumeBook 会话中补跑一次恢复门禁（bootstrap 的 Resume 只在启动时跑一次）：
-// 导入完成关面板、/reopen 重开后都靠它落回创作工作台。不重放事件队列——本会话事件
-// 已由常驻 listenEvents 呈现过，重放会重复回显。待处理干预（如 /reopen 登记的续写
-// 方向）由 Resume 先经 Arbiter 裁定消化，再续跑引擎。
+// resumeBook re-runs the resume gate once mid-session (bootstrap's Resume runs only at startup):
+// after an import finishes and the panel closes, and after /reopen, it is what lands the user back on the creation workbench. It does not replay the event queue: this session's events
+// have already been shown by the resident listenEvents, and replaying would echo them twice. Pending interventions (such as the continuation
+// direction registered by /reopen) are first adjudicated and consumed by the Arbiter in Resume, and then the engine resumes.
 func resumeBook(rt *host.Host) tea.Cmd {
 	return func() tea.Msg {
 		snapshot := rt.Snapshot()
@@ -130,7 +130,7 @@ func resumeBook(rt *host.Host) tea.Cmd {
 
 func startRuntime(rt *host.Host, prompt string) tea.Cmd {
 	return func() tea.Msg {
-		// 启动侧确定性生成本书用户规则快照（用原始 prompt 归一化），须在 StartPrepared 前。
+		// Deterministically generate this book's user-rule snapshot on the startup side (normalized from the original prompt); must happen before StartPrepared.
 		if err := rt.PrepareUserRules(prompt); err != nil {
 			return startResultMsg{err: err}
 		}
@@ -145,7 +145,7 @@ func runCoCreate(rt *host.Host, state *cocreateState) tea.Cmd {
 	state.cancel = cancel
 	state.deltaCh = make(chan cocreateStreamItem, 64)
 	state.doneCh = make(chan cocreateDoneMsg, 1)
-	// 阶段共创带故事状态摘要、产出"后续方向 brief"；冷启动从零澄清需求。两者签名一致。
+	// Phase co-create carries a story-state summary and produces a "next-direction brief"; cold-start co-create clarifies requirements from scratch. The two have the same signature.
 	stream := rt.CoCreateStream
 	if state.stage {
 		stream = rt.StageCoCreateStream
@@ -171,8 +171,8 @@ func listenCoCreateDelta(state *cocreateState) tea.Cmd {
 	if state == nil || state.deltaCh == nil {
 		return nil
 	}
-	// 抓取 channel 局部引用：避免后续 state.deltaCh 被 reassign 时
-	// 旧 listen 闭包错读新 channel（虽然当前流程不触发，留作维护陷阱不应该）。
+	// Capture a local reference to the channel: this prevents an old listen closure from
+	// misreading the new channel if state.deltaCh is reassigned later (not triggered by the current flow, but it should not be left as a maintenance trap).
 	reqID := state.reqID
 	ch := state.deltaCh
 	return func() tea.Msg {
@@ -213,8 +213,8 @@ func continueRuntime(rt *host.Host, text string) tea.Cmd {
 	}
 }
 
-// resumeFromCoCreate 把阶段共创产出的后续方向 brief 注入并恢复创作。
-// 复用 continueResultMsg：成功即接 listenDone 续跑，失败回显错误。
+// resumeFromCoCreate injects the next-direction brief produced by phase co-create and resumes creation.
+// It reuses continueResultMsg: on success it attaches listenDone to keep running, on failure it echoes the error.
 func resumeFromCoCreate(rt *host.Host, draft string) tea.Cmd {
 	return func() tea.Msg {
 		err := rt.ResumeFromCoCreate(draft)
@@ -222,7 +222,7 @@ func resumeFromCoCreate(rt *host.Host, draft string) tea.Cmd {
 	}
 }
 
-// cancelCoCreate 放弃阶段共创：清占用标记、保持暂停。事件经 events 通道回流，无需返回消息。
+// cancelCoCreate abandons phase co-create: clears the occupancy marker and stays paused. Events flow back through the events channel, so no message needs to be returned.
 func cancelCoCreate(rt *host.Host) tea.Cmd {
 	return func() tea.Msg {
 		rt.CancelCoCreate()
@@ -239,9 +239,9 @@ func abortRuntime(rt *host.Host) tea.Cmd {
 func loadReport(dir string, reqID int) tea.Cmd {
 	return func() tea.Msg {
 		s := store.NewStore(dir)
-		// Diagnose = 创作诊断 + 运行时检测，运行时 Finding 也进屏上报告。
+		// Diagnose = creation diagnosis + runtime checks; runtime Findings are also included in the on-screen report.
 		rep, rc := diag.Diagnose(s)
-		// 复用 rep+rc 写出脱敏诊断文件（导出失败不影响屏上报告）。
+		// Reuse rep+rc to write the redacted diagnostic file (an export failure does not affect the on-screen report).
 		exportPath, exportErr := diag.WriteExport(s, rep, rc)
 		return reportLoadedMsg{
 			reqID:      reqID,
@@ -259,15 +259,15 @@ func tickSpinner() tea.Cmd {
 	})
 }
 
-// tickToolSpinner 驱动事件流"进行中"行的 spinner。独立于 tickSpinner，节奏更快（150ms）。
+// tickToolSpinner drives the spinner of the "in progress" rows in the event stream. Independent of tickSpinner and faster (150ms).
 func tickToolSpinner() tea.Cmd {
 	return tea.Tick(150*time.Millisecond, func(t time.Time) tea.Msg {
 		return toolSpinnerTickMsg(t)
 	})
 }
 
-// tickStreamFlush 合并一个 16ms 窗口内的流式增量。它由首个待刷 delta 启动，
-// 刷完即停止，空闲时不会持续唤醒 TUI。
+// tickStreamFlush coalesces streaming deltas within a 16ms window. It is started by the first pending delta
+// and stops after flushing, so it does not keep waking the TUI while idle.
 func tickStreamFlush() tea.Cmd {
 	return tea.Tick(16*time.Millisecond, func(t time.Time) tea.Msg {
 		return streamFlushTickMsg{}
@@ -280,9 +280,9 @@ func listenStream(rt *host.Host) tea.Cmd {
 		if !ok {
 			return nil
 		}
-		// sentinel 派发为 streamClearMsg，保证与正常 delta 在同一通道里按 emit
-		// 顺序到达 TUI。双通道时 clearCh 与 streamCh 之间无序，✻ header 经常被
-		// 错塞到上一段 thinking 末尾。
+		// The sentinel is dispatched as streamClearMsg, guaranteeing it reaches the TUI in emit order
+		// on the same channel as normal deltas. With two channels, clearCh and streamCh are unordered, and the ✻ header was often
+		// wrongly inserted at the end of the previous thinking segment.
 		if delta == host.StreamClearSentinel {
 			return streamClearMsg{}
 		}

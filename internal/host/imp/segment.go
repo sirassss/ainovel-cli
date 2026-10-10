@@ -10,7 +10,7 @@ import (
 	"unicode"
 )
 
-// BoundaryDecision 是模型对单个 owned range 的边界判断（RFC §8.2）。
+// BoundaryDecision is the model's boundary judgment for a single owned range (RFC §8.2).
 type BoundaryDecision struct {
 	UnitID    string `json:"unit_id"`
 	Anchor    string `json:"anchor,omitempty"`
@@ -27,12 +27,12 @@ const (
 	kindBackMatter  = "back_matter"
 )
 
-// boundaryBatch 是一次分段调用的结构化返回。
+// boundaryBatch is the structured return of one segmentation call.
 type boundaryBatch struct {
 	Boundaries []BoundaryDecision `json:"boundaries"`
 }
 
-// ChapterSpan 是切分确认后的一个可提交章节：标题 + 归一化文本字节范围（含标题行）。
+// ChapterSpan is a committable chapter after segmentation confirmation: title + byte range of the normalized text (including the title line).
 type ChapterSpan struct {
 	Number int    `json:"number"`
 	Title  string `json:"title"`
@@ -40,7 +40,7 @@ type ChapterSpan struct {
 	End    int    `json:"end_byte"`
 }
 
-// MatterSpan 是卷/篇标题或明确的附属区域。
+// MatterSpan is a volume/section title or an explicit auxiliary region.
 type MatterSpan struct {
 	Kind  string `json:"kind"`
 	Title string `json:"title,omitempty"`
@@ -48,27 +48,27 @@ type MatterSpan struct {
 	End   int    `json:"end_byte"`
 }
 
-// Segmentation 是全文覆盖校验通过的切分结果（confirmation 与逐章分析的上游）。
+// Segmentation is the segmentation result that passed full-text coverage validation (the upstream of confirmation and per-chapter analysis).
 type Segmentation struct {
 	Chapters  []ChapterSpan `json:"chapters"`
 	Matter    []MatterSpan  `json:"matter,omitempty"`    // group / front / back
-	Uncertain []int         `json:"uncertain,omitempty"` // 标记 uncertain 的章节号，供预览提示
-	Notes     []string      `json:"notes,omitempty"`     // 切分期需人工核对的说明（如空正文占位标题并入前段）
+	Uncertain []int         `json:"uncertain,omitempty"` // chapter numbers marked uncertain, for preview hints
+	Notes     []string      `json:"notes,omitempty"`     // notes needing manual review from segmentation time (e.g. an empty-body placeholder title merged into the previous section)
 }
 
-// Content 返回第 i 个章节的归一化正文（含标题行）。
+// Content returns the normalized body text (including the title line) of chapter i.
 func (s *Segmentation) Content(normalized []byte, i int) string {
 	c := s.Chapters[i]
 	return string(normalized[c.Start:c.End])
 }
 
-// resolveSegmentation 把有序边界决策映射为经全文覆盖校验的 Segmentation（RFC §8.3）。
-// 纯函数：模型输出与代码校验分离，"某行是不是章标题"不由 Go 复判，但覆盖不变量必须成立。
+// resolveSegmentation maps ordered boundary decisions to a Segmentation that passed full-text coverage validation (RFC §8.3).
+// Pure function: model output and code validation are separate; "is this line a chapter title" is not re-judged by Go, but the coverage invariant must hold.
 func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []BoundaryDecision) (*Segmentation, error) {
 	if len(decisions) == 0 {
 		return nil, fmt.Errorf("Không nhận diện được ranh giới nào")
 	}
-	// 前置契约：units 必须按 (Line,Part) 数值序排列（禁止 ID 字典序）。
+	// Precondition: units must be sorted in numeric (Line,Part) order (no ID lexicographic order).
 	for i := 1; i < len(units); i++ {
 		if !unitLess(units[i-1], units[i]) {
 			return nil, fmt.Errorf("SourceUnit không được sắp theo thứ tự số (Line,Part): %s đứng trước %s", units[i-1].ID, units[i].ID)
@@ -96,18 +96,18 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 		}
 		points = append(points, point{byte: b, d: d})
 	}
-	// 模型偶发的乱序与重复是坐标纪律问题，Go 确定性修复而非终局否决——全部块成功后因
-	// 两个边界次序颠倒废弃整个切分阶段，代价不可接受（实测 319 个边界败于 1 处块内倒序，
-	// 且块缓存会让失败确定性复现）。块间顺序由 owned 区间不重叠保证，乱序只可能发生在
-	// 块内：按字节稳定排序即恢复真实顺序，零信息损失；同字节重复保留先出现者并记 Notes
-	// 交确认预览人工核对。
+	// Occasional disorder and duplication from the model are coordinate-discipline problems; Go repairs them deterministically rather than vetoing terminally - discarding the whole segmentation stage because
+	// two boundaries are in reversed order after all chunks succeeded is an unacceptable cost (measured: 319 boundaries lost to 1 in-chunk inversion,
+	// and the chunk cache would make the failure reproduce deterministically). Order between chunks is guaranteed by owned ranges not overlapping, so disorder can only occur
+	// within a chunk: a stable sort by byte restores the true order with zero information loss; for duplicates at the same byte, keep the first occurrence and record it in Notes
+	// for manual review in the confirmation preview.
 	sort.SliceStable(points, func(i, j int) bool { return points[i].byte < points[j].byte })
 	var notes []string
 	uniq := points[:0]
 	for _, p := range points {
 		if n := len(uniq); n > 0 && uniq[n-1].byte == p.byte {
-			// 完全相同的重复是机械冗余，静默去重；同位语义冲突（kind/标题不同）在调用期
-			// 已重问，走到这里只可能来自修复前的旧缓存——保留先出现者并记 Notes 人工核对。
+			// Fully identical duplicates are mechanical redundancy and are silently deduplicated; a same-position semantic conflict (different kind/title) was already
+			// re-asked at call time, so reaching here can only come from an old cache predating the repair - keep the first occurrence and record it in Notes for manual review.
 			if prev := uniq[n-1].d; prev.Kind != p.d.Kind || boundaryLabel(prev) != boundaryLabel(p.d) {
 				notes = append(notes, fmt.Sprintf("Ranh giới %q và %q trùng nhau (byte %d), đã giữ cái trước",
 					boundaryLabel(prev), boundaryLabel(p.d), p.byte))
@@ -117,10 +117,10 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 		uniq = append(uniq, p)
 	}
 	points = uniq
-	// 首个边界前的非空文本（书首简介/广告等，模型漏报起始边界）不终局否决：Go 确定性
-	// 补一个 front_matter 兜住 [0, first)，记 Notes 交确认预览人工核对——漏报已进块缓存，
-	// 终局否决会让重跑零调用复现同一失败（与空正文章节吸收同哲学，RFC §8.3.5）。
-	// 语义判断本身在调用期已交还模型（chunkValidator.coverStart 重问），此兜底只治愈旧缓存。
+	// Non-empty text before the first boundary (book-opening blurb / ads etc., where the model missed the starting boundary) is not terminally vetoed: Go deterministically
+	// adds a front_matter to cover [0, first) and records Notes for manual review in the confirmation preview - the miss has already entered the chunk cache,
+	// and a terminal veto would make a rerun reproduce the same failure with zero calls (same philosophy as absorbing empty-body chapters, RFC §8.3.5).
+	// The semantic judgment itself was already handed back to the model at call time (chunkValidator.coverStart re-ask); this fallback only heals old caches.
 	if head := points[0].byte; head != 0 && strings.TrimSpace(string(normalized[:head])) != "" {
 		notes = append(notes, fmt.Sprintf("%d byte văn bản đầu chưa được model gán vào đâu (%s…), đã thu vào front_matter, hãy kiểm tra có bỏ sót chương không",
 			head, snippet(string(normalized[:min(head, 48)]), 24)))
@@ -129,7 +129,7 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 
 	seg := &Segmentation{Notes: notes}
 	chapterNo := 0
-	// absorb 把一段并入最近产出的 span（章节或附属区域皆可），无可并入时返回 false。
+	// absorb merges a segment into the most recently produced span (either a chapter or an auxiliary region); returns false when there is nothing to merge into.
 	absorb := func(end int) bool {
 		ci, mi := len(seg.Chapters)-1, len(seg.Matter)-1
 		switch {
@@ -145,7 +145,7 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 	for i, p := range points {
 		start := p.byte
 		if i == 0 {
-			start = 0 // 首段吸收起始处的空白
+			start = 0 // whitespace at the start absorbed by the first segment
 		}
 		end := len(normalized)
 		if i+1 < len(points) {
@@ -158,9 +158,9 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 		switch p.d.Kind {
 		case kindChapter:
 			if strings.TrimSpace(bodyAfterTitle(normalized, p.byte, end)) == "" {
-				// 真实网络小说源常见"已锁定/付费章节"占位：标题在、正文缺失。不整体失败——
-				// 终局一票否决会浪费切分阶段的全部模型调用；标题行并入前段（文本一字不丢），
-				// 记入 Notes 由确认预览呈现，人工不认可可用 --guide 裁定（RFC §8.4 的停点正为此存在）。
+				// Real web-novel sources often have "locked / paid chapter" placeholders: the title is there but the body is missing. Do not fail wholesale -
+				// a terminal veto would waste all model calls of the segmentation stage; the title line is merged into the previous section (not a character of text lost),
+				// recorded in Notes for the confirmation preview to present, and if a human does not accept it they can rule with --guide (the stop point in RFC §8.4 exists for exactly this).
 				seg.Notes = append(seg.Notes,
 					fmt.Sprintf("Tiêu đề chương %q không có nội dung chương (byte %d..%d), đã gộp vào đoạn trước (thường gặp ở chương bị khóa/chương giữ chỗ trả phí)", title, start, end))
 				if !absorb(end) {
@@ -180,8 +180,8 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 	if chapterNo == 0 {
 		return nil, fmt.Errorf("Chia tách không tạo ra chương nào (group không tính là chương)")
 	}
-	// 同名章节是"同章被误切"的确定性信号（有标题规约的源里章名不该重复），只记 Notes
-	// 交确认预览人工核对（Notes 非空即阻断 --yes）——是否合并不由 Go 裁定。
+	// A chapter with the same name is a deterministic signal of "one chapter wrongly split" (in sources with a title convention, chapter names should not repeat); only record Notes
+	// for manual review in the confirmation preview (non-empty Notes blocks --yes) - whether to merge is not ruled by Go.
 	titleAt := make(map[string]int, len(seg.Chapters))
 	for _, c := range seg.Chapters {
 		key := squashSpace(c.Title)
@@ -195,7 +195,7 @@ func resolveSegmentation(normalized []byte, units []SourceUnit, decisions []Boun
 	return seg, nil
 }
 
-// squashSpace 去除全部空白，用于标题回显与同名比对——空白/装饰差异不构成语义差异。
+// squashSpace removes all whitespace, for title echo and same-name comparison - whitespace/decoration differences are not semantic differences.
 func squashSpace(s string) string {
 	return strings.Map(func(r rune) rune {
 		if unicode.IsSpace(r) {
@@ -205,7 +205,7 @@ func squashSpace(s string) string {
 	}, s)
 }
 
-// firstLine 返回 [start,end) 内首行去空白后的文本。
+// firstLine returns the first line within [start,end) with whitespace removed.
 func firstLine(normalized []byte, start, end int) string {
 	s := string(normalized[start:end])
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
@@ -214,9 +214,9 @@ func firstLine(normalized []byte, start, end int) string {
 	return strings.TrimSpace(s)
 }
 
-// bodyAfterTitle 返回 [start,end) 去掉首行（标题）后的正文。
-// 多行章节标题独占首行，正文在其后；无换行的单行段（锚点切分场景）整段即正文，
-// 此时返回全段而非空串——否则合法的单行/单行多章小说会被误判"正文为空"拒绝（RFC §8.3）。
+// bodyAfterTitle returns the body text within [start,end) after dropping the first line (the title).
+// A multi-line chapter's title occupies the first line alone and the body follows; a single-line segment without newline (anchor-split scenario) is entirely body,
+// in which case the whole segment is returned rather than an empty string - otherwise a legitimate single-line / single-line multi-chapter novel would be wrongly rejected as "body is empty" (RFC §8.3).
 func bodyAfterTitle(normalized []byte, start, end int) string {
 	s := string(normalized[start:end])
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
@@ -225,8 +225,8 @@ func bodyAfterTitle(normalized []byte, start, end int) string {
 	return s
 }
 
-// planChunks 按字节预算把 units 切成互不重叠、完整覆盖的 owned 索引区间 [start,end)。
-// 分块大小由上下文预算计算，不按固定行数或章节数（RFC §8.1）。
+// planChunks splits units into non-overlapping, fully covering owned index ranges [start,end) by byte budget.
+// Chunk size is computed from the context budget, not by a fixed number of lines or chapters (RFC §8.1).
 func planChunks(units []SourceUnit, budgetBytes int) [][2]int {
 	if len(units) == 0 {
 		return nil
@@ -250,12 +250,12 @@ func planChunks(units []SourceUnit, budgetBytes int) [][2]int {
 	return chunks
 }
 
-// buildProjection 组装一个 owned 区间的结构投影 payload（含少量上下文），模型只为 owned 返回边界。
-// 同时返回投影内全部 unit_id 集合（owned + 上下文区），供输出校验区分幻觉与越界。
+// buildProjection assembles the structural projection payload of an owned range (with a little context); the model returns boundaries only for owned.
+// It also returns the set of all unit_ids inside the projection (owned + context area), so output validation can distinguish hallucination from out-of-range.
 func buildProjection(units []SourceUnit, owned [2]int, contextMargin, ctxBudget int, guidance string) (string, map[string]bool) {
-	// 上下文区按单元数与字节双上限收缩（ctxBudget<=0 时只按单元数）：margin 单元通常是
-	// 普通行，但超长行的虚拟分片可达 MaxUnitBytes，数个即可吞掉整个输入预算——上下文
-	// 只是参考信息，不值这个价。
+	// The context area shrinks under both a unit-count and a byte cap (only by unit count when ctxBudget<=0): margin units are usually
+	// ordinary lines, but virtual slices of an over-long line can reach MaxUnitBytes, and a few of them could swallow the whole input budget - context
+	// is only reference information, not worth that price.
 	lo, budget := owned[0], ctxBudget
 	for lo > 0 && owned[0]-lo < contextMargin {
 		if n := len(units[lo-1].Text); ctxBudget > 0 {
@@ -299,13 +299,13 @@ func buildProjection(units []SourceUnit, owned [2]int, contextMargin, ctxBudget 
 	return string(data), ids
 }
 
-// segmentInputDigest 覆盖分段动作实际消费的语义输入：归一化源、用户指导、prompt 版本（RFC §6.3）。
+// segmentInputDigest covers the semantic inputs the segmentation action actually consumes: normalized source, user guidance, prompt version (RFC §6.3).
 func segmentInputDigest(normalizedDigest, guidance, promptVersion string) string {
 	return Digest([]byte(strings.Join([]string{"segment", promptVersion, normalizedDigest, guidance}, "\x00")))
 }
 
-// segmentChunkPath / segmentChunkDigest：块级边界缓存的工件路径与身份。
-// 身份绑定切分身份（源+指导+prompt 版本）与块的 owned 单元范围——上游任何变化都使缓存自然失配。
+// segmentChunkPath / segmentChunkDigest: artifact path and identity of the chunk-level boundary cache.
+// The identity binds the segmentation identity (source + guidance + prompt version) and the chunk's owned unit range - any upstream change makes the cache naturally mismatch.
 func segmentChunkPath(owned [2]int) string {
 	return fmt.Sprintf("%s/chunk-%06d-%06d.json", dirSegmentChunks, owned[0], owned[1])
 }
@@ -314,11 +314,11 @@ func segmentChunkDigest(identity, loID, hiID string) string {
 	return Digest([]byte(strings.Join([]string{"segment-chunk", identity, loID, hiID}, "\x00")))
 }
 
-// Segment 对整份归一化文本做语义切分：逐 owned 区间调用模型识别边界，再全文覆盖校验。
-// contextMargin 上下文单元数，chunkBytes owned 区间字节预算，maxTokens 单次输出预算。
-// w 非空时逐块落盘边界缓存（identity = segmentInputDigest）：单块可达数分钟，任何一块失败
-// 不应重付已完成块的调用——与 analyze 逐章、synthesize 逐区间同一哲学，此前切分是
-// 唯一没有阶段内持久化的昂贵阶段，一处失败即全部重来。
+// Segment performs semantic segmentation on the whole normalized text: it calls the model per owned range to identify boundaries, then validates full-text coverage.
+// contextMargin is the number of context units, chunkBytes the byte budget of an owned range, maxTokens the per-call output budget.
+// When w is non-nil the boundary cache is persisted chunk by chunk (identity = segmentInputDigest): a single chunk can take minutes, and the failure of any chunk
+// should not repay for calls of completed chunks - the same philosophy as analyze per chapter and synthesize per range; previously segmentation was the
+// only expensive stage without in-stage persistence, so one failure meant redoing everything.
 func Segment(ctx context.Context, m callModel, systemPrompt string, normalized []byte, units []SourceUnit, guidance string, chunkBytes, contextMargin, maxTokens int, prof callProfile, w *Workspace, identity string) (*Segmentation, error) {
 	chunks := planChunks(units, planningBudget(chunkBytes, systemPrompt, guidance))
 	unitByID := make(map[string]SourceUnit, len(units))
@@ -326,9 +326,9 @@ func Segment(ctx context.Context, m callModel, systemPrompt string, normalized [
 		unitByID[u.ID] = u
 	}
 	var decisions []BoundaryDecision
-	// chunk 处理一个 owned 区间：缓存命中零调用；输出被长度截断且区间可再分时对半缩块
-	// 递归重试（大量短章节的边界 JSON 会超出可见输出，与 analyze 缩批同哲学）——半块有
-	// 独立缓存路径，重试成果不重付；单元级仍截断才是真容量不足。
+	// chunk handles one owned range: a cache hit makes zero calls; when the output is truncated by length and the range can be split again, halve the chunk
+	// and retry recursively (the boundary JSON of many short chapters exceeds the visible output; same philosophy as analyze's batch shrinking) - a half chunk has its
+	// own cache path, so retry results are not repaid; only truncation at the single-unit level is real capacity shortage.
 	var chunk func(owned [2]int, cur, total int) ([]BoundaryDecision, error)
 	chunk = func(owned [2]int, cur, total int) ([]BoundaryDecision, error) {
 		lo, hi := units[owned[0]], units[owned[1]-1]
@@ -338,11 +338,11 @@ func Segment(ctx context.Context, m callModel, systemPrompt string, normalized [
 				return art.Payload.Boundaries, nil
 			}
 		}
-		// 单块模型调用可达数分钟，逐块回显推进 + 累计边界数，面板才不会整段静默像卡死。
+		// A single-chunk model call can take minutes; echoing progress + the cumulative boundary count per chunk keeps the panel from staying silent for the whole stretch and looking hung.
 		prof.step(cur, total, "Chia khối %d/%d (%s..%s), đã nhận diện %d ranh giới...",
 			cur, total, lo.ID, hi.ID, len(decisions))
-		// 上下文区字节上限取 chunkBytes/8 但不低于 4096：要拦的是超长行虚拟分片
-		// （单片可达 MaxUnitBytes）吞掉输入预算，普通行的 margin 开销本就无害。
+		// The context-area byte cap is chunkBytes/8 but no lower than 4096: what must be blocked is virtual slices of an over-long line
+		// (a single slice can reach MaxUnitBytes) swallowing the input budget; the margin overhead of ordinary lines is harmless anyway.
 		payload, projIDs := buildProjection(units, owned, contextMargin, max(chunkBytes/8, 4096), guidance)
 		ownedIDs := make(map[string]bool, owned[1]-owned[0])
 		for i := owned[0]; i < owned[1]; i++ {
@@ -371,9 +371,9 @@ func Segment(ctx context.Context, m callModel, systemPrompt string, normalized [
 			}
 			return nil, fmt.Errorf("Khoảng chia tách %s..%s: %w", lo.ID, hi.ID, err)
 		}
-		// 上下文区边界归相邻块管辖（它会在自己的 owned 区间再报告一次），Go 直接裁掉：
-		// 坐标纪律由代码执行，语义重试只留给真正的语义失败——旧行为对越界反馈重问，
-		// 弱模型常把 3 次尝试全部耗尽拖垮整块（RFC §8.1「模型管语义，Go 管坐标」）。
+		// Context-area boundaries fall under the adjacent chunk's jurisdiction (it will report them again in its own owned range), and Go trims them directly:
+		// coordinate discipline is enforced by code, and semantic retry is reserved for genuine semantic failures - the old behavior re-asked on out-of-range feedback,
+		// and weak models often exhausted all 3 attempts and dragged down the whole chunk (RFC §8.1 "the model owns semantics, Go owns coordinates").
 		kept := make([]BoundaryDecision, 0, len(batch.Boundaries))
 		for _, bd := range batch.Boundaries {
 			if ownedIDs[bd.UnitID] {
@@ -381,10 +381,10 @@ func Segment(ctx context.Context, m callModel, systemPrompt string, normalized [
 			}
 		}
 		if n := len(batch.Boundaries) - len(kept); n > 0 {
-			// 例行坐标纪律而非异常，用普通进度回显——警示色会让用户误以为出错。
+			// Routine coordinate discipline rather than an anomaly, so echo with ordinary progress - a warning color would make users think something went wrong.
 			prof.step(0, 0, "Đã cắt bỏ %d ranh giới báo thừa ở vùng ngữ cảnh (khối kề bên tự báo, không phải lỗi)", n)
 		}
-		// 回显模型的语义判断（识别出的标题），让用户看见模型读懂了什么，而非只有机械计数。
+		// Echo the model's semantic judgment (the identified titles), so the user sees what the model understood, not just a mechanical count.
 		if len(kept) > 0 {
 			prof.step(0, 0, "Model nhận diện: %s", previewBoundaries(kept))
 		}
@@ -404,10 +404,10 @@ func Segment(ctx context.Context, m callModel, systemPrompt string, normalized [
 	}
 	seg, err := resolveSegmentation(normalized, units, decisions)
 	if err != nil {
-		// 终局整合失败时块缓存已无价值：digest 恒匹配会让重跑零调用复读同一批边界、
-		// 确定性复现同一失败。清缓存换取下次重新切分的模型机会；决策快照经 errSemantic
-		// 统一落 failures/ 供事后排查。清除失败必须如实报告——谎称已清除会让用户重跑
-		// 时再次复读坏缓存（Debug-First）。
+		// When terminal integration fails the chunk cache has no value left: an always-matching digest would make a rerun reread the same boundaries with zero calls
+		// and reproduce the same failure deterministically. Clearing the cache gives the model a chance to re-segment next time; the decision snapshot is written via errSemantic
+		// uniformly to failures/ for post-mortem. A clear failure must be reported truthfully - falsely claiming it was cleared would make the user's rerun
+		// reread the bad cache again (Debug-First).
 		hint := "Đã xóa cache khối, chạy lại sẽ chia lại"
 		if w != nil {
 			if cerr := w.clearDir(dirSegmentChunks); cerr != nil {
@@ -420,10 +420,10 @@ func Segment(ctx context.Context, m callModel, systemPrompt string, normalized [
 	return seg, nil
 }
 
-// planningBudget 从输入预算扣除请求的结构性开销：系统提示与指导按实际长度扣除，剩余按
-// 3/4 折算投影 JSON 包装的暴涨（id/引号/转义 ≈ 正文的 1/3）——owned 正文只是请求的一部分，
-// 按满额规划会在长提示或大上下文区时超出真实输入预算。下限 chunkBytes/4 防超长提示把预算
-// 挤成负数；chunkBytes<=0 表示无预算（单块），原样透传。
+// planningBudget deducts the request's structural overhead from the input budget: the system prompt and guidance are deducted at their actual length, and the remainder is
+// scaled by 3/4 to account for the blow-up from wrapping the projection JSON (id/quotes/escapes ≈ 1/3 of the body text) - the owned body text is only part of the request,
+// and planning at full amount would exceed the real input budget with a long prompt or a large context area. The lower bound chunkBytes/4 keeps an over-long prompt from
+// squeezing the budget negative; chunkBytes<=0 means no budget (single chunk) and is passed through unchanged.
 func planningBudget(chunkBytes int, systemPrompt, guidance string) int {
 	if chunkBytes <= 0 {
 		return chunkBytes
@@ -432,7 +432,7 @@ func planningBudget(chunkBytes int, systemPrompt, guidance string) int {
 	return max(b, chunkBytes/4)
 }
 
-// boundaryLabel 给边界决策一个可读标识：标题优先，无标题回落到 kind@unit_id。
+// boundaryLabel gives a boundary decision a readable label: title first, falling back to kind@unit_id when there is no title.
 func boundaryLabel(d BoundaryDecision) string {
 	if t := strings.TrimSpace(d.Title); t != "" {
 		return t
@@ -440,7 +440,7 @@ func boundaryLabel(d BoundaryDecision) string {
 	return d.Kind + "@" + d.UnitID
 }
 
-// previewBoundaries 把一批边界决策压成一行标题预览（最多 3 个 + 计数），供面板回显。
+// previewBoundaries compresses a batch of boundary decisions into a one-line title preview (at most 3 + a count), for panel echo.
 func previewBoundaries(bs []BoundaryDecision) string {
 	titles := make([]string, 0, 3)
 	for _, b := range bs {
@@ -456,16 +456,16 @@ func previewBoundaries(bs []BoundaryDecision) string {
 	return s
 }
 
-// chunkValidator 承载一次切分调用的调用期校验上下文：投影外 unit_id 是幻觉；owned 区
-// 边界还须 kind 合法、anchor 可解析、同位不语义冲突；首块须有边界兜住文本起点。
-// 这些坏值调用期不拦会随块落进缓存——digest 恒匹配，重跑零调用复读同一份坏数据，
-// 失败确定性复现（RFC §8.3）。语义判断（保留哪个、开头是什么）经重问交还模型，
-// Go 不代答；上下文区边界注定被坐标纪律裁掉，不为其重问。
+// chunkValidator carries the call-time validation context of one segmentation call: a unit_id outside the projection is a hallucination; a boundary in the owned
+// area must also have a valid kind, a resolvable anchor and no semantic conflict at the same position; the first chunk must have a boundary covering the text start.
+// If these bad values were not blocked at call time they would be written into the cache with the chunk - the digest always matches, a rerun rereads the same bad data with zero calls,
+// and the failure reproduces deterministically (RFC §8.3). Semantic judgment (which to keep, what the opening is) goes back to the model via re-ask,
+// and Go does not answer on its behalf; context-area boundaries are destined to be trimmed by coordinate discipline, so no re-ask is made for them.
 type chunkValidator struct {
 	projIDs, ownedIDs map[string]bool
 	unitByID          map[string]SourceUnit
 	normalized        []byte
-	coverStart        bool // 首块：文本起点前的非空文本必须有边界归属
+	coverStart        bool // first chunk: non-empty text before the text start must have a boundary owner
 }
 
 func (v chunkValidator) validate(bs []BoundaryDecision) error {
@@ -490,18 +490,18 @@ func (v chunkValidator) validate(bs []BoundaryDecision) error {
 		if err != nil {
 			return err
 		}
-		// 标题回显：chapter/group 的标题必须真实存在于边界单元原文（忽略空白差异）——
-		// 编造的标题在此被事实拦下（实测某源 157 章里 67 章是模型在章中续文上造的边界+
-		// 编的标题）。语义裁量仍归模型：真无标题规约的源可置 uncertain 保留归纳标题；
-		// front/back matter 的描述性标题低风险，不核对。
+		// Title echo: the title of a chapter/group must actually exist in the boundary unit's original text (ignoring whitespace differences) -
+		// a fabricated title is blocked here by fact (measured: in one source of 157 chapters, 67 were boundaries the model made up on mid-chapter continuation text +
+		// invented titles). Semantic discretion still belongs to the model: for sources truly without a title convention, uncertain can be set to keep a summarized title;
+		// descriptive titles of front/back matter are low risk and are not checked.
 		if (b.Kind == kindChapter || b.Kind == kindGroup) && !b.Uncertain {
 			if t := squashSpace(b.Title); t != "" && !strings.Contains(squashSpace(v.unitByID[b.UnitID].Text), t) {
 				return fmt.Errorf("Ranh giới %s có tiêu đề %q không tìm thấy trong nguyên văn đơn vị đó: nếu đây là phần tiếp nối nội dung của chương trước thì đừng đặt ranh giới cho nó (do ranh giới trước đó quản, boundaries có thể rỗng); nếu nguồn ở đây thực sự không có dòng tiêu đề mà tiêu đề do bạn tự tóm tắt thì đặt uncertain=true",
 					b.UnitID, snippet(b.Title, 24))
 			}
 		}
-		// 同位冲突（kind/标题不同）是语义问题，保留哪个不由 Go 裁定；完全相同的重复
-		// 是机械冗余，放行后由 resolve 静默去重。
+		// A same-position conflict (different kind/title) is a semantic problem, and which to keep is not ruled by Go; fully identical duplicates
+		// are mechanical redundancy and, once let through, are silently deduplicated by resolve.
 		if prev, ok := seen[at]; ok {
 			if prev.Kind != b.Kind || boundaryLabel(prev) != boundaryLabel(b) {
 				return fmt.Errorf("Ranh giới %q và %q rơi vào cùng một vị trí (%s), xung đột ngữ nghĩa, hãy chỉ giữ cái đúng",
@@ -517,7 +517,7 @@ func (v chunkValidator) validate(bs []BoundaryDecision) error {
 	if v.coverStart {
 		head := first
 		if head < 0 {
-			head = len(v.normalized) // 首块一个 owned 边界都没报：全部起始文本未归属
+			head = len(v.normalized) // first chunk reported no owned boundary at all: all starting text is unowned
 		}
 		if head > 0 && strings.TrimSpace(string(v.normalized[:head])) != "" {
 			return fmt.Errorf("%d byte văn bản đầu (%s…) chưa thuộc ranh giới nào, hãy bổ sung ranh giới ở đầu văn bản (front_matter/chapter/group)",

@@ -7,8 +7,8 @@ import (
 	"github.com/voocel/ainovel-cli/internal/domain"
 )
 
-// Tái hiện sự cố thật: model đặt mọi chi tiết gài trước mới là "new", nên từ lần thứ hai
-// trở đi chúng đâm vào bản ghi cũ và bị nuốt lặng — 22 chương gieo 6 lần, vào sổ 2.
+// Reproduces a real incident: the model named every new foreshadowing "new", so from the second one on
+// they collided with the old record and were silently swallowed - 22 chapters planted 6 times, 2 recorded.
 func TestRejectsPlaceholderForeshadowID(t *testing.T) {
 	for _, id := range []string{"new", "New", " none ", "TBD", "-", "n/a", "auto"} {
 		f := domain.ChapterFacts{

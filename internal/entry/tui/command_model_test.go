@@ -12,7 +12,7 @@ type fakeModelRuntime struct {
 	models      map[string][]host.ConfiguredModel
 	curProvider string
 	curModel    string
-	thinking    map[string]string // role -> 存储的原始意图
+	thinking    map[string]string // role -> stored original intent
 	available   []agentcore.ThinkingLevel
 	setCalls    []struct{ role, level string }
 	switchCalls int
@@ -43,15 +43,15 @@ func (f *fakeModelRuntime) SetRoleThinking(role, level string) error {
 	return nil
 }
 
-// 存储的强度意图高于当前模型能力、面板无法呈现时，用户不动强度字段直接应用，
-// 不应把意图误抹成初始默认值。
+// When the stored effort intent is above the current model's capability and the panel cannot show it, applying without touching the effort field
+// must not wrongly wipe the intent to the initial default.
 func TestModelSwitchKeepsUnrepresentableThinkingIntent(t *testing.T) {
 	rt := &fakeModelRuntime{
 		providers:   []string{"proxy"},
 		models:      map[string][]host.ConfiguredModel{"proxy": {{Name: "chat-only"}}},
 		curProvider: "proxy", curModel: "chat-only",
 		thinking:  map[string]string{"writer": "high"},
-		available: nil, // 当前模型只有“继承”一档
+		available: nil, // The current model has only the "inherit" level
 	}
 	st := newModelSwitchState(rt, "writer")
 	if st.thinkingKey() != "" {
@@ -68,7 +68,7 @@ func TestModelSwitchKeepsUnrepresentableThinkingIntent(t *testing.T) {
 	}
 }
 
-// 用户在面板里显式改动强度，则应回写为新值。
+// If the user explicitly changes the effort in the panel, it should be written back as the new value.
 func TestModelSwitchAppliesExplicitThinkingChange(t *testing.T) {
 	rt := &fakeModelRuntime{
 		providers:   []string{"proxy"},
@@ -79,7 +79,7 @@ func TestModelSwitchAppliesExplicitThinkingChange(t *testing.T) {
 	}
 	st := newModelSwitchState(rt, "writer")
 	st.focus = modelFocusThinking
-	st.cycle(1, rt) // 移动强度字段
+	st.cycle(1, rt) // Move to the effort field
 	want := st.thinkingKey()
 	if want == "" {
 		t.Fatal("测试前置：应已移动到某个非空强度档")

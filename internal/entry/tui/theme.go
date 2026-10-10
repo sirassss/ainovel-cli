@@ -2,23 +2,23 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
-// 主题色板 — 暖调书卷气
-// AdaptiveColor: Light = 亮底色值, Dark = 暗底色值
+// Theme palette -- warm, bookish tone
+// AdaptiveColor: Light = light-background value, Dark = dark-background value
 //
-// 设计原则：Light 一档稳定不动（亮底已调出满意效果）；Dark 一档统一比 Light
-// 提亮 ~25% lightness、略升饱和，保证暗底有足够对比度（colorDim 之前 #6b6355
-// 在 #1c1c1c 黑底上几乎不可见，分隔线/辅助文字全消失）。
+// Design principle: the Light tier stays stable and untouched (the light background was already tuned to a satisfying result); the Dark tier is uniformly
+// ~25% lighter than Light with slightly higher saturation, ensuring enough contrast on dark backgrounds (colorDim used to be #6b6355
+// and was almost invisible on a #1c1c1c black background, so separators / auxiliary text all vanished).
 //
-// colorAccent2 暗底从 #7a9e7e 改为青绿 #5fb8a3，跟 colorSuccess 的"健康绿"拉
-// 开 — 之前两者完全同色，让 architect agent 的色标和"高命中"喜悦感混淆。
-// bodyTextColor 是"中性正文"的前景策略：
-//   - 暗色终端 → NoColor，继承终端默认前景，避免我们硬塞 #e8e0d0 米白在用户自配
-//     的暖底/冷底主题上撞色（用户实测暗底默认色更耐读）。
-//   - 亮色终端 → 用 colorText 的 Light 档（深棕 #3d3529），保留品牌暖调；
-//     亮底默认黑色对比度太硬，原本调过的深棕在亮底视觉更柔和。
+// colorAccent2 on dark changed from #7a9e7e to teal #5fb8a3 to set it apart from colorSuccess's "healthy green"
+// -- the two used to be exactly the same color, confusing the architect agent's color tag with the joy of a "high hit rate".
+// bodyTextColor is the foreground policy for "neutral body text":
+//   - Dark terminal -> NoColor, inherit the terminal default foreground, to avoid us forcing #e8e0d0 off-white and clashing
+//     with the user's own warm/cool background themes (users found the dark-background default color easier to read).
+//   - Light terminal -> use the Light tier of colorText (dark brown #3d3529) to keep the brand's warm tone;
+//     the default black on light backgrounds has too harsh a contrast, and the tuned dark brown looks softer on light backgrounds.
 //
-// AdaptiveColor 两端都必须给颜色值，没有"无色"档，所以这里启动时判一次背景，
-// 之后所有概览值/章节正文/命令描述等"中性正文"统一引用 bodyTextColor。
+// AdaptiveColor requires color values at both ends and has no "no color" tier, so the background is detected once at startup here,
+// and afterward all "neutral body text" such as overview values / chapter text / command descriptions uniformly references bodyTextColor.
 var bodyTextColor lipgloss.TerminalColor = func() lipgloss.TerminalColor {
 	if lipgloss.HasDarkBackground() {
 		return lipgloss.NoColor{}
@@ -40,7 +40,7 @@ var (
 	colorTool    = lipgloss.AdaptiveColor{Light: "#3a7a8a", Dark: "#7ec5d8"}
 )
 
-// 状态标签颜色映射
+// Status label color mapping
 var statusColors = map[string]lipgloss.AdaptiveColor{
 	"READY":    colorDim,
 	"PAUSING":  colorAccent,
@@ -52,8 +52,8 @@ var statusColors = map[string]lipgloss.AdaptiveColor{
 	"ERROR":    colorError,
 }
 
-// 状态展示：图标 + 中文标签。与整体暖调主题一致，避免实心色块突兀。
-// RUNNING 的 icon 留空，由 spinner frame 动态填充，让动态感融入状态指示本身。
+// Status display: icon + label. Consistent with the overall warm theme, avoiding jarring solid color blocks.
+// The RUNNING icon is left empty and filled dynamically by the spinner frame, blending the sense of motion into the status indicator itself.
 var statusDisplay = map[string]struct {
 	icon  string
 	label string
@@ -68,7 +68,7 @@ var statusDisplay = map[string]struct {
 	"ERROR":    {"✕", "Lỗi"},
 }
 
-// 事件分类颜色映射
+// Event category color mapping
 var categoryColors = map[string]lipgloss.AdaptiveColor{
 	"DISPATCH": colorAccent,
 	"DECISION": colorContext,
@@ -83,7 +83,7 @@ var categoryColors = map[string]lipgloss.AdaptiveColor{
 	"COMPACT":  colorContext,
 }
 
-// 基础样式
+// Base styles
 var (
 	baseBorder = lipgloss.RoundedBorder()
 
@@ -105,11 +105,11 @@ var (
 			Foreground(colorMuted).
 			Width(10)
 
-	// fieldValueStyle / cardContentStyle 用 bodyTextColor —— 概览区的值（运行态、
-	// 已完成章节数、字数等）、大纲条目、角色列表、章节摘要等"中性正文内容"
-	// 在暗底跟随终端默认前景色（避免硬塞米白撞主题），亮底走深棕保留暖调。
-	// 语义性强的元素（标题、高亮值、状态、错误、命中率染色等）仍走 colorAccent /
-	// colorError 等主题色。
+	// fieldValueStyle / cardContentStyle use bodyTextColor -- overview values (run state,
+	// completed chapter count, word count, etc.), outline entries, character lists, chapter summaries and other "neutral body content"
+	// follow the terminal default foreground on dark backgrounds (avoiding forcing off-white that clashes with themes) and use dark brown on light backgrounds to keep the warm tone.
+	// Strongly semantic elements (titles, highlighted values, status, errors, hit-rate coloring, etc.) still use the theme colors such as colorAccent /
+	// colorError.
 	fieldValueStyle = lipgloss.NewStyle().Foreground(bodyTextColor)
 
 	highlightValueStyle = lipgloss.NewStyle().

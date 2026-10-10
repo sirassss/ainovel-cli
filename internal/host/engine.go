@@ -23,60 +23,60 @@ import (
 	"github.com/voocel/ainovel-cli/internal/tools"
 )
 
-// engine 是确定性执行引擎:读事实 → Route → 前置校验 → 直接运行 Worker →
-// 检查推进 → 循环;语义场景按需咨询 Arbiter。它执行决定,不参与文学判断
-// (docs/engine-rfc.md)。单 goroutine 串行,控制状态只在循环边界变更。
+// engine is the deterministic execution engine: read facts → Route → precheck → run a Worker directly →
+// check progress → loop; semantic scenarios consult the Arbiter on demand. It executes decisions and takes no part in literary judgment
+// (docs/engine-rfc.md). Single goroutine, serial; control state changes only at loop boundaries.
 type engine struct {
 	store   *storepkg.Store
 	workers *subagent.Runner
 
 	arbiterModel    agentcore.ChatModel
 	failurePrompt   string
-	planStartPrompt string // 启动裁定系统提示词:裁定从未完成时引擎据 StartPrompt 现场补裁
-	style           string // 风格名,补裁时传给 DecidePlanStart
-	// reconsult 把过期干预送回 host 的完整裁定路径(持久化/审计/全量动作应用),
-	// 异步执行——engine 只丢弃过期派单,不自行做残缺的重新裁定。
+	planStartPrompt string // Startup-ruling system prompt: when the ruling never completed, the engine uses StartPrompt to make up the
+	style           string // style-name ruling on the spot and passes it to DecidePlanStart
+	// reconsult sends a stale intervention back into the host's full ruling path (persistence/audit/applying all actions),
+	// executed asynchronously; the engine only discards stale dispatches and does not do a partial re-ruling itself.
 	reconsult func(text string)
 
 	observer  *observer
 	budget    *BudgetSentinel
 	gate      *ChapterAdvanceGate
-	refresh   func() // 每次 writer 派发前刷新 RestorePack
+	refresh   func() // Refresh the RestorePack before every writer dispatch
 	emitEvent func(Event)
 	notify    func(kind, level, title, body string)
-	onPause   func(summary string) // 引擎自主暂停(僵局/失败裁定 abort):走 host 统一暂停语义(lifecycle=paused)
-	onDone    func()               // run 结束(任何原因);host 据 store 事实定终态
+	onPause   func(summary string) // The engine pauses itself (deadlock / failure-ruling abort): goes through the host's unified pause semantics (lifecycle=paused)
+	onDone    func()               // run ended (for any reason); the host decides the terminal state from store facts
 
 	mu      sync.Mutex
 	wg      sync.WaitGroup
 	cancel  context.CancelFunc
 	running bool
-	pending []controlOp       // 干预的控制态动作,边界提交
-	next    *flow.Instruction // 下一轮优先执行的指令(plan_start / arbiter dispatch)
-	// deferGateForNext 只与 next 同生共灭：hold+dispatch 必须先运行配对的
-	// editor/writer，让它建立返工队列，随后 Gate 才能判断 rewrites_drained。
+	pending []controlOp       // Control-state actions of an intervention, committed at the boundary
+	next    *flow.Instruction // Instruction to run first in the next round (plan_start / arbiter dispatch)
+	// deferGateForNext lives and dies with next only: hold+dispatch must first run the paired
+	// editor/writer so it builds the rewrite queue, and only then can the Gate judge rewrites_drained.
 	deferGateForNext bool
 
-	// 僵局追踪:上一轮执行后 Route 仍产生同一指令键即累计。
-	// Router 指令是任务后置条件的投影；真正完成会让下一指令改变。
+	// Deadlock tracking: counted whenever Route still yields the same instruction key after the previous round executed.
+	// A Router instruction is a projection of the task's postcondition; real completion changes the next instruction.
 	lastKey string
 	repeats int
-	// 失败重试:同指令键仅重试一次,再败问 Arbiter。
+	// Failure retry: the same instruction key is retried only once, then the Arbiter is asked.
 	failedKey string
-	// 保留同指令最近一次 Worker 错误，让僵局裁定看到真实失败原因。
+	// Keep the latest Worker error for the same instruction so the deadlock ruling sees the real cause of failure.
 	lastWorkerErrorKey string
 	lastWorkerError    error
 }
 
-// deadlockConsultAt / deadlockAbortAt:repeats 达到前者问 Arbiter,达到后者硬熔断。
-// 确定性 Engine 必须对无进展循环给出明确上界(RFC §5)。
+// deadlockConsultAt / deadlockAbortAt: once repeats reaches the former, ask the Arbiter; once it reaches the latter, hard-trip.
+// A deterministic Engine must give a clear upper bound for loops that make no progress (RFC §5).
 const (
 	deadlockConsultAt = 3
 	deadlockAbortAt   = 5
 )
 
-// controlOp 是干预裁定中修改控制状态的动作(边界提交;RFC §3)。
-// text/facts 保留原始咨询上下文:dispatch 对账失败时以新事实重询。
+// controlOp is an action in an intervention ruling that modifies control state (committed at the boundary; RFC §3).
+// text/facts keep the original consultation context: when a dispatch fails reconciliation, ask again with the new facts.
 type controlOp struct {
 	hold     *arbiter.AdvanceHoldOp
 	reopen   *arbiter.ReopenOp
@@ -85,7 +85,7 @@ type controlOp struct {
 	facts    arbiter.InterventionFacts
 }
 
-// start 启动引擎循环;已在运行则 no-op(返回 false)。
+// start launches the engine loop; no-op if already running (returns false).
 func (e *engine) start(initial *flow.Instruction) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -96,9 +96,9 @@ func (e *engine) start(initial *flow.Instruction) bool {
 	ctx = agentcore.WithToolProgress(ctx, e.observer.workerProgress)
 	e.cancel = cancel
 	e.running = true
-	// initial 为空时不覆盖 e.next——停机期干预可能已通过 applyControlOp 排入
-	// 裁定派单(如 editor 返工),start(nil) 抹掉它会让 Route 派 writer 续写,
-	// 与用户意图相反。
+	// When initial is empty, do not overwrite e.next: an intervention made while stopped may already have queued a
+	// ruling dispatch via applyControlOp (e.g. editor rework); start(nil) wiping it would make Route send the writer to continue writing,
+	// the opposite of what the user intended.
 	if initial != nil {
 		e.next = initial
 		e.deferGateForNext = false
@@ -113,7 +113,7 @@ func (e *engine) start(initial *flow.Instruction) bool {
 	return true
 }
 
-// abort 取消当前循环(暂停语义;checkpoint 保证无损)。
+// abort cancels the current loop (pause semantics; checkpoints guarantee nothing is lost).
 func (e *engine) abort() {
 	e.mu.Lock()
 	cancel := e.cancel
@@ -123,8 +123,8 @@ func (e *engine) abort() {
 	}
 }
 
-// wait 等待当前 Engine goroutine 完整退出。Host.Close 会先 cancel 再调用它，
-// 保证写工具和 runEnded 都结束后才关闭事件通道与退出进程。
+// wait waits for the current Engine goroutine to exit completely. Host.Close cancels first and then calls it,
+// guaranteeing that the event channel is closed and the process exits only after the write tools and runEnded have finished.
 func (e *engine) wait() {
 	e.wg.Wait()
 }
@@ -135,8 +135,8 @@ func (e *engine) isRunning() bool {
 	return e.running
 }
 
-// enqueue 把干预的控制态动作排入边界队列(引擎运行中);返回 false 表示未运行,
-// 调用方应立即自行执行。
+// enqueue puts an intervention's control-state actions into the boundary queue (while the engine is running); returns false if not running,
+// in which case the caller should execute them immediately itself.
 func (e *engine) enqueue(op controlOp) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -155,10 +155,10 @@ func (e *engine) run(ctx context.Context) {
 		leftover := e.pending
 		e.pending = nil
 		e.mu.Unlock()
-		// 退出竞态:enqueue 与退出并发时残留的干预动作不得无声丢弃——
-		// hold/reopen 是幂等的事实写入,用独立 ctx 补执行;dispatch 无引擎可派,
-		// 恢复 PendingSteer 持久化(host 可能已按"入队成功"清除),下次
-		// Resume/Continue 重放整条干预。
+		// Exit race: when enqueue runs concurrently with exit, leftover intervention actions must not be dropped silently:
+		// hold/reopen are idempotent fact writes, so re-run them with an independent ctx; dispatch has no engine to send it to,
+		// so restore PendingSteer persistence (the host may already have cleared it on "enqueue succeeded"), and the next
+		// Resume/Continue replays the whole intervention.
 		for _, op := range leftover {
 			if op.dispatch != nil {
 				if op.text != "" {
@@ -184,8 +184,8 @@ func (e *engine) run(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		// hold+dispatch 必须先让配对派单建立返工事实；其它情况在派发前统一检查
-		// Gate，保证 boundary hold 和无许可 review 不会多跑一个 Worker。
+		// hold+dispatch must first let the paired dispatch build the rework facts; in other cases the Gate is checked uniformly before dispatch,
+		// guaranteeing that a boundary hold and a review without a permit do not run an extra Worker.
 		deferGate := e.applyPendingOps(ctx) || e.nextDefersGate()
 		if !deferGate {
 			if e.gate.HandleBoundary() {
@@ -200,8 +200,8 @@ func (e *engine) run(ctx context.Context) {
 				e.pauseWithNotify(notify.KindWorkerFailure, "Không đọc được dữ kiện định tuyến, đã tạm dừng: "+err.Error())
 				return
 			}
-			// 卷摘要可能已落盘而进程尚未来得及 MarkComplete。聚合工件全部齐备时
-			// 先按事实补做完结判定，再交给 Router，避免收官卷被误派去续卷。
+			// The volume summary may already be on disk while the process has not yet got to MarkComplete. When all aggregate artifacts are present,
+			// first make the completion judgment from facts, then hand over to the Router, so that the final volume is not mistakenly dispatched to continue a volume.
 			if state.AggregateRefresh == nil && state.Progress != nil && state.Progress.Layered &&
 				state.Progress.Phase == domain.PhaseWriting && state.ArcBoundary != nil &&
 				state.ArcBoundary.IsVolumeEnd && state.HasArcReview && state.HasArcSummary && state.HasVolumeSummary {
@@ -225,8 +225,8 @@ func (e *engine) run(ctx context.Context) {
 			}
 		}
 		if inst == nil {
-			// 语义场景或终态:完本 → 确定性收尾;其余(Steering 残留等)
-			// → 自然停机,等用户 Continue / 干预。
+			// Semantic scenario or terminal state: book complete → deterministic wrap-up; otherwise (leftover Steering, etc.)
+			// → stop naturally and wait for the user's Continue / intervention.
 			return
 		}
 		replaced, err := e.precheck(inst)
@@ -249,7 +249,7 @@ func (e *engine) run(ctx context.Context) {
 			return
 		}
 		if inst == nil {
-			continue // 僵局裁定要求重算路由
+			continue // The deadlock ruling asks for the route to be recomputed
 		}
 
 		err = e.runWorker(ctx, inst)
@@ -258,15 +258,15 @@ func (e *engine) run(ctx context.Context) {
 		}
 		e.rememberWorkerError(inst, err)
 		if err != nil {
-			// trackDeadlock 在派发前预记本次尝试。未进入有效 Worker
-			// 语义执行的错误不能被计为“同一任务无进展”。
+			// trackDeadlock records this attempt ahead of dispatch. Errors where no valid Worker
+			// semantic execution happened must not be counted as "no progress on the same task".
 			e.discardNonSemanticDeadlockAttempt(inst, err)
 			if stop := e.handleWorkerError(ctx, inst, err); stop {
 				return
 			}
 		}
 
-		// 政策边界:预算止损优先于验收/推进暂停。
+		// Policy boundary: budget stop-loss takes precedence over acceptance/advance pauses.
 		if e.budget.HandleBoundary() {
 			return
 		}
@@ -291,12 +291,12 @@ func (e *engine) nextDefersGate() bool {
 	return e.next != nil && e.deferGateForNext
 }
 
-// planStartFallback 覆盖规划事实缺位、Route 无法推导规划师的两个窗口:
-//  1. 裁定已落盘、首个 save_foundation 尚未发生 → 按固化的 PlanStartRecord 续跑,
-//     不重新裁定(RFC §6);首个 foundation 落盘后 tier 就位,补齐分支接管。
-//  2. 裁定从未完成(启动时模型故障)但输入事实 StartPrompt 在 → 现场补裁。
-//     这是首次裁定的重试,不违反"恢复不依赖重新裁定"——那条纪律针对已存在的裁定。
-//     补裁失败走显式暂停:启动失败不允许无声停机。
+// planStartFallback covers two windows where planning facts are missing and Route cannot derive a planner:
+//  1. The ruling is on disk but the first save_foundation has not happened → continue from the fixed PlanStartRecord,
+//     without re-ruling (RFC §6); once the first foundation is on disk the tier is in place, and the make-up branch takes over.
+//  2. The ruling never completed (model failure at startup) but the input fact StartPrompt exists → make up the ruling on the spot.
+//     This is a retry of the first ruling and does not violate "recovery does not depend on re-ruling", which applies to rulings that already exist.
+//     If the make-up ruling fails, take an explicit pause: a startup failure must not stop silently.
 func (e *engine) planStartFallback(ctx context.Context) (*flow.Instruction, error) {
 	progress, err := e.store.Progress.Load()
 	if err != nil {
@@ -335,7 +335,7 @@ func (e *engine) planStartFallback(ctx context.Context) (*flow.Instruction, erro
 	return e.retryPlanStart(ctx, meta.StartPrompt), nil
 }
 
-// retryPlanStart 补裁启动决策并固化(裁定先落事实再执行,与 StartPrepared 同构)。
+// retryPlanStart makes up the startup decision and fixes it (the ruling lands as facts before execution, same shape as StartPrepared).
 func (e *engine) retryPlanStart(ctx context.Context, prompt string) *flow.Instruction {
 	start := time.Now()
 	decision, derr := runObservedDecision(e.observer, "Phân xử khởi động bổ sung", func() (arbiter.PlanStartDecision, error) {
@@ -369,16 +369,16 @@ func (e *engine) retryPlanStart(ctx context.Context, prompt string) *flow.Instru
 	return &flow.Instruction{Agent: decision.Planner, Task: decision.Task, Reason: decision.Reason}
 }
 
-// precheck 是原 ToolGate 的确定性化身:不合法的派发直接改写,无需教学文案。
+// precheck is the deterministic incarnation of the former ToolGate: an illegal dispatch is rewritten directly, with no teaching text needed.
 func (e *engine) precheck(inst *flow.Instruction) (*flow.Instruction, error) {
 	progress, err := e.store.Progress.Load()
 	if err != nil {
 		return nil, fmt.Errorf("load progress: %w", err)
 	}
 	if progress != nil && progress.Phase == domain.PhaseComplete {
-		// 完本期唯一合法出路是 reopen(干预动作),任何派发直接丢弃。
+		// The only legal way out in the book-complete state is reopen (an intervention action); any dispatch is discarded directly.
 		slog.Warn("dispatch after book completion discarded", "module", "engine", "agent", inst.Agent)
-		return &flow.Instruction{}, nil // 置空:下轮 Route 归 nil 自然停机
+		return &flow.Instruction{}, nil // Clear it: next round Route returns nil and the engine stops naturally
 	}
 	if inst.Agent == "writer" {
 		if progress == nil || progress.Phase != domain.PhaseWriting {
@@ -397,8 +397,8 @@ func (e *engine) precheck(inst *flow.Instruction) (*flow.Instruction, error) {
 				if !errors.Is(err, errs.ErrToolPrecondition) {
 					return nil, err
 				}
-				// 目标章未展开 → 确定性改派 architect_long 展开(原 gate 的教学文案
-				// 是说给 LLM 的;Engine 直接做正确的事)。
+				// The target chapter is not yet expanded → deterministically reroute to architect_long to expand it (the original gate's teaching text
+				// was addressed to the LLM; the Engine just does the right thing).
 				return &flow.Instruction{
 					Agent:  "architect_long",
 					Task:   fmt.Sprintf("Cung kế tiếp đang là cung phác thảo (%s). Gọi save_foundation(type=expand_arc) để mở rộng cung kế; nếu tập hiện tại đã viết xong thì dùng type=append_volume để thêm và mở rộng tập kế.", err),
@@ -411,7 +411,7 @@ func (e *engine) precheck(inst *flow.Instruction) (*flow.Instruction, error) {
 	return nil, nil
 }
 
-// writerTargetChapter 推导 writer 下一次派发实际会写的章节(重写队列头,否则下一章)。
+// writerTargetChapter derives the chapter the writer's next dispatch will actually write (head of the rewrite queue, otherwise the next chapter).
 func writerTargetChapter(st *storepkg.Store) (int, error) {
 	progress, err := st.Progress.Load()
 	if err != nil {
@@ -426,11 +426,11 @@ func writerTargetChapter(st *storepkg.Store) (int, error) {
 	return progress.NextChapter(), nil
 }
 
-// trackDeadlock 维护僵局计数：连续出现同一 Agent+Task 说明上一轮
-// 没有满足路由后置条件。Worker 内部的 plan/draft/edit 等中间 checkpoint
-// 只用于恢复和观测，不能重置 Engine 级计数（issue #84）。
-// repeats 达阈值时咨询 Arbiter，硬上限直接熔断。
-// 返回 stop=true 表示本轮应结束循环;inst 可能被 Arbiter 改写(reroute)或置 nil(重算)。
+// trackDeadlock maintains the deadlock count: seeing the same Agent+Task consecutively means the previous round
+// did not satisfy the routing postcondition. Intermediate checkpoints inside a Worker such as plan/draft/edit
+// are used only for recovery and observation and must not reset the Engine-level count (issue #84).
+// When repeats reaches the threshold, consult the Arbiter; at the hard limit, trip directly.
+// Returns stop=true when this round should end the loop; inst may be rewritten by the Arbiter (reroute) or set to nil (recompute).
 func (e *engine) trackDeadlock(ctx context.Context, inst **flow.Instruction) (stop bool) {
 	in := *inst
 	if in == nil || in.Agent == "" {
@@ -450,7 +450,7 @@ func (e *engine) trackDeadlock(ctx context.Context, inst **flow.Instruction) (st
 		e.pauseStuck(notify.KindDeadlock, in, fmt.Sprintf("Ngắt mạch bế tắc: chỉ thị %d lần liên tiếp không tiến triển (%s), đã tạm dừng chờ bạn can thiệp", e.repeats, in.Agent))
 		return true
 	}
-	// Arbiter 僵局咨询(repeats ∈ [consultAt, abortAt))。裁定 retry 不清零计数。
+	// Arbiter deadlock consultation (repeats ∈ [consultAt, abortAt)). A retry ruling does not reset the count.
 	facts := e.failureFacts("deadlock", in, e.workerErrorFor(in))
 	decision, err := runObservedDecision(e.observer, "Phân xử bế tắc", func() (arbiter.FailureDecision, error) {
 		return arbiter.DecideFailure(ctx, e.arbiterModel, e.failurePrompt, facts)
@@ -472,10 +472,10 @@ func (e *engine) trackDeadlock(ctx context.Context, inst **flow.Instruction) (st
 	}
 }
 
-// runWorker 直接运行一次子代理:DISPATCH 事件 + 进度中继 + 结果解析。
+// runWorker runs a sub-agent directly once: DISPATCH event + progress relay + result parsing.
 func (e *engine) runWorker(ctx context.Context, inst *flow.Instruction) error {
 	e.observer.dispatchStart(inst.Agent, inst.Task, inst.Reason)
-	// Writer 任务预标进行中(与旧 Dispatcher 一致:UI 大纲立即反映"▸ 进行中")。
+	// Mark the Writer task in progress ahead of time (consistent with the old Dispatcher: the UI outline immediately shows "▸ in progress").
 	if inst.Agent == "writer" && inst.Chapter > 0 {
 		if err := e.store.Progress.ValidateChapterWork(inst.Chapter); err != nil {
 			runErr := fmt.Errorf("%w: %w", errInvalidWriteTarget, err)
@@ -489,28 +489,28 @@ func (e *engine) runWorker(ctx context.Context, inst *flow.Instruction) error {
 		}
 	}
 
-	// Worker 进度经 ctx ToolProgress 中继到 observer。
+	// Worker progress is relayed to the observer via the ctx ToolProgress.
 	runCtx := agentcore.WithToolProgress(ctx, func(p agentcore.ProgressPayload) {
 		e.observer.workerProgress(p)
 	})
 	_, err := e.workers.Run(runCtx, inst.Agent, inst.Task)
 	if err == nil {
-		// 成功即清失败追踪:同键的下一次失败重新享有"先重试一次"额度。
+		// Clear failure tracking on success: the next failure of the same key again gets the "retry once first" allowance.
 		e.failedKey = ""
 	}
 	e.observer.dispatchFinish(inst.Agent, err)
 	return err
 }
 
-// handleWorkerError 对同一指令先重试一次，再把错误类型和当前事实交给 Arbiter。
-// Engine 不硬编码哪些执行错误“必然无法恢复”；语义改派由模型决定，Store 边界继续
-// 负责阻止不合法写入。
+// handleWorkerError retries the same instruction once first, then hands the error type and current facts to the Arbiter.
+// The Engine does not hard-code which execution errors are "necessarily unrecoverable"; semantic rerouting is decided by the model, and the Store boundary continues
+// to block illegal writes.
 func (e *engine) handleWorkerError(ctx context.Context, inst *flow.Instruction, werr error) (stop bool) {
 	msg := werr.Error()
 
 	key := instructionKey(inst)
 	if e.failedKey != key {
-		// 首败:原指令重试一次(下一轮 Route 重算,事实驱动天然幂等)。
+		// First failure: retry the original instruction once (the next round's Route recomputes; fact-driven, so naturally idempotent).
 		e.failedKey = key
 		return false
 	}
@@ -539,9 +539,9 @@ func (e *engine) handleWorkerError(ctx context.Context, inst *flow.Instruction, 
 	}
 }
 
-// pauseStuck 在引擎放弃一条指令时暂停:返工章先出队再停。仅用于引擎已判定该指令
-// 走不通的出路(僵局熔断、僵局/失败裁定 abort),裁定不可用等基础设施故障仍走
-// pauseWithNotify——那是外部问题,不该赔上一章返工。
+// pauseStuck pauses when the engine gives up on an instruction: the rework chapter is dequeued first, then stop. Used only for exits where the engine has itself judged
+// the instruction a dead end (deadlock trip, deadlock/failure ruling abort); infrastructure failures such as an unavailable ruling still go through
+// pauseWithNotify, since that is an external problem and should not cost a chapter's rework.
 func (e *engine) pauseStuck(kind string, inst *flow.Instruction, body string) {
 	if e.dropStuckRewrite(inst) {
 		body += fmt.Sprintf("; chương %d đã được đưa ra khỏi hàng đợi viết lại (giữ bản chính thức trước đó), khi tiếp tục sáng tác sẽ tiến từ các chương phía sau", inst.Chapter)
@@ -549,9 +549,9 @@ func (e *engine) pauseStuck(kind string, inst *flow.Instruction, body string) {
 	e.pauseWithNotify(kind, body)
 }
 
-// dropStuckRewrite 把卡死的返工章移出队列。PendingRewrites 是持久化事实,引擎放弃
-// 这条指令时不出队的话,重启会立刻重放同一条死指令,把整本书永久锁死(issue #110)。
-// 返回 true 表示确实出队了。
+// dropStuckRewrite removes a stuck rework chapter from the queue. PendingRewrites is a persisted fact; if it is not dequeued when the engine gives up on
+// the instruction, a restart will immediately replay the same dead instruction and lock the whole book permanently (issue #110).
+// Returns true if it was actually dequeued.
 func (e *engine) dropStuckRewrite(inst *flow.Instruction) bool {
 	if inst == nil || inst.Agent != "writer" || inst.Chapter <= 0 {
 		return false
@@ -567,9 +567,9 @@ func (e *engine) dropStuckRewrite(inst *flow.Instruction) bool {
 	return true
 }
 
-// discardNonSemanticDeadlockAttempt 撤销 trackDeadlock 为本次派发预记的
-// 语义尝试。只排除模型调用未完整执行的稳定错误类型；content_filter
-// 保留在原有自愈路径，max_turns、stop_guard、取消等真实无进展仍计数。
+// discardNonSemanticDeadlockAttempt undoes the semantic attempt that trackDeadlock
+// recorded in advance for this dispatch. It excludes only stable error types where the model call was not fully executed; content_filter
+// stays on its existing self-healing path, while real no-progress cases such as max_turns, stop_guard and cancellation are still counted.
 func (e *engine) discardNonSemanticDeadlockAttempt(inst *flow.Instruction, werr error) {
 	if inst == nil || !isNonSemanticWorkerFailure(werr) {
 		return
@@ -584,8 +584,8 @@ func (e *engine) discardNonSemanticDeadlockAttempt(inst *flow.Instruction, werr 
 	}
 }
 
-// isNonSemanticWorkerFailure 仅识别“本次模型执行没有产生可判断语义”的错误。
-// 优先依赖 agentcore 的错误链契约；错误链被供应商扁平化时复用日志分类。
+// isNonSemanticWorkerFailure recognizes only errors where "this model execution produced nothing whose semantics can be judged".
+// It relies first on agentcore's error-chain contract; when the error chain has been flattened by the provider, it reuses the log classification.
 func isNonSemanticWorkerFailure(err error) bool {
 	if err == nil {
 		return false
@@ -626,10 +626,10 @@ func (e *engine) workerErrorFor(inst *flow.Instruction) error {
 	return e.lastWorkerError
 }
 
-// contentFilterAdvice 给内容审核拦截的暂停附上用户可执行的出路。
-// 审核是服务商黑盒,预检/规避都不可行,能做的只有把决策递到用户手上;
-// 拦截本身不提前熔断——换上下文重派对它有真实自愈率(ch21-24 实测),
-// 走完"免费重试→仲裁"再暂停。
+// contentFilterAdvice attaches a way out the user can act on to a pause caused by a content-moderation block.
+// Moderation is a provider black box; pre-checking and evasion are both infeasible, so all we can do is hand the decision to the user;
+// the block itself does not trip the breaker early: re-dispatching with a different context has a real self-healing rate (measured on ch21-24),
+// so run through "free retry → arbitration" before pausing.
 func contentFilterAdvice(werr error) string {
 	if !errors.Is(werr, agentcore.ErrProviderContentFilter) {
 		return ""
@@ -637,8 +637,8 @@ func contentFilterAdvice(werr error) string {
 	return ". Đây là provider chặn nội dung (không phải lỗi cục bộ), có thể: dùng /model chuyển sang provider không có tầng kiểm duyệt rồi nhập \"tiếp tục\"; hoặc sửa lại cách diễn đạt của bản nháp chương này (drafts/) rồi tiếp tục; thử lại nguyên trạng nhiều khả năng vẫn bị chặn"
 }
 
-// errInvalidWriteTarget 标记 runWorker 前置校验拦下的非法写作目标，供错误链和
-// Arbiter 事实保留稳定语义；是否重试或改派仍由统一失败流程决定。
+// errInvalidWriteTarget marks an illegal write target rejected by the runWorker precheck, so the error chain and
+// Arbiter facts keep stable semantics; whether to retry or reroute is still decided by the unified failure flow.
 var errInvalidWriteTarget = errors.New("Mục tiêu viết không hợp lệ")
 
 func (e *engine) failureFacts(kind string, inst *flow.Instruction, workerErr error) arbiter.FailureFacts {
@@ -685,10 +685,10 @@ func (e *engine) recordFailureDecision(kind string, inst *flow.Instruction, fact
 	}
 }
 
-// applyPendingOps 在循环边界提交干预的控制态动作;循环排空——同步重询
-// (reconsult)会在应用过程中追加新动作,必须在本边界内消化完,否则中间会
-// 多派一个 worker(干预必须先于后续创作生效)。
-// 返回是否有 hold+dispatch 必须先执行配对派单；该情况下调用方暂缓 Gate 检查。
+// applyPendingOps commits an intervention's control-state actions at the loop boundary; the loop drains the queue: a synchronous re-consultation
+// (reconsult) appends new actions during application, and they must all be consumed within this boundary, otherwise
+// an extra worker would be dispatched in between (an intervention must take effect before later creative work).
+// Returns whether a hold+dispatch pair exists whose paired dispatch must run first; in that case the caller defers the Gate check.
 func (e *engine) applyPendingOps(ctx context.Context) (deferGate bool) {
 	for {
 		e.mu.Lock()
@@ -702,8 +702,8 @@ func (e *engine) applyPendingOps(ctx context.Context) (deferGate bool) {
 			pairedHoldDispatch := op.hold != nil && !op.hold.Cancel && op.dispatch != nil
 			err := e.applyControlOp(ctx, op)
 			if err != nil {
-				// 动作持久化失败:host 已按"入队成功"清除 PendingSteer,
-				// 这里回存整条干预,恢复/继续时重新裁定重试(动作幂等 + 重询按新事实)。
+				// Action persistence failed: the host has already cleared PendingSteer on "enqueue succeeded",
+				// so store the whole intervention back here, and on recovery/continue re-rule and retry (actions are idempotent + re-consultation uses the new facts).
 				if op.text != "" {
 					if serr := e.store.RunMeta.SetPendingSteer(op.text); serr != nil {
 						slog.Warn("saving intervention failed", "module", "engine", "err", serr)
@@ -712,18 +712,18 @@ func (e *engine) applyPendingOps(ctx context.Context) (deferGate bool) {
 				e.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "warn",
 					Summary: "Không thực hiện được hành động can thiệp, đã giữ lại; sẽ tự thử lại khi khôi phục/tiếp tục"})
 			} else if pairedHoldDispatch && e.nextDefersGate() {
-				// 只有 hold 与配对派单都成功落地，才允许绕过本次 Gate。
-				// hold 写入失败或派单因事实过期被丢弃时继续绕过，都会让
-				// 未受保护的 Worker 前进。
+				// Only when both the hold and the paired dispatch have landed successfully may this Gate be bypassed.
+				// Continuing to bypass when the hold write failed or the dispatch was dropped because its facts went stale would
+				// let an unprotected Worker move forward.
 				deferGate = true
 			}
 		}
 	}
 }
 
-// applyControlOp 执行单个控制态动作(hold 直写 RunMeta、reopen 调工具内核、dispatch 先对账)。
-// 引擎未运行时由 host 在干预路径直接调用;返回首个持久化失败(调用方据此决定是否
-// 保留 PendingSteer 供恢复重放)。
+// applyControlOp executes a single control-state action (hold writes RunMeta directly, reopen calls the tool kernel, dispatch reconciles first).
+// When the engine is not running the host calls it directly on the intervention path; returns the first persistence failure (the caller uses it to decide whether to
+// keep PendingSteer for recovery replay).
 func (e *engine) applyControlOp(ctx context.Context, op controlOp) error {
 	var firstErr error
 	fail := func(err error) {
@@ -732,8 +732,8 @@ func (e *engine) applyControlOp(ctx context.Context, op controlOp) error {
 		}
 	}
 	if op.dispatch != nil {
-		// Expect 必须在 hold 等配对动作落盘前核对。否则派单过期后旧 hold
-		// 会残留，并与按新事实重新裁定出的 hold 冲突，最终只暂停却漏做修改。
+		// Expect must be checked before paired actions such as hold land. Otherwise, after a dispatch goes stale the old hold
+		// would linger and conflict with the hold from the re-ruling on new facts, ending up pausing without making the change.
 		fresh, err := arbiter.CollectInterventionFacts(e.store)
 		if err != nil {
 			return fmt.Errorf("Làm mới dữ kiện can thiệp: %w", err)
@@ -744,8 +744,8 @@ func (e *engine) applyControlOp(ctx context.Context, op controlOp) error {
 				Summary: "Phân công theo phân xử đã lỗi thời (dữ kiện đã tiến), phân xử lại theo dữ kiện mới nhất"})
 			e.recordStale(op)
 			if op.text != "" && e.reconsult != nil {
-				// 同步重询:干预必须先于后续创作生效——异步会让引擎在新裁定
-				// 落地前又派一个 worker。新动作由 applyPendingOps 在本边界排空。
+				// Synchronous re-consultation: an intervention must take effect before later creative work; asynchronous would let the engine dispatch another worker
+				// before the new ruling lands. New actions are drained by applyPendingOps within this boundary.
 				e.reconsult(op.text)
 			}
 			return nil
@@ -769,7 +769,7 @@ func (e *engine) applyControlOp(ctx context.Context, op controlOp) error {
 			hold := domain.AdvanceHold{After: op.hold.After, TargetChapter: op.hold.TargetChapter, Reason: op.hold.Reason}
 			if err := e.store.RunMeta.SetAdvanceHold(hold); err != nil {
 				e.emitEvent(Event{Time: time.Now(), Category: "ERROR", Summary: "Không đặt được tạm dừng một lần: " + err.Error(), Level: "error"})
-				return err // hold 未落盘时关联 dispatch 不得执行
+				return err // A linked dispatch must not execute when the hold has not landed
 			}
 			e.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Summary: "Đã đặt tạm dừng một lần: " + op.hold.Reason, Level: "info"})
 		}
@@ -785,12 +785,12 @@ func (e *engine) applyControlOp(ctx context.Context, op controlOp) error {
 		}
 	}
 	if op.dispatch != nil {
-		// Expect 已在任何配对状态写入前核对。CheckpointSeq 只留审计不参与
-		// 对账：干预到达时 worker 多半正在跑，seq 必然推进。
+		// Expect was checked before any paired state was written. CheckpointSeq is kept for audit only and does not take part in
+		// reconciliation: when the intervention arrives the worker is usually running, so seq has necessarily advanced.
 		e.mu.Lock()
-		// 已知窗口(best-effort 边界,见 engine-arbiter.md 澄清③):派单自此存于内存,
-		// worker 启动前被硬杀(kill -9,defer 不执行)会丢失本次派单意图——
-		// 正常退出/Abort 由 run 的 defer 回存 PendingSteer 兜底。
+		// Known window (best-effort boundary, see engine-arbiter.md clarification ③): the dispatch lives only in memory from here on,
+		// and a hard kill (kill -9, defers do not run) before the worker starts loses this dispatch intent;
+		// a normal exit / Abort is covered by the run's defer, which stores PendingSteer back.
 		e.next = &flow.Instruction{Agent: op.dispatch.Agent, Task: interventionDispatchTask(op.dispatch.Task, op.text), Reason: "Phân xử can thiệp của người dùng"}
 		e.deferGateForNext = op.hold != nil && !op.hold.Cancel
 		e.mu.Unlock()
@@ -798,8 +798,8 @@ func (e *engine) applyControlOp(ctx context.Context, op controlOp) error {
 	return firstErr
 }
 
-// interventionDispatchTask 保留用户原始干预，避免 Arbiter 在转述任务时无意扩大
-// 修改目标。下游可以读取更广上下文做判断，但只能把原文当作动作授权来源。
+// interventionDispatchTask preserves the user's original intervention, so the Arbiter does not inadvertently widen the
+// modification target when paraphrasing the task. Downstream may read wider context to judge, but may treat the original text only as the source of action authorization.
 func interventionDispatchTask(task, original string) string {
 	task = strings.TrimSpace(task)
 	if strings.TrimSpace(original) == "" {
@@ -818,8 +818,8 @@ func (e *engine) recordStale(op controlOp) {
 	}
 }
 
-// pauseWithNotify 引擎自主暂停(僵局熔断/失败裁定 abort):离屏通知 + 走 host 统一
-// 暂停语义(onPause → abortWithEvent:lifecycle=paused + 屏内事件 + cancel ctx)。
+// pauseWithNotify is the engine's own pause (deadlock trip / failure-ruling abort): off-screen notification + the host's unified
+// pause semantics (onPause → abortWithEvent: lifecycle=paused + on-screen event + cancel ctx).
 func (e *engine) pauseWithNotify(kind, body string) {
 	e.notify(kind, "warn", "ainovel: Engine tạm dừng", body)
 	if e.onPause != nil {
@@ -830,7 +830,7 @@ func (e *engine) pauseWithNotify(kind, body string) {
 	e.abort()
 }
 
-// completionSummary 完本的确定性收尾报告，不花 LLM 调用。
+// completionSummary is the deterministic wrap-up report for a completed book; it spends no LLM call.
 func completionSummary(progress domain.Progress, book domain.BookMetadata) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "\"%s\" đã sáng tác xong: tổng %d chương, %d chữ", book.Title, len(progress.CompletedChapters), progress.TotalWordCount)

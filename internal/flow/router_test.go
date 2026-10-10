@@ -70,7 +70,7 @@ func TestLoadStateOnlyPrioritizesExternalRevisionFeedback(t *testing.T) {
 	}
 }
 
-// helper：构造一个处于 Writing 阶段、分层模式的 Progress。
+// helper: builds a Progress in the Writing phase and layered mode.
 func writingProgress(completed []int, flow domain.FlowState) *domain.Progress {
 	return &domain.Progress{
 		Phase:             domain.PhaseWriting,
@@ -309,7 +309,7 @@ func TestRoute_NonLayeredOutlineExhaustedDispatchesArchitect(t *testing.T) {
 }
 
 func TestRoute_ArcEndNonLayeredSkipsBoundary(t *testing.T) {
-	// 非 Layered 模式即使 ArcBoundary 非 nil 也不走弧末分支
+	// In non-Layered mode, the arc-end branch is not taken even when ArcBoundary is non-nil
 	p := &domain.Progress{
 		Phase:             domain.PhaseWriting,
 		Flow:              domain.FlowWriting,
@@ -337,7 +337,7 @@ func contains(s, sub string) bool {
 	return false
 }
 
-// 规划期补齐:设定缺项 + 规划师可判定 → 照缺项续派同一规划师。
+// Planning-stage completion: foundation items missing + planner determinable -> keep dispatching the same planner per the missing items.
 func TestRoute_PlanningFillDispatchesSamePlanner(t *testing.T) {
 	base := State{
 		Progress:          &domain.Progress{Phase: domain.PhaseOutline},
@@ -369,13 +369,13 @@ func TestRoute_PlanningFillDispatchesSamePlanner(t *testing.T) {
 		t.Fatalf("book 缺失时应指示 save_book,got %+v", got)
 	}
 
-	// 首次规划未落盘任何设定(tier 空)→ 选型是语义判断,交 LLM
+	// The first planning has not persisted any foundation yet (tier empty) -> choosing is a semantic judgment, left to the LLM
 	unknown := base
 	if got := Route(unknown); got != nil {
 		t.Fatalf("tier 未知时应交 LLM 裁定,got %+v", got)
 	}
 
-	// 缺项已齐 → 无补齐指令(等 phase 推进)
+	// Missing items are all complete -> no completion instruction (wait for the phase to advance)
 	done := base
 	done.PlanningTier = domain.PlanningTierLong
 	done.FoundationMissing = nil
@@ -384,9 +384,9 @@ func TestRoute_PlanningFillDispatchesSamePlanner(t *testing.T) {
 	}
 }
 
-// Chương trong hàng viết lại mà chưa có chỉ thị: chỉ thị phải yêu cầu writer
-// lập kế hoạch trước. Không đổi agent — chèn thêm một lượt điều phối sẽ khiến
-// hàng đợi không bao giờ rút nếu bước lập kế hoạch thất bại.
+// A chapter in the rewrite queue without an instruction yet: the instruction must require the writer
+// to plan first. The agent is not changed - inserting an extra dispatch round would make the
+// queue never drain if the planning step fails.
 func TestRoute_RewriteWithoutDirectiveAsksWriterToPlanFirst(t *testing.T) {
 	s := State{
 		Progress: &domain.Progress{

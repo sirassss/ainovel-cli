@@ -77,7 +77,7 @@ func (o *observer) handleContextProgress(ev agentcore.Event) {
 		return
 	}
 
-	// 更新 agent 快照（TUI 侧边栏始终可见）
+	// Update the agent snapshot (the TUI sidebar is always visible)
 	o.updateAgent(agent, func(a *agentState) {
 		a.context = AgentContextSnapshot{
 			Tokens:        payload.Tokens,
@@ -95,12 +95,12 @@ func (o *observer) handleContextProgress(ev agentcore.Event) {
 	summary := fmt.Sprintf("%s context window %.0f%% (%d/%d), chiến lược: %s", agent, payload.Percent, payload.Tokens, payload.ContextWindow, payload.Strategy)
 
 	if payload.Strategy != "" {
-		// 触发了压缩 → 事件流 + 日志
+		// Compaction triggered → event stream + log
 		ctxEv := Event{Time: time.Now(), Category: "SYSTEM", Agent: agent, Summary: summary, Level: level, Depth: 1}
 		o.emitEv(ctxEv)
 		o.persistEvent(ctxEv)
 	} else {
-		// 普通使用率报告 → 仅日志
+		// Ordinary usage-rate report → log only
 		slogLevel := slog.LevelInfo
 		if level == "warn" {
 			slogLevel = slog.LevelWarn

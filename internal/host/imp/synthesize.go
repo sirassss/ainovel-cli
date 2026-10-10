@@ -9,22 +9,22 @@ import (
 	"github.com/voocel/ainovel-cli/internal/domain"
 )
 
-// 故事状态闭集（RFC §10.4）。
+// Closed set of story states (RFC §10.4).
 const (
 	storyOpen      = "open"
 	storyClosed    = "closed"
 	storyUncertain = "uncertain"
 )
 
-// synthesisSchemaVersion 纳入 RangeDigest / synthesis InputDigest，升级综合契约时递增以失效已落盘工件。
-// synthesizePromptVersion 纳入 synthesis InputDigest，改综合 prompt 时递增，否则旧 synthesis 仍被误判有效。
+// synthesisSchemaVersion is included in RangeDigest / synthesis InputDigest; increment it when the synthesis contract is upgraded, to invalidate persisted artifacts.
+// synthesizePromptVersion is included in the synthesis InputDigest; increment it when the synthesis prompt changes, otherwise the old synthesis is still wrongly judged valid.
 const (
 	synthesisSchemaVersion  = 3
 	synthesizePromptVersion = "synthesize-v3"
-	rangePromptVersion      = "range-v2" // 纳入 rangeInputDigest，改 Range prompt 时递增，否则旧区间摘要仍被误判有效
+	rangePromptVersion      = "range-v2" // included in rangeInputDigest; increment when the Range prompt changes, otherwise old range summaries are still wrongly judged valid
 )
 
-// ImportedArcRange / ImportedVolumeRange：综合只返回卷弧范围，不重复输出所有章节（RFC §10.3）。
+// ImportedArcRange / ImportedVolumeRange: synthesis returns only volume/arc ranges, without repeating all chapters (RFC §10.3).
 type ImportedArcRange struct {
 	Title        string `json:"title"`
 	Goal         string `json:"goal"`
@@ -38,7 +38,7 @@ type ImportedVolumeRange struct {
 	Arcs  []ImportedArcRange `json:"arcs"`
 }
 
-// BookSynthesis 是最终综合结果：全局事实 + 卷弧范围（RFC §10.3）。
+// BookSynthesis is the final synthesis result: global facts + volume/arc ranges (RFC §10.3).
 type BookSynthesis struct {
 	Title        *string               `json:"title"`
 	Synopsis     string                `json:"synopsis"`
@@ -52,7 +52,7 @@ type BookSynthesis struct {
 	StatusReason string                `json:"status_reason,omitempty"`
 }
 
-// RangeDigest 是长书 Map 阶段的连续区间摘要，输出受单区间约束（RFC §10.2）。
+// RangeDigest is a contiguous-range summary from the Map stage of a long book; its output is bounded by a single range (RFC §10.2).
 type RangeDigest struct {
 	StartChapter    int      `json:"start_chapter"`
 	EndChapter      int      `json:"end_chapter"`
@@ -69,7 +69,7 @@ var validPlanningTiers = map[domain.PlanningTier]bool{
 	domain.PlanningTierLong:  true,
 }
 
-// planFactRanges 按字节预算把逐章事实分连续区间；短书一次容纳则单区间直接综合（RFC §10.2）。
+// planFactRanges splits per-chapter facts into contiguous ranges by byte budget; if a short book fits at once, a single range is synthesized directly (RFC §10.2).
 func planFactRanges(facts []ImportedChapterFacts, budgetBytes int) [][2]int {
 	if len(facts) == 0 {
 		return nil
@@ -91,9 +91,9 @@ func planFactRanges(facts []ImportedChapterFacts, budgetBytes int) [][2]int {
 	return ranges
 }
 
-// compactView 是送入综合的紧凑视图：保留跨章归纳需要的字段，不含全文。
-// character/world evidence 是逐章反推时专为全书综合提取的观察，必须带进来——
-// 否则综合器只能从摘要臆造正式角色与世界规则，白白浪费已提取的证据（RFC §9.1/§10）。
+// compactView is the compact view fed into synthesis: it keeps the fields needed for cross-chapter induction and omits the full text.
+// character/world evidence are observations extracted specifically for whole-book synthesis during per-chapter reverse-engineering and must be carried in -
+// otherwise the synthesizer could only fabricate formal characters and world rules from summaries, wasting the evidence already extracted (RFC §9.1/§10).
 type compactView struct {
 	Chapter           int                     `json:"chapter"`
 	Title             string                  `json:"title"`
@@ -130,9 +130,9 @@ func compactFacts(facts []ImportedChapterFacts) string {
 	return string(data)
 }
 
-// Synthesize 分层综合：短书直接出 BookSynthesis；长书先出 RangeDigest 再归并（RFC §10）。
-// bookPrompt 描述 BookSynthesis 契约，rangePrompt 描述 RangeDigest 契约——两阶段输出结构不同，
-// 必须各用对应系统提示词，否则模型收到 BookSynthesis 指令却被要求 RangeDigest，指令自相矛盾。
+// Synthesize synthesizes hierarchically: a short book produces BookSynthesis directly; a long book first produces RangeDigests and then merges them (RFC §10).
+// bookPrompt describes the BookSynthesis contract and rangePrompt describes the RangeDigest contract - the two stages output different structures,
+// so each must use its own system prompt, otherwise the model receives a BookSynthesis instruction yet is asked for a RangeDigest, and the instructions contradict themselves.
 func Synthesize(ctx context.Context, m callModel, bookPrompt, rangePrompt string, w *Workspace, facts []ImportedChapterFacts, budgetBytes, maxTokens int, prof callProfile) (*BookSynthesis, error) {
 	ranges := planFactRanges(facts, budgetBytes)
 	if len(ranges) <= 1 {
@@ -144,7 +144,7 @@ func Synthesize(ctx context.Context, m callModel, bookPrompt, rangePrompt string
 		startCh, endCh := rangeFacts[0].Chapter, rangeFacts[len(rangeFacts)-1].Chapter
 		want := rangeInputDigest(rangeFacts)
 		rel := rangeDigestPath(startCh, endCh)
-		// InputDigest 匹配的已落盘区间摘要直接复用，长书任一区间崩溃后不重复收费（RFC §6/§10.2）。
+		// Persisted range summaries whose InputDigest matches are reused directly, so a crash in any range of a long book is not charged twice (RFC §6/§10.2).
 		if art, err := readArtifact[RangeDigest](w, rel); err == nil && art.InputDigest == want {
 			digests = append(digests, art.Payload)
 			continue
@@ -161,8 +161,8 @@ func Synthesize(ctx context.Context, m callModel, bookPrompt, rangePrompt string
 		}
 		digests = append(digests, rd)
 	}
-	// 递归 Reduce：区间摘要总量仍可能超过最终综合输入预算（把 #83 从"全部章节"推迟到"全部区间摘要"）。
-	// 逐层归并到可容纳，才真正无界扩展（RFC §10.2）。
+	// Recursive Reduce: the total of range summaries may still exceed the final synthesis input budget (this defers #83 from "all chapters" to "all range summaries").
+	// Only merging layer by layer until it fits makes the expansion truly unbounded (RFC §10.2).
 	digests, err := reduceToFit(ctx, m, rangePrompt, digests, budgetBytes, maxTokens, prof)
 	if err != nil {
 		return nil, err
@@ -171,9 +171,9 @@ func Synthesize(ctx context.Context, m callModel, bookPrompt, rangePrompt string
 	return synthesizeBook(ctx, m, bookPrompt, string(data), len(facts), maxTokens, prof)
 }
 
-// reduceToFit 反复把连续区间摘要按预算分组归并，直到序列化后可容纳最终 BookSynthesis 输入预算。
-// 每轮严格减少摘要数量，故必然收敛；单个摘要即便超预算也不再拆（下层已是最小语义单元），
-// 交最终调用，若因此截断由 callStructured 显式报错而非静默溢出。
+// reduceToFit repeatedly groups contiguous range summaries by budget and merges them, until the serialized size fits the final BookSynthesis input budget.
+// Each round strictly reduces the number of summaries, so it must converge; a single summary is not split further even if over budget (the lower layer is already the smallest semantic unit),
+// and goes to the final call; if that truncates, callStructured reports an explicit error rather than silently overflowing.
 func reduceToFit(ctx context.Context, m callModel, rangePrompt string, digests []RangeDigest, budgetBytes, maxTokens int, prof callProfile) ([]RangeDigest, error) {
 	round := 0
 	for len(digests) > 1 {
@@ -186,7 +186,7 @@ func reduceToFit(ctx context.Context, m callModel, rangePrompt string, digests [
 		}
 		groups := groupDigestsByBudget(digests, budgetBytes)
 		if len(groups) >= len(digests) {
-			return digests, nil // 无法再合并（每组仅一个摘要）
+			return digests, nil // cannot merge further (only one summary per group)
 		}
 		round++
 		merged := make([]RangeDigest, 0, len(groups))
@@ -217,7 +217,7 @@ func validateRangeDigest(d *RangeDigest, startChapter, endChapter int, label str
 	return nil
 }
 
-// groupDigestsByBudget 把连续区间摘要按字节预算分成连续分组；单个摘要即便超预算也单独成组。
+// groupDigestsByBudget splits contiguous range summaries into contiguous groups by byte budget; a single summary forms its own group even if over budget.
 func groupDigestsByBudget(digests []RangeDigest, budgetBytes int) [][]RangeDigest {
 	var groups [][]RangeDigest
 	var cur []RangeDigest
@@ -237,19 +237,19 @@ func groupDigestsByBudget(digests []RangeDigest, budgetBytes int) [][]RangeDiges
 	return groups
 }
 
-// buildDigestReducePayload 组装"把若干下层区间摘要合并为一个 RangeDigest"的输入。
+// buildDigestReducePayload assembles the input for "merge several lower-layer range summaries into one RangeDigest".
 func buildDigestReducePayload(digests []RangeDigest) string {
 	data, _ := json.Marshal(digests)
 	return fmt.Sprintf("Hãy gộp nhiều tóm tắt khoảng cấp dưới của chương %d-%d thành một RangeDigest (tóm tắt khoảng liên tiếp). Tóm tắt cấp dưới:\n%s",
 		digests[0].StartChapter, digests[len(digests)-1].EndChapter, string(data))
 }
 
-// rangeDigestPath 返回连续区间摘要工件相对路径。
+// rangeDigestPath returns the relative path of the contiguous-range summary artifact.
 func rangeDigestPath(startChapter, endChapter int) string {
 	return fmt.Sprintf("%s/%06d-%06d.json", dirRangeDigests, startChapter, endChapter)
 }
 
-// rangeInputDigest 绑定该连续区间的紧凑事实与 Range prompt/schema 版本（RFC §6.3）。
+// rangeInputDigest binds the compact facts of that contiguous range and the Range prompt/schema version (RFC §6.3).
 func rangeInputDigest(facts []ImportedChapterFacts) string {
 	return Digest([]byte(fmt.Sprintf("range\x00%s\x00v%d\x00%s", rangePromptVersion, synthesisSchemaVersion, compactFacts(facts))))
 }
@@ -262,7 +262,7 @@ func synthesizeBook(ctx context.Context, m callModel, systemPrompt, payload stri
 	if err != nil {
 		return nil, err
 	}
-	// 回显模型的全书理解：这是导入最核心的语义产出，值得让用户第一时间看见。
+	// Echo the model's whole-book understanding: this is the most central semantic output of the import, worth letting the user see right away.
 	prof.step(0, 0, "Model tóm lược toàn sách: %s", snippet(s.Premise, 80))
 	return &s, nil
 }
@@ -276,7 +276,7 @@ func buildBookPayload(inner string, n int) string {
 	return fmt.Sprintf("Dưới đây là sự thật gọn/tóm tắt khoảng của toàn sách %d chương. Hãy tạo BookSynthesis: title, synopsis, premise, characters, world_rules, structure (phạm vi tập/cung), compass, planning_tier, story_status.\n\n%s", n, inner)
 }
 
-// validateSynthesis 校验综合结果的结构约束（值域/闭集/范围），不复判文学质量。
+// validateSynthesis validates the structural constraints of the synthesis result (value domains / closed sets / ranges), without re-judging literary quality.
 func validateSynthesis(s *BookSynthesis, n int) error {
 	if strings.TrimSpace(s.Synopsis) == "" {
 		return fmt.Errorf("synopsis rỗng")
@@ -301,7 +301,7 @@ func validateSynthesis(s *BookSynthesis, n int) error {
 	return validateStructure(s.Structure, n)
 }
 
-// validateStructure 校验卷弧范围连续、无重叠、完整覆盖 1..N（RFC §11 / 不变量 5）。
+// validateStructure validates that volume/arc ranges are contiguous, non-overlapping and fully cover 1..N (RFC §11 / invariant 5).
 func validateStructure(structure []ImportedVolumeRange, n int) error {
 	if len(structure) == 0 {
 		return fmt.Errorf("structure rỗng")
@@ -327,8 +327,8 @@ func validateStructure(structure []ImportedVolumeRange, n int) error {
 	return nil
 }
 
-// synthesisInputDigest 绑定有序逐章分析集合的紧凑事实 + 综合 prompt/schema 版本（RFC §6.3 / 不变量 6）。
-// 纳入版本，改综合契约后旧 synthesis 自然失效重做。
+// synthesisInputDigest binds the compact facts of the ordered per-chapter analysis set + synthesis prompt/schema version (RFC §6.3 / invariant 6).
+// The version is included, so after the synthesis contract changes the old synthesis naturally invalidates and is redone.
 func synthesisInputDigest(facts []ImportedChapterFacts) string {
 	var b strings.Builder
 	b.WriteString("synthesize\x00")
@@ -341,7 +341,7 @@ func synthesisInputDigest(facts []ImportedChapterFacts) string {
 	return Digest([]byte(b.String()))
 }
 
-// Foundation 是从 BookSynthesis + 逐章事实组装出的正式领域对象集（发布前完整校验，RFC §11）。
+// Foundation is the set of formal domain objects assembled from BookSynthesis + per-chapter facts (fully validated before publishing, RFC §11).
 type Foundation struct {
 	Book         domain.BookMetadata
 	PlanningTier domain.PlanningTier
@@ -353,8 +353,8 @@ type Foundation struct {
 	Closed       bool
 }
 
-// AssembleFoundation 用综合语义 + 逐章事实组装正式 Foundation 并完整校验。
-// closed 是 story_status 裁定后的收束事实；fallbackName 用于正文无法确认书名时的推断标题。
+// AssembleFoundation assembles the formal Foundation from the synthesis semantics + per-chapter facts and validates it fully.
+// closed is the wrap-up fact after the story_status ruling; fallbackName is the inferred title used when the body text cannot confirm the book title.
 func AssembleFoundation(s *BookSynthesis, facts []ImportedChapterFacts, closed bool, fallbackName string) (*Foundation, error) {
 	n := len(facts)
 	if err := validateSynthesis(s, n); err != nil {
@@ -387,7 +387,7 @@ func AssembleFoundation(s *BookSynthesis, facts []ImportedChapterFacts, closed b
 		volumes[len(volumes)-1].Final = true
 	}
 
-	// FlattenOutline 后章数为 N，且标题与逐章事实一致（RFC §11.5）。
+	// After FlattenOutline the chapter count is N, and titles agree with the per-chapter facts (RFC §11.5).
 	flat := domain.FlattenOutline(volumes)
 	if len(flat) != n {
 		return nil, fmt.Errorf("Số chương FlattenOutline %d != %d", len(flat), n)
@@ -417,7 +417,7 @@ func AssembleFoundation(s *BookSynthesis, facts []ImportedChapterFacts, closed b
 	}, nil
 }
 
-// importedBookTitle 在正文无法确认书名时使用源文件名，保证作品信息仍有明确标题。
+// importedBookTitle uses the source file name when the body text cannot confirm the book title, ensuring the work info still has an explicit title.
 func importedBookTitle(fallbackName string) string {
 	name := strings.TrimSuffix(fallbackName, ".txt")
 	name = strings.TrimSuffix(name, ".md")

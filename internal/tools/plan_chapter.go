@@ -12,7 +12,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// PlanChapterTool 保存章节构思，Agent 自主决定规划粒度。
+// PlanChapterTool saves the chapter plan; the Agent decides the planning granularity itself.
 type PlanChapterTool struct {
 	store *store.Store
 }
@@ -27,7 +27,7 @@ func (t *PlanChapterTool) Description() string {
 }
 func (t *PlanChapterTool) Label() string { return "Lập kế hoạch chương" }
 
-// 写工具，禁止并发。
+// Write tool; concurrency is forbidden.
 func (t *PlanChapterTool) ReadOnly(_ json.RawMessage) bool        { return false }
 func (t *PlanChapterTool) ConcurrencySafe(_ json.RawMessage) bool { return false }
 
@@ -63,10 +63,10 @@ func (t *PlanChapterTool) Execute(_ context.Context, args json.RawMessage) (json
 		return nil, fmt.Errorf("load progress: %w: %w", errs.ErrStoreRead, err)
 	}
 	completed := progress != nil && slices.Contains(progress.CompletedChapters, plan.Chapter)
-	// 返工队列里的章节是唯一例外：已完成却要重写时，"该重写成什么样"必须有地方落盘，
-	// 而 Contract（goal / payoff_points / continuity_checks / hook_goal）正是那份指令。
-	// 此前这里一律拒绝，导致 revise_outline（只许改未写章节）、save_foundation(outline)
-	// （写作期禁止全量覆盖）与本工具三路皆堵——架构师无处可写重写方向，实测空转 4 次后熔断。
+	// Chapters in the rewrite queue are the one exception: when a completed chapter must be rewritten, there has to be somewhere on disk for "what it should be rewritten into",
+	// and the Contract (goal / payoff_points / continuity_checks / hook_goal) is exactly that instruction.
+	// This used to reject unconditionally, which blocked all three paths: revise_outline (only unwritten chapters may change), save_foundation(outline)
+	// (full overwrite forbidden while writing) and this tool; the Architect had nowhere to write the rewrite direction, and the circuit breaker tripped after 4 idle turns in practice.
 	queuedForRewrite := progress != nil && slices.Contains(progress.PendingRewrites, plan.Chapter)
 	if completed && !queuedForRewrite {
 		return json.Marshal(map[string]any{
@@ -86,10 +86,10 @@ func (t *PlanChapterTool) Execute(_ context.Context, args json.RawMessage) (json
 	if err := t.store.Drafts.SaveChapterPlan(plan); err != nil {
 		return nil, fmt.Errorf("save chapter plan: %w", err)
 	}
-	// 记录返工指令不等于开始写这一章：Engine 在派发 writer 时已预标进行中
-	// (engine.go)，draft_chapter 落笔时也会再标一次，所以这里对返工章是多余的。
-	// 而 StartChapter 会无条件改写 InProgressChapter 并清空 CompletedScenes——
-	// 若规划者为队列里的第 20 章写指令、而 writer 正在第 13 章，指针会被拽走。
+	// Recording a rewrite instruction is not the same as starting to write this chapter: the Engine already pre-marks it in progress when dispatching the writer
+	// (engine.go), and draft_chapter marks it again when it starts writing, so for a rewrite chapter this is redundant here.
+	// Moreover StartChapter unconditionally rewrites InProgressChapter and clears CompletedScenes;
+	// if the planner writes an instruction for chapter 20 in the queue while the writer is on chapter 13, the pointer would be yanked away.
 	if !queuedForRewrite || progress.InProgressChapter == plan.Chapter {
 		if err := t.store.Progress.StartChapter(plan.Chapter); err != nil {
 			return nil, fmt.Errorf("mark chapter in progress: %w", err)

@@ -40,8 +40,8 @@ func TestModelConfigAcceptsLegacyAndObjectEntries(t *testing.T) {
 	}
 }
 
-// json_schema 三态：未配置=nil（按 adapter 能力）、true/false=显式声明；
-// legacy 字符串条目读入为 nil；写回再读取不得改变三态。
+// json_schema tri-state: unset = nil (by adapter capability), true/false = explicit declaration;
+// a legacy string entry is read as nil; writing back and reading again must not change the tri-state.
 func TestModelConfigJSONSchemaTriState(t *testing.T) {
 	var cfg Config
 	input := `{"providers":{"custom":{"models":[
@@ -88,8 +88,8 @@ func TestModelConfigJSONSchemaTriState(t *testing.T) {
 	}
 }
 
-// SwappableModel 的 json_schema 覆盖值必须随热切换原子更新：
-// 切到声明不同的模型后，下一次 JSONSchemaOverride 现读即得新事实。
+// SwappableModel's json_schema override value must update atomically with a hot swap:
+// after switching to a model with a different declaration, the next JSONSchemaOverride reads the new fact fresh.
 func TestSwappableModelJSONSchemaOverrideFollowsSwap(t *testing.T) {
 	tr, fa := true, false
 	cfg := Config{
@@ -165,7 +165,7 @@ func TestSaveProviderConfigPreservesSelectionAndUsesPrivateMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	// 只补 providers 段：无关字段与顶层 provider/model 选择必须原样保留。
+	// Only the providers section is patched: unrelated fields and the top-level provider/model selection must be preserved as is.
 	if got.Style != "fantasy" || got.Budget.BookUSD != 20 || got.Provider != "old" || got.ModelName != "old-model" {
 		t.Fatalf("selection or unrelated fields mutated: %#v", got)
 	}
@@ -175,8 +175,8 @@ func TestSaveProviderConfigPreservesSelectionAndUsesPrivateMode(t *testing.T) {
 	if got.Providers["new"].Models[0].ContextWindow != 500000 {
 		t.Fatalf("new provider not patched in: %#v", got.Providers["new"])
 	}
-	// 权限断言只在有 POSIX 权限位语义的平台上有意义：Windows 把一切上报为
-	// 0666/0444，此断言在该平台恒假（参见 version.TestReplaceExecutable 同款处理）。
+	// The permission assertions only make sense on platforms with POSIX permission-bit semantics: Windows reports everything as
+	// 0666/0444, so this assertion is always false on that platform (see the identical handling in version.TestReplaceExecutable).
 	if runtime.GOOS != "windows" {
 		info, err := os.Stat(path)
 		if err != nil {

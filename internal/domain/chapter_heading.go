@@ -8,21 +8,21 @@ import (
 )
 
 var (
-	// 章号写法按语种三选一：越南语「Chương 12」、中文「第 12 章」、英文「Chapter 12」。
-	// han:keep regex nhận dạng đầu chương zh/vi
+	// Chapter numbers are written in one of three forms depending on language: Vietnamese "Chương 12", Chinese 「第 12 章」, English "Chapter 12" (han:keep).
+	// Regex that recognizes zh/vi/en chapter headings. han:keep
 	chapterNumberRe = regexp.MustCompile(`^\s*(?i:(chương|chapter)\s*(\d+)|第\s*(\d+)\s*章)`)
 
-	// 模型给出的首行标题装饰：# 到 ###### 的标题行，或整行 **加粗**。
+	// Heading decoration the model puts on the first line: a heading line from # to ######, or a whole line in **bold**.
 	headingDecorRe = regexp.MustCompile(`^\s*(?:#{1,6}\s*|\*\*)\s*|\s*\*\*\s*$`)
 )
 
-// FixChapterNumber 把标题里的章号改写成真实章号。
+// FixChapterNumber rewrites the chapter number in a title to the real chapter number.
 //
-// 实测事故：规划期生成的大纲把章节命名为「Chương 19..23」，落盘时实际是第 1..5 章，
-// 于是 ChapterRecord 里 chapter=2 而 title="Chương 20"——同一条记录自相矛盾，
-// 读者看到的目录跳号。章号是引擎已知的事实，不该由模型的记忆决定。
+// Observed incident: the outline generated during planning named chapters "Chương 19..23", but when persisted they were actually chapters 1..5 (han:keep),
+// so a ChapterRecord had chapter=2 with title="Chương 20" - a self-contradicting record (han:keep),
+// and readers saw gaps in the table of contents. The chapter number is a fact the engine knows; it must not be decided by the model's memory.
 //
-// 标题不含可识别章号时原样返回：不猜、不硬塞。
+// A title without a recognizable chapter number is returned unchanged: no guessing, no forcing one in.
 func FixChapterNumber(title string, chapter int) string {
 	m := chapterNumberRe.FindStringSubmatchIndex(title)
 	if m == nil || chapter <= 0 {
@@ -34,21 +34,21 @@ func FixChapterNumber(title string, chapter int) string {
 			continue
 		}
 		if n, err := strconv.Atoi(title[g[0]:g[1]]); err == nil && n != chapter {
-			// 只换数字，保留原本的写法与大小写（Chương / 第…章 / Chapter）。
+			// Replace only the digits, preserving the original form and letter case (Chương / 第…章 / Chapter) (han:keep).
 			head = head[:g[0]-m[0]] + strconv.Itoa(chapter) + head[g[1]-m[0]:]
 		}
 	}
 	return head + title[m[1]:]
 }
 
-// ApplyChapterHeading 保证正文首行是规范的一级标题。
+// ApplyChapterHeading guarantees that the first line of the chapter content is a proper level-1 heading.
 //
-// 引擎在 ChapterFacts.Title 里已持有正确标题，却直接把模型输出的正文原样落盘：
-// 实测 15 章里 9 章根本没有标题行，1 章写成 ## 二级，1 章写成 **加粗**。
-// 标题是结构，不是创作——这里统一由引擎渲染，模型写不写都不影响成品。
+// The engine already holds the correct title in ChapterFacts.Title, yet persisted the model's output as-is:
+// in a measured run, 9 of 15 chapters had no heading line at all, 1 was written as a ## level-2 heading, and 1 as **bold**.
+// A heading is structure, not creative work - the engine now renders it uniformly, so the result no longer depends on whether the model writes one.
 //
-// 只在首行确实是标题时才替换它（与 title 相同，或带章号前缀），否则一律前置，
-// 避免把一句以加粗开头的正文误当标题吃掉。
+// The first line is replaced only when it really is a heading (identical to title, or carrying a chapter-number prefix); otherwise the heading is always prepended,
+// so that a sentence of content that merely starts in bold is not mistaken for a heading and swallowed.
 func ApplyChapterHeading(content, title string, chapter int) string {
 	title = strings.TrimSpace(FixChapterNumber(strings.TrimSpace(title), chapter))
 	if title == "" {
@@ -79,6 +79,6 @@ func isChapterHeadingLine(line, title string) bool {
 	if strings.EqualFold(bare, title) {
 		return true
 	}
-	// 章号开头且够短：是标题行，不是正文段落。
+	// Starts with a chapter number and is short enough: it is a heading line, not a content paragraph.
 	return chapterNumberRe.MatchString(bare) && len([]rune(bare)) <= 80
 }

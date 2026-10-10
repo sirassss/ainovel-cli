@@ -12,7 +12,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// 冷启动共创：从零澄清需求，产出整本书的创作指令。
+// Cold-start co-creation: clarify requirements from scratch and produce the creative directive for the whole book.
 const coCreateSystemPrompt = `Bạn là trợ lý đồng sáng tác tiểu thuyết. Nhiệm vụ của bạn không phải là bắt đầu viết truyện ngay, mà là qua nhiều lượt hội thoại ngắn giúp người dùng làm rõ yêu cầu sáng tác, đồng thời liên tục chỉnh lý thành một chỉ thị sáng tác tiếng Việt có thể giao thẳng cho engine sáng tác.
 
 Mỗi lượt trả lời phải xuất đúng định dạng XML sau, gồm bốn thẻ lần lượt xuất hiện, mỗi thẻ đều phải có thẻ mở và thẻ đóng đúng:
@@ -26,8 +26,8 @@ Bản nháp chỉ thị sáng tác đầy đủ hiện tại, dùng Markdown: b�
 </draft>
 ` + coCreateProtocolTail
 
-// 阶段共创：小说已写了一部分，规划"后续阶段"的走向。调用方需把当前故事状态摘要
-// 追加到本 prompt 之后（"## 当前故事状态" 段），让模型在已写内容的基础上规划。
+// Stage co-creation: part of the novel is already written, and this plans the direction of the "next stage". The caller must append a summary of the current story state
+// to this prompt (the "## 当前故事状态" section), so the model plans on top of what is already written. // han:keep names a zh-mode section heading
 const stageCoCreateSystemPrompt = `Bạn là trợ lý "đồng sáng tác theo giai đoạn" cho tiểu thuyết. Cuốn tiểu thuyết này đã được viết một phần (tiến độ xem ở "Trạng thái truyện hiện tại" bên dưới). Người dùng tạm dừng, muốn cùng bạn lập kế hoạch hướng đi của "giai đoạn tiếp theo", rồi mới tiếp tục sáng tác.
 
 Nhiệm vụ của bạn không phải viết tiếp nội dung chương, mà là qua nhiều lượt hội thoại ngắn giúp người dùng nghĩ rõ đoạn phía sau (vài chương tới / cung kế / tập kế) sẽ đi về đâu, đồng thời liên tục chỉnh lý thành một "brief hướng đi tiếp theo" để engine sáng tác dựa vào đó tiến hành.
@@ -45,8 +45,8 @@ Câu trả lời tiếng Việt tự nhiên dành cho người dùng: trước h
 </draft>
 ` + coCreateProtocolTail
 
-// coCreateProtocolTail 是两种共创模式共用的输出协议尾部（<ready> / <suggestions> + 输出规范）。
-// 两模式只在开场语境与 <draft> 语义上不同，协议完全一致。
+// coCreateProtocolTail is the output-protocol tail shared by both co-creation modes (<ready> / <suggestions> + output rules).
+// The two modes differ only in the opening context and the semantics of <draft>; the protocol is identical.
 const coCreateProtocolTail = `
 <ready>false</ready>
 
@@ -69,15 +69,15 @@ Quy phạm đầu ra:
 - Khi <ready>true</ready> thì <suggestions> có thể để trống (giữ thẻ rỗng <suggestions></suggestions> là được).
 `
 
-// CoCreateProgressKind 标识流式回调的内容类型。
+// CoCreateProgressKind identifies the content type of a streaming callback.
 const (
 	CoCreateProgressThinking = "thinking"
 	CoCreateProgressReply    = "reply"
 )
 
-// 四段式 XML 标签输出。XML 风格比方括号 marker 更鲁棒——Claude/GPT 训练数据里
-// 大量 <thinking>...</thinking> 这类格式，模型几乎不会把 <reply> 改写成 <REWRITE>
-// 或其他变体；闭合标签也让流式中段截断更精确（不依赖找下一个 marker 来断尾）。
+// Four-part XML tag output. The XML style is more robust than square-bracket markers: Claude/GPT training data contains
+// plenty of formats like <thinking>...</thinking>, so the model almost never rewrites <reply> into <REWRITE>
+// or other variants; closing tags also make mid-stream truncation more precise (no need to look for the next marker to cut off the tail).
 const (
 	tagReply       = "reply"
 	tagDraft       = "draft"
@@ -108,8 +108,8 @@ func coCreateStream(ctx context.Context, models *bootstrap.ModelSet, sessions *s
 
 	var raw, thinking strings.Builder
 
-	// 排查 "cocreate empty response" 等偶发问题需要看到模型实际返回什么。
-	// 每轮全程落盘到 <output>/meta/sessions/cocreate.jsonl，与正式创作的 session 日志同位。
+	// Diagnosing sporadic problems such as "cocreate empty response" requires seeing what the model actually returned.
+	// Every round is written to <output>/meta/sessions/cocreate.jsonl in full, alongside the session logs of formal creation.
 	start := time.Now()
 	defer func() {
 		if sessions == nil {
@@ -163,10 +163,10 @@ func coCreateStream(ctx context.Context, models *bootstrap.ModelSet, sessions *s
 		}
 	}
 
-	// Channel fallback：思考型模型（R1/GLM-Z1/QwQ 等）偶发把完整答案写进
-	// reasoning_content 后没切回 final answer 通道，导致 raw 为空但 thinking 含
-	// 完整四段。实测见 meta/sessions/cocreate.jsonl —— 直接拿 thinking 当 raw 解析，
-	// 协议层已有降级处理（无 [REPLY] 标记时整段当 reply），救场后 UI 体验无差别。
+	// Channel fallback: reasoning models (R1/GLM-Z1/QwQ etc.) occasionally write the whole answer into
+	// reasoning_content without switching back to the final answer channel, leaving raw empty while thinking holds
+	// all four parts. See meta/sessions/cocreate.jsonl for a real observation: parse thinking directly as raw,
+	// and since the protocol layer already degrades gracefully (with no [REPLY] marker the whole text is the reply), the UI experience is unchanged after this rescue.
 	rawText := raw.String()
 	if strings.TrimSpace(rawText) == "" {
 		if t := strings.TrimSpace(thinking.String()); t != "" {
@@ -177,8 +177,8 @@ func coCreateStream(ctx context.Context, models *bootstrap.ModelSet, sessions *s
 	return reply, err
 }
 
-// coCreateLogEntry 是写入 meta/sessions/cocreate.jsonl 的一行结构。
-// 字段命名贴近 jsonl 直查习惯（snake_case），方便 jq 过滤。
+// coCreateLogEntry is the structure of one line written to meta/sessions/cocreate.jsonl.
+// Field names follow the habit of querying jsonl directly (snake_case), which makes jq filtering convenient.
 type coCreateLogEntry struct {
 	Time         time.Time         `json:"time"`
 	DurationMS   int64             `json:"duration_ms"`
@@ -208,8 +208,8 @@ func assistantMsg(text string) agentcore.Message {
 	}
 }
 
-// parseCoCreateResponse 解析 XML 标签输出。模型若没遵守协议（直接说自然语言），
-// 整段作为 reply 显示，draft 留空让 session 保留上一轮。
+// parseCoCreateResponse parses the XML-tag output. If the model did not follow the protocol (answered in plain natural language),
+// the whole text is shown as the reply and draft is left empty so the session keeps the previous round.
 func parseCoCreateResponse(raw string) (CoCreateReply, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -218,7 +218,7 @@ func parseCoCreateResponse(raw string) (CoCreateReply, error) {
 
 	reply, draft, ready, suggestions := splitCoCreateMarkers(raw)
 	if reply == "" {
-		// 模型没遵守 XML 协议：整段作为 reply。
+		// The model did not follow the XML protocol: use the whole text as the reply.
 		return CoCreateReply{Message: raw, Prompt: "", Ready: false, Raw: raw}, nil
 	}
 	return CoCreateReply{
@@ -230,9 +230,9 @@ func parseCoCreateResponse(raw string) (CoCreateReply, error) {
 	}, nil
 }
 
-// splitCoCreateMarkers 按四个 XML 标签切分文本。
-// 标签可能缺失（流式中段或模型遗漏），缺失部分对应字段为空 / false / nil。
-// 缺失闭标签时，extractTagContent 会取到字符串末尾，仍尽力解析。
+// splitCoCreateMarkers splits the text by the four XML tags.
+// Tags may be missing (mid-stream or omitted by the model); the corresponding fields are then empty / false / nil.
+// When a closing tag is missing, extractTagContent reads to the end of the string and still parses on a best-effort basis.
 func splitCoCreateMarkers(s string) (reply, draft string, ready bool, suggestions []string) {
 	reply = extractTagContent(s, tagReply)
 	draft = extractTagContent(s, tagDraft)
@@ -242,12 +242,12 @@ func splitCoCreateMarkers(s string) (reply, draft string, ready bool, suggestion
 	return
 }
 
-// extractTagContent 从 s 中抠出 <tag>...</tag> 之间的文本。
-// 三种偶发故障场景兜底，避免直接走降级丢字段：
-//  1. 有开无闭（流式中段）→ 切到下一个已知开标签前
-//  2. 无开有闭（模型 typo，如 <suggestions> 写成 <uggestions>）→ 从最近一个已知
-//     完整闭合标签的结束位置开始，到 </tag> 之前
-//  3. reply 完全无开标签（模型直接以自然语言开篇，末尾贴 </reply>）→ 从开头到 </reply>
+// extractTagContent extracts the text between <tag>...</tag> from s.
+// It covers three sporadic failure scenarios so the parse does not fall straight to the degraded path and lose fields:
+//  1. open tag without close (mid-stream) → cut before the next known open tag
+//  2. close tag without open (model typo, e.g. <suggestions> written as <uggestions>) → from the end of the most recent known
+//     complete closing tag to before </tag>
+//  3. reply has no open tag at all (the model opened directly in natural language and appended </reply> at the end) → from the start to </reply>
 func extractTagContent(s, tag string) string {
 	open := "<" + tag + ">"
 	closeTag := "</" + tag + ">"
@@ -257,7 +257,7 @@ func extractTagContent(s, tag string) string {
 		if cIdx := strings.Index(rest, closeTag); cIdx >= 0 {
 			return strings.TrimSpace(rest[:cIdx])
 		}
-		// 有开无闭 → 切到下一个已知开标签前
+		// open without close → cut before the next known open tag
 		for _, other := range []string{"<reply>", "<draft>", "<ready>", "<suggestions>"} {
 			if other == open {
 				continue
@@ -269,7 +269,7 @@ func extractTagContent(s, tag string) string {
 		return strings.TrimSpace(rest)
 	}
 
-	// 无开有闭 → 从最近一个已知完整闭合标签的结束位置开始，到 </tag>。
+	// close without open → from the end of the most recent known complete closing tag to </tag>.
 	if cIdx := strings.Index(s, closeTag); cIdx >= 0 {
 		prefix := s[:cIdx]
 		start := 0
@@ -288,9 +288,9 @@ func extractTagContent(s, tag string) string {
 	return ""
 }
 
-// parseSuggestions 把 <suggestions> 段每行抠出来，去掉 "- " / "* " / "1. " 等列表前缀。
-// 最多保留 3 条；空行、过短（<2 字）、整行像 XML 标签的（typo 开标签兜底残留，
-// 例如 <uggestions>）忽略。
+// parseSuggestions extracts each line of the <suggestions> section and strips list prefixes such as "- " / "* " / "1. ".
+// At most 3 entries are kept; empty lines, lines that are too short (<2 characters), and lines that look entirely like an XML tag (leftovers of the typo open-tag fallback,
+// e.g. <uggestions>) are ignored.
 func parseSuggestions(text string) []string {
 	if text == "" {
 		return nil
@@ -301,11 +301,11 @@ func parseSuggestions(text string) []string {
 		if line == "" {
 			continue
 		}
-		// 整行像 XML 标签 → 跳过（防 typo 开标签污染）
+		// A line that looks entirely like an XML tag → skip (prevents a typo open tag from polluting the output)
 		if strings.HasPrefix(line, "<") && strings.HasSuffix(line, ">") {
 			continue
 		}
-		// 剥列表前缀
+		// strip the list prefix
 		switch {
 		case strings.HasPrefix(line, "- "):
 			line = strings.TrimSpace(line[2:])
@@ -325,7 +325,7 @@ func parseSuggestions(text string) []string {
 	return out
 }
 
-// isOrderedSuggestion 判断行首是否形如 "1. " / "12. "（数字+点+空格）。
+// isOrderedSuggestion reports whether the line starts like "1. " / "12. " (digits + dot + space).
 func isOrderedSuggestion(line string) bool {
 	i := 0
 	for i < len(line) && line[i] >= '0' && line[i] <= '9' {
@@ -345,9 +345,9 @@ func stripOrderedPrefix(line string) string {
 	return strings.TrimSpace(line[i+2:])
 }
 
-// extractReplyPreview 流式预览：raw 还在生长时给 UI 一段可显示的文本。
-// 找到 <reply> 之后的内容，切到 </reply> 或下一个开标签 <draft> 之前。
-// 模型半遵守（漏 <reply> 开标签）时，开头到 </reply> 或 <draft> 都算 reply。
+// extractReplyPreview is the streaming preview: while raw is still growing it gives the UI a displayable piece of text.
+// It finds the content after <reply> and cuts before </reply> or the next open tag <draft>.
+// When the model half-complies (omits the <reply> open tag), everything from the start to </reply> or <draft> counts as the reply.
 func extractReplyPreview(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	open := "<" + tagReply + ">"
@@ -367,7 +367,7 @@ func extractReplyPreview(raw string) string {
 	return strings.TrimSpace(rest)
 }
 
-// coCreatePromptFor chọn system prompt đồng sáng tác theo ngôn ngữ tác phẩm (chỉ "zh" mới dùng bản Hán).
+// coCreatePromptFor picks the co-creation system prompt by the work's language (only "zh" uses the Chinese version).
 func coCreatePromptFor(lang string) string {
 	if lang == "zh" {
 		return coCreateSystemPromptZH

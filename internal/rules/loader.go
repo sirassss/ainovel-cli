@@ -5,23 +5,23 @@ import (
 	"path/filepath"
 )
 
-// LoadOptions 枚举 rules 文件来源目录，供 RawFileSources 扫描归一化。
+// LoadOptions enumerates the source directories of rules files, for RawFileSources to scan and normalize.
 //
-// 目录不存在不算错误，扫描时静默跳过。
+// A missing directory is not an error; it is silently skipped during scanning.
 type LoadOptions struct {
-	// HomeRulesDir 是 ~/.ainovel/rules/ 目录；扫描其下所有顶层 .md（文件名字典序合并）。空表示跳过。
+	// HomeRulesDir is the ~/.ainovel/rules/ directory; all top-level .md files under it are scanned (merged in filename lexicographic order). Empty means skip.
 	HomeRulesDir string
 
-	// ProjectRulesDir 是 ./.ainovel/rules/ 目录（镜像全局，同样扫描其下所有顶层 .md）。空表示跳过。
+	// ProjectRulesDir is the ./.ainovel/rules/ directory (mirrors the global one; all top-level .md files under it are scanned as well). Empty means skip.
 	ProjectRulesDir string
 }
 
-// ainovelDirName 是 ainovel 在 user / project 两级共用的 dotdir 名。
-// 全局 ~/.ainovel/rules/ 与项目 ./.ainovel/rules/ 由此对称。
+// ainovelDirName is the dotdir name that ainovel shares at both the user and project levels.
+// The global ~/.ainovel/rules/ and the project ./.ainovel/rules/ are symmetric because of it.
 const ainovelDirName = ".ainovel"
 
-// DefaultProjectRulesDir 拼出 ./.ainovel/rules/ 的绝对路径（基于给定项目目录）。
-// 调用方传入项目根，避免在 loader 内部依赖 cwd；镜像 DefaultHomeRulesDir。
+// DefaultProjectRulesDir builds the absolute path of ./.ainovel/rules/ (based on the given project directory).
+// The caller passes in the project root so the loader does not depend on cwd internally; mirrors DefaultHomeRulesDir.
 func DefaultProjectRulesDir(projectDir string) string {
 	if projectDir == "" {
 		return ""
@@ -29,8 +29,8 @@ func DefaultProjectRulesDir(projectDir string) string {
 	return filepath.Join(projectDir, ainovelDirName, "rules")
 }
 
-// DefaultHomeRulesDir 拼出 ~/.ainovel/rules/ 目录的绝对路径。
-// home 解析失败返回空串（调用方据此跳过该来源）。
+// DefaultHomeRulesDir builds the absolute path of the ~/.ainovel/rules/ directory.
+// Returns an empty string when the home directory cannot be resolved (callers skip this source accordingly).
 func DefaultHomeRulesDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
@@ -39,8 +39,8 @@ func DefaultHomeRulesDir() string {
 	return filepath.Join(home, ainovelDirName, "rules")
 }
 
-// homeRulesReadme 是首次引导时写入 ~/.ainovel/rules/README.txt 的说明。
-// 刻意用 .txt 后缀而非 .md——扫描只认 .md，这份说明不会被当成规则归一化。
+// homeRulesReadme is the guide written to ~/.ainovel/rules/README.txt on first-run onboarding.
+// It deliberately uses the .txt suffix instead of .md: scanning only recognizes .md, so this guide is never normalized as a rule.
 const homeRulesReadme = `Đặt ở đây các sở thích viết toàn cục, có hiệu lực với mọi cuốn sách.
 
 Tạo một tệp .md mới (như my-style.md) và viết yêu cầu bằng lời thường là được —
@@ -64,18 +64,18 @@ Nhiều tệp .md được gộp theo thứ tự từ điển của tên tệp; 
 
 Thứ tự ưu tiên nạp (cao -> thấp): ./.ainovel/rules/*.md (cuốn sách này) > ~/.ainovel/rules/*.md (ở đây) > mặc định tích hợp`
 
-// EnsureHomeRulesDir 尽力创建 ~/.ainovel/rules/ 目录并写入 README.txt 引导，
-// 让用户发现这个全局偏好扩展点、知道怎么写。
-// nice-to-have，非关键路径：home 解析失败或写入出错都静默吞掉，绝不阻断启动。
+// EnsureHomeRulesDir makes a best effort to create the ~/.ainovel/rules/ directory and write the README.txt guide into it,
+// so users discover this global-preference extension point and know how to write rules.
+// Nice-to-have, not on the critical path: failure to resolve home or to write is silently swallowed and never blocks startup.
 func EnsureHomeRulesDir() {
 	if dir := DefaultHomeRulesDir(); dir != "" {
 		_ = ensureRulesDirAt(dir)
 	}
 }
 
-// ensureRulesDirAt 创建目录并把 README.txt 写成当前引导模板，是 EnsureHomeRulesDir 的可测内核。
-// README.txt 是系统生成的引导文件（用户偏好写在 *.md，它不被扫描加载），每次都覆盖为
-// 最新模板——不保留旧内容，也就不需要任何版本兼容逻辑。
+// ensureRulesDirAt creates the directory and writes README.txt as the current onboarding template; it is the testable core of EnsureHomeRulesDir.
+// README.txt is a system-generated onboarding file (user preferences go in *.md; it is not scanned or loaded) and is overwritten with
+// the latest template every time - old content is not preserved, so no version-compatibility logic is needed.
 func ensureRulesDirAt(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -83,14 +83,14 @@ func ensureRulesDirAt(dir string) error {
 	return os.WriteFile(filepath.Join(dir, "README.txt"), []byte(homeRulesReadme), 0o644)
 }
 
-// DefaultOptions 根据当前工作目录构造常用 LoadOptions。
+// DefaultOptions builds the commonly used LoadOptions from the current working directory.
 //
-// 适合 Host 启动时调用一次，让用户规则服务复用同一份来源配置。
-// 解析 cwd 失败时 ProjectRulesDir 留空（扫描会跳过该来源）。
+// Suited to being called once at Host startup so the user-rules service reuses the same source configuration.
+// When cwd cannot be resolved, ProjectRulesDir is left empty (scanning skips that source).
 //
-// 路径语义：ProjectRulesDir 绑定 **当前工作目录（cwd）** 而非 outputDir。
-// 用户 cd 到不同目录启动写不同的书，./.ainovel/rules/ 自然跟着 cwd 走；如需跨书共享，
-// 放 ~/.ainovel/rules/ 全局目录即可（其下所有 .md 都会被加载）。
+// Path semantics: ProjectRulesDir is bound to the **current working directory (cwd)**, not outputDir.
+// When the user cd's into different directories to start different books, ./.ainovel/rules/ naturally follows cwd; to share across books,
+// put the rules in the global ~/.ainovel/rules/ directory (all .md files under it are loaded).
 func DefaultOptions() LoadOptions {
 	cwd, _ := os.Getwd()
 	return LoadOptions{

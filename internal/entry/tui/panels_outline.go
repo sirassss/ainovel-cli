@@ -141,7 +141,7 @@ func truncateWidth(s string, maxW int) string {
 func renderDetailContent(snap host.UISnapshot, contentW int) string {
 	var b strings.Builder
 
-	// Dàn ý
+	// Outline
 	if len(snap.Outline) > 0 {
 		outlineHeader := ":: Dàn ý"
 		if snap.Layered {
@@ -171,7 +171,7 @@ func renderDetailContent(snap host.UISnapshot, contentW int) string {
 		b.WriteString("\n")
 	}
 
-	// Nhân vật
+	// Characters
 	if len(snap.Characters) > 0 {
 		b.WriteString(panelTitleStyle.Render(":: Nhân vật"))
 		b.WriteString("\n")
@@ -181,7 +181,7 @@ func renderDetailContent(snap host.UISnapshot, contentW int) string {
 		b.WriteString("\n")
 	}
 
-	// Nhân vật phụ
+	// Supporting characters
 	if snap.SupportingCount > 0 {
 		b.WriteString(panelTitleStyle.Render(":: Nhân vật phụ"))
 		b.WriteString("\n")
@@ -203,7 +203,7 @@ func renderDetailContent(snap host.UISnapshot, contentW int) string {
 		b.WriteString("\n\n")
 	}
 
-	// Tiền đề
+	// Premise
 	if snap.Premise != "" {
 		b.WriteString(panelTitleStyle.Render(":: Tiền đề cốt truyện"))
 		b.WriteString("\n")

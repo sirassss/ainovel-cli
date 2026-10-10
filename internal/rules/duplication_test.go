@@ -9,7 +9,7 @@ func para(seed string) string {
 	return seed + " Gió từ đỉnh núi phả vào mặt lạnh như kim loại, hắn siết chặt cây gậy gỗ mục."
 }
 
-// Chương 21 thật: cùng một đoạn xuất hiện 5 lần, tổng trùng 43.5%.
+// Real chapter 21: the same passage appears 5 times, total duplication 43.5%.
 func TestSelfDuplicationCatchesRepeatedParagraph(t *testing.T) {
 	rep := para("Họ đi xuống dốc núi theo con đường Thầy Mộc Lâu chọn.")
 	body := strings.Join([]string{rep, para("A."), rep, para("B."), rep, rep, rep}, "\n\n")
@@ -22,7 +22,7 @@ func TestSelfDuplicationCatchesRepeatedParagraph(t *testing.T) {
 	}
 }
 
-// 19/22 chương thật đo được đúng 0.0% — văn bình thường không được báo.
+// 19 of 22 real chapters measure exactly 0.0% - normal prose must not be flagged.
 func TestSelfDuplicationSilentOnCleanChapter(t *testing.T) {
 	body := strings.Join([]string{para("Một."), para("Hai."), para("Ba."), para("Bốn.")}, "\n\n")
 	if vs := appendSelfDuplication(nil, body); len(vs) != 0 {
@@ -30,7 +30,7 @@ func TestSelfDuplicationSilentOnCleanChapter(t *testing.T) {
 	}
 }
 
-// Chương 14 thật: 32.2% ký tự lấy nguyên văn từ chương 13.
+// Real chapter 14: 32.2% of characters are taken verbatim from chapter 13.
 func TestCheckAgainstPreviousCatchesCopiedChapter(t *testing.T) {
 	shared := []string{para("Hơi ẩm rừng buổi sáng hòa lẫn mùi đất."), para("Hắn mở mắt ra.")}
 	prev := strings.Join(append(shared, para("Riêng của chương trước.")), "\n\n")
@@ -52,7 +52,7 @@ func TestCheckAgainstPreviousSilentOnFreshChapter(t *testing.T) {
 	}
 }
 
-// Chương 18 thật: 27 lần "not", 9 lần "the", 3 lần "from" giữa văn Việt.
+// Real chapter 18: "not" 27 times, "the" 9 times, "from" 3 times in the middle of Vietnamese prose.
 func TestEnglishResidueCatchesLeakInVietnamese(t *testing.T) {
 	text := "Lá cây bắt đầu chuyển động—not nhanh chóng mà nhẹ nhàng nghiêng mình. " +
 		"Lê An nắm chặt cây gậy gỗ mục—the flow từ lòng đất vẫn thì thầm điều gì đó khó hiểu."
@@ -70,7 +70,7 @@ func TestEnglishResidueSilentOnCleanVietnamese(t *testing.T) {
 	}
 }
 
-// Truyện tiếng Anh/Trung phải im hẳn — cùng bài học từ non_cjk_fragments.
+// English/Chinese novels must stay completely silent - the same lesson as non_cjk_fragments.
 func TestEnglishResidueSilentOnNonVietnameseNovel(t *testing.T) {
 	text := "He walked into the forest and the flow of qi from the roots was not what he expected."
 	if vs := appendEnglishResidue(nil, text); len(vs) != 0 {

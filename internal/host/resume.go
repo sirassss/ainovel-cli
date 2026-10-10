@@ -92,7 +92,7 @@ func loadLegacyBook(st *storepkg.Store) (*domain.BookMetadata, error) {
 	if title != legacy.NovelName {
 		return nil, fmt.Errorf("Tên sách tác phẩm cũ xung đột: progress=%q, premise=%q", legacy.NovelName, title)
 	}
-	// han:keep tiêu đề premise phiên bản cũ (dữ liệu zh)
+	// han:keep legacy premise heading (zh data)
 	synopsis := legacyPremiseSection(premise, "核心冲突")
 	if synopsis == "" {
 		return nil, fmt.Errorf("Tiền đề truyện cũ thiếu mục \"Xung đột cốt lõi\", không thể tạo giới thiệu tác phẩm")
@@ -104,7 +104,7 @@ func legacyPremiseTitle(premise string) string {
 	for _, line := range strings.Split(premise, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "# ") {
-			// han:keep dấu ngoặc tên sách trong premise phiên bản cũ
+			// han:keep book-title brackets in the legacy premise
 			return strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "# ")), "《》\"")
 		}
 	}
@@ -130,9 +130,9 @@ func legacyPremiseSection(premise, heading string) string {
 	return strings.TrimSpace(strings.Join(body, "\n"))
 }
 
-// resumeLabel 基于事实生成 Resume 的 UI 标签。
-// label 为空表示无可恢复状态（应走新建）。恢复本身不需要任何 prompt——
-// Engine 只恢复事实：从 store 重算路由续跑（docs/engine-rfc.md §6）。
+// resumeLabel generates the UI label for Resume from facts.
+// An empty label means there is no recoverable state (a fresh start should be taken). Resuming itself needs no prompt:
+// the Engine only restores facts: it recomputes the route from the store and continues (docs/engine-rfc.md §6).
 func resumeLabel(store *storepkg.Store) (string, error) {
 	progress, err := store.Progress.Load()
 	if err != nil && !os.IsNotExist(err) {
@@ -144,14 +144,14 @@ func resumeLabel(store *storepkg.Store) (string, error) {
 	return describeResume(store, progress)
 }
 
-// describeResume 生成人类可读的恢复标签；不影响 Engine 路由。
-// 所有执行路由由 Flow Router 按事实推导；这里仅面向 UI 的 "恢复：xxx"。
+// describeResume generates a human-readable resume label; it does not affect Engine routing.
+// All execution routes are derived by the Flow Router from facts; this is only for the UI's "Resume: xxx".
 func describeResume(store *storepkg.Store, progress *domain.Progress) (string, error) {
 	switch progress.Phase {
 	case domain.PhasePremise, domain.PhaseOutline:
 		return fmt.Sprintf("Khôi phục: giai đoạn lập kế hoạch (%s)", progress.Phase), nil
 	case domain.PhaseWriting:
-		// 优先级与 Router 的决策优先级对齐，让 label 与即将派发的指令一致。
+		// Priority is aligned with the Router's decision priority, so the label matches the instruction about to be dispatched.
 		pending, err := store.Signals.LoadPendingCommit()
 		if err != nil {
 			return "", fmt.Errorf("Đọc bản nộp chờ khôi phục: %w", err)
@@ -184,8 +184,8 @@ func describeResume(store *storepkg.Store, progress *domain.Progress) (string, e
 	return "Khôi phục", nil
 }
 
-// describeArcEndLabel 为弧末/卷末的多种中间状态生成贴合 UI 的标签。
-// 与 flow.Route 的弧末分支保持同序，保证 label 与 Router 首条指令对齐。
+// describeArcEndLabel generates UI-friendly labels for the various intermediate states at an arc end / volume end.
+// It keeps the same order as the arc-end branch of flow.Route, ensuring the label lines up with the Router's first instruction.
 func describeArcEndLabel(store *storepkg.Store, progress *domain.Progress) (string, error) {
 	if !progress.Layered || len(progress.CompletedChapters) == 0 {
 		return "", nil

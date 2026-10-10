@@ -36,23 +36,23 @@ func errorKind(err error, msg string) string {
 		return "tool_validation"
 	case strings.Contains(lower, "too many concurrent requests"):
 		return "overloaded"
-	// providerError 会把 litellm 的结构化类型附在文本末尾。
-	// HTTP/2 INTERNAL_ERROR 本身没有可分类关键词，保留这个显式 network 标记即可。
+		// providerError appends litellm's structured type to the end of the text.
+		// HTTP/2 INTERNAL_ERROR itself has no classifiable keyword, so keeping this explicit network marker is enough.
 	case strings.Contains(lower, "[network,"):
 		return "network"
 	}
 	return ""
 }
 
-// 单调递增的事件 ID 计数器；配合时间戳生成稳定 ID。
+// Monotonically increasing event ID counter; combined with a timestamp it generates stable IDs.
 var eventIDCounter uint64
 
 func nextEventID() string {
 	return fmt.Sprintf("e%d", atomic.AddUint64(&eventIDCounter, 1))
 }
 
-// activeCall 记录一次正在进行的调用（TOOL / DISPATCH）的 ID、起点时间与 summary。
-// summary 在完成事件时回填进 finish Event，保证 replay（runtime queue）能还原行内容。
+// activeCall records the ID, start time and summary of a call in progress (TOOL / DISPATCH).
+// The summary is filled back into the finish Event on completion so that replay (the runtime queue) can restore the row content.
 type activeCall struct {
 	id      string
 	start   time.Time
@@ -60,39 +60,39 @@ type activeCall struct {
 	depth   int
 }
 
-// observer 把 Engine 派发与 Worker 进度投影到 Host 的输出通道。
-// 它是纯观察者,不参与任何控制决策。
+// observer projects Engine dispatches and Worker progress onto the Host's output channel.
+// It is a pure observer and takes part in no control decision.
 type observer struct {
 	emitEv  func(Event)
 	emitD   func(string)
 	emitC   func()
-	store   *storepkg.Store // 用于 runtime queue 持久化（ReplayQueue 消费）
+	store   *storepkg.Store // for runtime queue persistence (consumed by ReplayQueue)
 	agents  map[string]*agentState
 	agentMu sync.Mutex
 
-	// aborting 由 Host 在 Abort()/Close() 入口置位、Start/Resume/Continue 清位。
-	// 置位期间 emitCallFinish 把 context-cancel 衍生的结束事件降为 warn 且不计失败
-	// （既是用户期望，也避免显示为错误）。真实异常（非 cancel）仍照常上报。
+	// aborting is set by the Host at the entry of Abort()/Close() and cleared by Start/Resume/Continue.
+	// While set, emitCallFinish downgrades the end events derived from context-cancel to warn and does not count them as failures
+	// (this is what the user expects, and it also avoids showing them as errors). Real exceptions (non-cancel) are still reported as usual.
 	aborting atomic.Bool
 
 	streamThinking      bool
-	lastThinkingByAgent map[string]string          // agent → 最近的累积 thinking 文本（用于提取增量 delta）
-	dispatchStarts      map[string]*activeCall     // dispatched agent → 进行中的 DISPATCH 调用
-	toolStarts          map[string]*activeCall     // agent → 进行中的 TOOL 调用
-	streamExtractors    map[string]*agentExtractor // agent → 当前工具调用 JSON 参数的内容抽取器
-	streamArgPrefixes   map[string]string          // agent/tool → 参数流前缀，用于提前识别轻量标签
-	streamArgLabels     map[string]string          // agent/tool → 已从参数流提前识别出的展示名
-	retryEvents         map[string]string          // retry scope → event ID，用同一行原地更新 (2/7)
-	streamHasContent    bool                       // 当前 streamRound 是否已输出过内容（判断是否需要段落分隔）
-	streamLastByte      byte                       // 最近一次流式输出的末字节（用于精确补齐换行）
+	lastThinkingByAgent map[string]string          // agent → latest accumulated thinking text (used to extract the incremental delta)
+	dispatchStarts      map[string]*activeCall     // dispatched agent → DISPATCH call in progress
+	toolStarts          map[string]*activeCall     // agent → TOOL call in progress
+	streamExtractors    map[string]*agentExtractor // agent → content extractor for the current tool call's JSON arguments
+	streamArgPrefixes   map[string]string          // agent/tool → argument stream prefix, used to recognize lightweight labels early
+	streamArgLabels     map[string]string          // agent/tool → display name already recognized early from the argument stream
+	retryEvents         map[string]string          // retry scope → event ID, updating the same row in place (2/7)
+	streamHasContent    bool                       // whether the current streamRound has already output content (decides whether a paragraph separator is needed)
+	streamLastByte      byte                       // last byte of the most recent streaming output (used to pad newlines precisely)
 }
 
-// agentExtractor 记录某个 agent 当前正在抽取的工具名与抽取器实例。
-// 工具名用于检测"新的工具调用开始了"，避免缓存被上一轮残留污染。
+// agentExtractor records the tool name an agent is currently extracting and the extractor instance.
+// The tool name is used to detect "a new tool call has started", so the cache is not polluted by leftovers from the previous round.
 type agentExtractor struct {
 	tool       string
 	ext        *jsonFieldExtractor
-	emittedAny bool // 本 extractor 是否已经产出过内容；用于首次输出前补段落分隔
+	emittedAny bool // whether this extractor has produced content; used to pad a paragraph separator before the first output
 }
 
 type agentState struct {
@@ -122,15 +122,15 @@ func newObserver(s *storepkg.Store, emitEv func(Event), emitD func(string), emit
 	}
 }
 
-// ── Engine 直驱入口 ──
+// ── Engine direct-drive entry points ──
 //
-// Engine 直接运行 Worker，事件来源分为两条:
-//  1. dispatchStart/dispatchFinish —— Engine 在派发边界直接调用(DISPATCH 行)
-//  2. workerProgress —— Worker 的进度中继(ctx ToolProgress)，
-//     由 handleToolUpdate 统一处理 TOOL/流式正文/thinking/retry/context
-//     (TOOL 行/流式正文/thinking/retry/context)。
+// The Engine runs the Worker directly, and events come from two sources:
+//  1. dispatchStart/dispatchFinish — the Engine calls them directly at the dispatch boundary (DISPATCH row)
+//  2. workerProgress — the Worker's progress relay (ctx ToolProgress),
+//     handled uniformly by handleToolUpdate for TOOL / streamed body / thinking / retry / context
+//     (TOOL row / streamed body / thinking / retry / context).
 
-// dispatchStart 记录一次 Worker 派发开始并发 DISPATCH 行。
+// dispatchStart records the start of a Worker dispatch and emits the DISPATCH row.
 func (o *observer) dispatchStart(agent, task, reason string) {
 	summary := dispatchSummary(agent, task)
 	o.updateAgent(agent, func(a *agentState) {
@@ -151,8 +151,8 @@ func (o *observer) dispatchStart(agent, task, reason string) {
 	})
 }
 
-// dispatchFinish 把 DISPATCH 行落成完成态并复位 Worker 状态;
-// 清理该 Worker 名下的孤儿 TOOL 行(abort/错误路径 ProgressToolEnd 可能缺席)。
+// dispatchFinish settles the DISPATCH row into the finished state and resets Worker state;
+// it cleans up orphan TOOL rows under that Worker's name (ProgressToolEnd may be absent on abort/error paths).
 func (o *observer) dispatchFinish(agent string, runErr error) {
 	o.updateAgent(agent, func(a *agentState) {
 		a.state = "idle"
@@ -171,7 +171,7 @@ func (o *observer) dispatchFinish(agent string, runErr error) {
 	o.streamClear()
 }
 
-// workerProgress 把 Worker 进度中继适配为既有的 ToolExecUpdate 处理。
+// workerProgress adapts the Worker progress relay to the existing ToolExecUpdate handling.
 func (o *observer) workerProgress(p agentcore.ProgressPayload) {
 	payload := p
 	o.handleToolUpdate(agentcore.Event{Type: agentcore.EventToolExecUpdate, Progress: &payload})
@@ -186,8 +186,8 @@ func (o *observer) finalize() {
 	}
 }
 
-// setAborting 由 Host 在 Abort/Close/Start 等生命周期切换处调用，控制
-// "context canceled" 类衍生事件是否需要抑制（避免与"用户手动暂停"重复）。
+// setAborting is called by the Host at lifecycle switches such as Abort/Close/Start, controlling
+// whether derived "context canceled" events need to be suppressed (to avoid duplicating "the user paused manually").
 func (o *observer) setAborting(v bool) { o.aborting.Store(v) }
 
 func (o *observer) retryEventID(scope string, attempt int) string {
@@ -203,13 +203,13 @@ func (o *observer) retryEventID(scope string, attempt int) string {
 	return o.retryEvents[scope]
 }
 
-// emitAndLog 用于调用类事件的"开始"态：发给 TUI 但不写入 runtime queue，
-// 避免 replay 时"开始一行、完成又一行"重复。slog 由 host.emitEvent 统一记录。
+// emitAndLog is for the "start" state of call-type events: it sends to the TUI but does not write to the runtime queue,
+// avoiding the duplication of "one row for start, another for completion" on replay. slog is recorded uniformly by host.emitEvent.
 func (o *observer) emitAndLog(ev Event) {
 	o.emitEv(ev)
 }
 
-// persistEvent 把事件写入 runtime queue（slog 由 host.emitEvent 统一记录）。
+// persistEvent writes the event to the runtime queue (slog is recorded uniformly by host.emitEvent).
 func (o *observer) persistEvent(ev Event) {
 	if o.store == nil || o.store.Runtime == nil {
 		return

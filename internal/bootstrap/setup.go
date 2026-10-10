@@ -13,12 +13,12 @@ import (
 	"github.com/voocel/ainovel-cli/internal/utils"
 )
 
-// exampleConfig là mẫu cấu hình có chú thích ghi vào ~/.ainovel/config.example.jsonc.
+// exampleConfig is the annotated config template written to ~/.ainovel/config.example.jsonc.
 //
 //go:embed config.example.jsonc
 var exampleConfig string
 
-// NeedsSetup kiểm tra xem có cần chạy trình hướng dẫn khởi tạo lần đầu hay không.
+// NeedsSetup checks whether the first-run setup wizard needs to run.
 func NeedsSetup() bool {
 	if p := DefaultConfigPath(); p != "" {
 		if _, err := os.Stat(p); err == nil {
@@ -34,12 +34,12 @@ func NeedsSetup() bool {
 type setupProvider struct {
 	name           string
 	label          string
-	baseURL        string // base_url điền sẵn
-	needType       bool   // Proxy tùy chỉnh cần hỏi thêm type và base_url
-	apiKeyOptional bool   // true nếu cho phép để trống API Key
+	baseURL        string // base_url pre-filled
+	needType       bool   // A custom proxy needs extra questions for type and base_url
+	apiKeyOptional bool   // true if the API Key may be left empty
 }
 
-// ProviderPreset là mục cấu hình Provider dùng chung cho Setup và lệnh /config.
+// ProviderPreset is a Provider config entry shared by Setup and the /config command.
 type ProviderPreset struct {
 	Name           string
 	Label          string
@@ -62,7 +62,7 @@ var setupProviders = []setupProvider{
 	{name: "custom", label: "Custom proxy (proxy / API tùy chỉnh)", needType: true, apiKeyOptional: true},
 }
 
-// ProviderPresets trả về danh sách các thiết lập Provider mẫu.
+// ProviderPresets returns the list of preset Provider settings.
 func ProviderPresets() []ProviderPreset {
 	out := make([]ProviderPreset, 0, len(setupProviders))
 	for _, preset := range setupProviders {
@@ -84,7 +84,7 @@ var languageOptions = []setupLanguageOption{
 	{code: "zh", label: "Tiếng Trung (nguyên bản, sáng tác bằng tiếng Trung)"},     // case:ok (proper noun)
 }
 
-// RunSetup chạy trình hướng dẫn thiết lập lần đầu và trả về cấu hình tạo được.
+// RunSetup runs the first-run setup wizard and returns the config it produced.
 func RunSetup() (Config, error) {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99")).
@@ -93,14 +93,14 @@ func RunSetup() (Config, error) {
 	fmt.Fprintf(os.Stderr, "  Sau khi xong, bạn có thể sửa tệp này để tùy chỉnh nâng cao.\n")
 	fmt.Fprintln(os.Stderr)
 
-	// Step 1: Chọn Ngôn ngữ Sáng tác Truyện
+	// Step 1: Choose the novel writing language
 	selectedLang, err := runLanguageSelect()
 	if err != nil {
 		return Config{}, err
 	}
 	printStepDone("Ngôn ngữ sáng tác", selectedLang.label)
 
-	// Step 2: Chọn Nhà cung cấp AI (Provider)
+	// Step 2: Choose the AI provider (Provider)
 	sp, err := runProviderSelect()
 	if err != nil {
 		return Config{}, err
@@ -110,7 +110,7 @@ func RunSetup() (Config, error) {
 	var pc ProviderConfig
 	printStepDone("Provider AI", sp.label)
 
-	// Tùy biến proxy: hỏi thêm tên và giao thức API
+	// Custom proxy: ask additionally for the name and the API protocol
 	if sp.needType {
 		providerName, err = runTextInput("Tên provider", "my-proxy")
 		if err != nil {
@@ -123,7 +123,7 @@ func RunSetup() (Config, error) {
 		pc.Type = providerType
 	}
 
-	// Step 3: Nhập API Key
+	// Step 3: Enter the API Key
 	var apiKey string
 	if sp.apiKeyOptional {
 		apiKey, err = runOptionalTextInput("[3/5] API key (Nhấn Enter để bỏ qua nếu dùng Ollama/Local)", "Để trống nếu không cần API key")
@@ -140,7 +140,7 @@ func RunSetup() (Config, error) {
 		printStepDone("API key", maskKey(apiKey))
 	}
 
-	// Step 4: Base URL (Nhấn Enter để dùng mặc định)
+	// Step 4: Base URL (press Enter to use the default)
 	baseDefault := sp.baseURL
 	baseHint := "Để trống dùng địa chỉ mặc định"
 	if baseDefault != "" {
@@ -157,7 +157,7 @@ func RunSetup() (Config, error) {
 		printStepDone("Base URL", "Mặc định")
 	}
 
-	// Step 5: Tên Model (bắt buộc)
+	// Step 5: Model name (required)
 	modelPlaceholder := "Ví dụ: qwen2.5:14b / ainovel-qwen / google/gemini-2.5-flash / claude-3-5-sonnet"
 	if providerName == "ollama" {
 		modelPlaceholder = "Ví dụ: qwen2.5:14b / ainovel-qwen / qwen3:14b"
@@ -178,13 +178,13 @@ func RunSetup() (Config, error) {
 		Language:  selectedLang.code,
 	}
 
-	// Lưu cấu hình
+	// Save the config
 	path := DefaultConfigPath()
 	if err := SaveConfig(path, cfg); err != nil {
 		return cfg, fmt.Errorf("không lưu được cấu hình: %w", err)
 	}
 
-	// Tạo file ví dụ mẫu
+	// Create the example file
 	saveExampleConfig()
 
 	rulesDir := rules.DefaultHomeRulesDir()
@@ -212,7 +212,7 @@ func saveExampleConfig() {
 	_ = os.WriteFile(filepath.Join(dir, "config.example.jsonc"), []byte(exampleConfig), 0o644)
 }
 
-// printStepDone in dòng xác nhận hoàn thành một bước.
+// printStepDone prints a confirmation line that a step is done.
 func printStepDone(label, value string) {
 	fmt.Fprintf(os.Stderr, "  %s %s: %s\n",
 		lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Render("✓"),

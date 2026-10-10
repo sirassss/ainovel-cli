@@ -62,8 +62,8 @@ func TestInterventionStopsWhenPersistenceFails(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "Không lưu được can thiệp") {
 		t.Fatalf("expected persistence error, got %v", err)
 	}
-	// 公共 Steer 必须等待异步任务并把同一业务错误返回给 TUI；不能只表示 goroutine
-	// 启动成功，否则界面永远收不到真实失败。
+	// The public Steer must wait for the async task and return the same business error to the TUI; it cannot merely signal that the goroutine
+	// started successfully, or the interface would never receive the real failure.
 	err = h.Steer("修改主角性格")
 	if err == nil || !strings.Contains(err.Error(), "Không lưu được can thiệp") {
 		t.Fatalf("Steer should return persistence error, got %v", err)

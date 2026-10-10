@@ -19,7 +19,7 @@ func newTestStore(t *testing.T) *Store {
 	return s
 }
 
-// TestLoadEmpty 统一验证所有领域的空读取行为。
+// TestLoadEmpty uniformly verifies the empty-read behavior of all domains.
 func TestLoadEmpty(t *testing.T) {
 	s := newTestStore(t)
 
@@ -89,7 +89,7 @@ func TestTimeline_AppendIsIdempotent(t *testing.T) {
 	if err := s.World.AppendTimelineEvents([]domain.TimelineEvent{event}); err != nil {
 		t.Fatalf("append first: %v", err)
 	}
-	event.Characters = []string{"老周", "林墨"} // 角色顺序不应影响同一事件判定
+	event.Characters = []string{"老周", "林墨"} // Character order should not affect the identity of the same event
 	if err := s.World.AppendTimelineEvents([]domain.TimelineEvent{event}); err != nil {
 		t.Fatalf("append duplicate: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestTimeline_AppendIsIdempotent(t *testing.T) {
 		t.Fatalf("duplicate timeline event should be ignored, got %d: %+v", len(loaded), loaded)
 	}
 
-	// 跨重启仍从 JSONL 重建去重索引，commit Saga 重放不能产生重复记录。
+	// The dedup index is still rebuilt from the JSONL across restarts, and a commit Saga replay must not produce duplicate records.
 	s2 := NewStore(s.Dir())
 	if err := s2.World.AppendTimelineEvents([]domain.TimelineEvent{event}); err != nil {
 		t.Fatalf("append duplicate after restart: %v", err)
@@ -227,7 +227,7 @@ func TestTimeline_LoadRecent(t *testing.T) {
 	for _, tt := range []struct {
 		current, window, want int
 	}{
-		{7, 10, 4}, // 全部
+		{7, 10, 4}, // All
 		{7, 3, 2},  // ch5,ch7
 		{5, 2, 3},  // ch3,ch5,ch7
 	} {
@@ -265,7 +265,7 @@ func TestForeshadow_UpdateLifecycle(t *testing.T) {
 		t.Errorf("f2: want resolved@3, got %s@%d", all[1].Status, all[1].ResolvedAt)
 	}
 
-	// LoadActive 应排除 resolved
+	// LoadActive should exclude resolved
 	active, _ := s.World.LoadActiveForeshadow()
 	if len(active) != 1 || active[0].ID != "f1" {
 		t.Errorf("active: want [f1], got %v", active)
@@ -322,7 +322,7 @@ func TestRelationships_UpdateMerge(t *testing.T) {
 		{CharacterA: "张三", CharacterB: "李四", Relation: "师徒", Chapter: 1},
 	})
 
-	// 更新已有 + 新增
+	// Update existing + add new
 	_ = s.World.UpdateRelationships([]domain.RelationshipEntry{
 		{CharacterA: "张三", CharacterB: "李四", Relation: "挚友", Chapter: 5},
 		{CharacterA: "王五", CharacterB: "赵六", Relation: "同门", Chapter: 5},
@@ -342,7 +342,7 @@ func TestRelationships_PairKeySymmetry(t *testing.T) {
 	_ = s.World.SaveRelationships([]domain.RelationshipEntry{
 		{CharacterA: "张三", CharacterB: "李四", Relation: "师徒", Chapter: 1},
 	})
-	// B-A 顺序更新，应匹配同一条
+	// Updating in B-A order should match the same entry
 	_ = s.World.UpdateRelationships([]domain.RelationshipEntry{
 		{CharacterA: "李四", CharacterB: "张三", Relation: "反目", Chapter: 3},
 	})
@@ -448,7 +448,7 @@ func TestStateChanges_MigratesLegacyAndRemainsIdempotent(t *testing.T) {
 		t.Fatal("state_changes.jsonl should preserve old bytes and append new records")
 	}
 
-	// 新 Store 从日志恢复索引后重放相同 change，条目数仍保持不变。
+	// After a new Store recovers the index from the log and replays the same change, the entry count stays unchanged.
 	s2 := NewStore(dir)
 	if err := s2.World.AppendStateChanges([]domain.StateChange{next}); err != nil {
 		t.Fatalf("restart duplicate: %v", err)
@@ -493,7 +493,7 @@ func TestReview_GlobalScopeIsolation(t *testing.T) {
 	s := newTestStore(t)
 	_ = s.World.SaveReview(domain.ReviewEntry{Chapter: 5, Scope: "global", Verdict: "accept"})
 
-	// chapter-scoped load 不应找到 global review
+	// A chapter-scoped load should not find the global review
 	if got, _ := s.World.LoadReview(5); got != nil {
 		t.Errorf("chapter load should not find global: %+v", got)
 	}
@@ -515,7 +515,7 @@ func TestReview_LoadLastReview(t *testing.T) {
 			t.Errorf("LoadLastReview(%d): want ch%d, got %+v", tt.from, tt.want, got)
 		}
 	}
-	// from=1 找不到
+	// from=1 is not found
 	if got, _ := s.World.LoadLastReview(1); got != nil {
 		t.Errorf("from=1 should be nil, got %+v", got)
 	}
@@ -551,21 +551,21 @@ func TestRenderWorldRules(t *testing.T) {
 		{Category: "magic", Rule: "禁咒需三人", Boundary: "单人施放会死"},
 	}, labelsZH)
 
-	// magic 分组应在 society 之前
+	// The magic group should come before society
 	if strings.Index(md, "## magic") >= strings.Index(md, "## society") {
 		t.Error("magic should appear before society")
 	}
 	if !strings.Contains(md, "边界：精神力耗尽会昏迷") {
 		t.Error("missing boundary")
 	}
-	// 无 boundary 不应输出空边界行
+	// With no boundary, no empty boundary line should be output
 	if strings.Contains(md, "边界：\n") {
 		t.Error("empty boundary rendered")
 	}
 }
 
-// TestRuleViolationsContract 违规事实存储契约(第五轮评审):
-// 同章最新覆盖旧记录;重写后空列表视为已清;跨重启可读。
+// TestRuleViolationsContract is the storage contract for violation facts (round-five review):
+// the latest entry for a chapter overwrites the old record; an empty list after a rewrite counts as cleared; readable across restarts.
 func TestRuleViolationsContract(t *testing.T) {
 	dir := t.TempDir()
 	s := NewStore(dir)
@@ -578,7 +578,7 @@ func TestRuleViolationsContract(t *testing.T) {
 		t.Fatalf("首次读取: %+v", got)
 	}
 
-	// 同章重写:最新记录(空列表=已清)覆盖旧违规
+	// Same-chapter rewrite: the latest record (empty list = cleared) overwrites the old violations
 	if err := s.World.SaveRuleViolations(3, nil); err != nil {
 		t.Fatalf("save empty: %v", err)
 	}
@@ -586,7 +586,7 @@ func TestRuleViolationsContract(t *testing.T) {
 		t.Fatalf("重写后旧违规应被清除: %+v", got)
 	}
 
-	// 其他章不受影响 + 跨重启(新 Store 实例)可读
+	// Other chapters are unaffected + readable across restarts (new Store instance)
 	if err := s.World.SaveRuleViolations(5, []rules.Violation{{Rule: "forbidden_phrases", Target: "某种程度上", Actual: 2, Severity: rules.SeverityWarning}}); err != nil {
 		t.Fatalf("save ch5: %v", err)
 	}

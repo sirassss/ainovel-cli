@@ -12,11 +12,11 @@ import (
 	buildversion "github.com/voocel/ainovel-cli/internal/version"
 )
 
-// Run 启动 TUI。
-// 启动模式分层约定：
-// 1. 快速模式、共创模式属于“启动编排”；
-// 2. 正式创作会话进入 host.Host；
-// 3. 未来若新增“续写已有小说”等共享模式，统一落到 internal/entry/startup。
+// Run starts the TUI.
+// Startup-mode layering convention:
+// 1. Quick mode and co-create mode belong to "startup orchestration";
+// 2. The actual creation session enters host.Host;
+// 3. If a shared mode such as "continue an existing novel" is added later, it goes into internal/entry/startup.
 func Run(cfg bootstrap.Config, bundle assets.Bundle, build buildversion.Info) error {
 	rt, err := host.New(cfg, bundle, host.WithFileLog("tui.log", false,
 		slog.String("version", build.Version),
@@ -37,9 +37,9 @@ func Run(cfg bootstrap.Config, bundle assets.Bundle, build buildversion.Info) er
 			Summary: logWarning.Error(), Detail: logWarning.Error(),
 		})
 	}
-	// 不在启动时全局开启鼠标上报：欢迎页用不到鼠标，关闭上报可保留终端原生
-	// 拖拽选中复制。进入创作工作台（modeRunning）时再由 enterRunning 打开上报，
-	// 以支持点击切面板 / 滚轮 / 拖拽侧边栏。
+	// Mouse reporting is not enabled globally at startup: the welcome screen does not use the mouse, and keeping reporting off preserves the terminal's native
+	// drag-to-select copy. When entering the creation workbench (modeRunning), enterRunning turns reporting on
+	// to support click-to-switch panels / wheel scrolling / dragging the sidebar.
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err = p.Run()
 	return err

@@ -21,9 +21,9 @@ type Options struct {
 	Stderr io.Writer
 }
 
-// Run 以无界面模式运行会话内核，直接消费 Engine 事件与流式输出。
-// 未来若新增“续写已有小说”等共享启动方式，不应直接堆到这里，
-// 而应先落到 internal/entry/startup，再由 headless 入口调用。
+// Run runs the session kernel in UI-less mode, consuming Engine events and streaming output directly.
+// If a shared startup path such as "continue an existing novel" is added later, it should not be
+// piled in here; land it in internal/entry/startup first and let the headless entry call it.
 func Run(cfg bootstrap.Config, bundle assets.Bundle, opts Options) error {
 	stdout := opts.Stdout
 	if stdout == nil {
@@ -41,8 +41,8 @@ func Run(cfg bootstrap.Config, bundle assets.Bundle, opts Options) error {
 	if logErr := eng.FileLogError(); logErr != nil {
 		fmt.Fprintf(stderr, "Cảnh báo: nhật ký tệp không dùng được, tiếp tục dùng nhật ký terminal: %v\n", logErr)
 	}
-	// 运行结束 / 出错返回时落一份脱敏诊断，方便 headless 用户贴 issue。
-	// （外部 kill 的挂死不走 defer，仍需在 TUI 里手动 /diag。）
+	// When the run finishes or returns with an error, write a redacted diagnostic so headless users
+	// can paste it into an issue. (A hang ended by an external kill skips defer; run /diag manually in the TUI.)
 	defer func() {
 		if _, err := diag.Export(store.NewStore(eng.Dir())); err != nil {
 			fmt.Fprintf(stderr, "Cảnh báo: không xuất được báo cáo chẩn đoán: %v\n", err)
@@ -56,7 +56,7 @@ func Run(cfg bootstrap.Config, bundle assets.Bundle, opts Options) error {
 			return err
 		}
 		fmt.Fprintf(stderr, "headless khởi động: %s\n", eng.Dir())
-		// 启动侧确定性生成本书用户规则快照（用原始 prompt 归一化），须在 StartPrepared 前。
+		// Deterministically generate this book's user-rule snapshot on the startup side (normalized from the original prompt); must happen before StartPrepared.
 		if err := eng.PrepareUserRules(prompt); err != nil {
 			return err
 		}

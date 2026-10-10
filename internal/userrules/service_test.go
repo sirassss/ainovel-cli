@@ -7,8 +7,8 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// nil 模型 + 空规则目录：归一化全降级，但快照仍可产出（system_defaults 兜底）并落盘。
-// LoadOptions{} 的两个目录为空串，RawFileSources 返回 nil，测试不触碰真实磁盘。
+// nil model + empty rules directories: normalization all degrades, but the snapshot can still be produced (system_defaults as fallback) and persisted.
+// Both directories of LoadOptions{} are empty strings, so RawFileSources returns nil and the test never touches the real disk.
 func newDegradedService(t *testing.T) (*Service, *store.Store) {
 	t.Helper()
 	st := store.NewStore(t.TempDir())
@@ -25,16 +25,16 @@ func TestService_Build_DegradesButPersists(t *testing.T) {
 	if snap.Status != rules.StatusDegraded {
 		t.Fatalf("无模型应降级，status=%q", snap.Status)
 	}
-	// system_defaults 始终兜底机械基线。
+	// system_defaults always backstops the mechanical baseline.
 	if len(snap.Structured.FatigueWords) == 0 || len(snap.Structured.ForbiddenPhrases) == 0 {
 		t.Fatalf("应保留 system_defaults 机械基线，got %+v", snap.Structured)
 	}
-	// 启动 prompt 降级为 raw preferences，原文不丢。
+	// The startup prompt degrades to raw preferences, and the original text is not lost.
 	if snap.Preferences == "" {
 		t.Fatal("降级应把启动 prompt 原文记入 preferences")
 	}
 
-	// 已落盘：GetOrBuild 读回同一份而非重建。
+	// Already persisted: GetOrBuild reads back the same copy rather than rebuilding.
 	reloaded, err := st.UserRules.Load()
 	if err != nil || reloaded == nil {
 		t.Fatalf("快照应已落盘：err=%v snap=%v", err, reloaded)
@@ -70,14 +70,14 @@ func TestService_AddRuntimeRule_PersistsAndReturnsCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddRuntimeRule 不应报错：%v", err)
 	}
-	// 候选用于回显：无模型时降级，原文进 preferences。
+	// The candidate is for echoing: with no model it degrades, and the original text goes into preferences.
 	if !cand.Degraded {
 		t.Fatal("无模型时本次候选应降级")
 	}
 	if cand.Preferences != text {
 		t.Fatalf("候选应保留原文，got %q", cand.Preferences)
 	}
-	// 叠加后快照含该条且已落盘。
+	// The overlaid snapshot contains the entry and is already persisted.
 	if merged.Preferences == "" {
 		t.Fatal("叠加后 preferences 不应为空")
 	}

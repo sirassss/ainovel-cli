@@ -12,12 +12,12 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// Projector 从章节记录重建所有章节级派生状态。
+// Projector rebuilds all chapter-level derived state from chapter records.
 type Projector struct{ store *store.Store }
 
 func NewProjector(st *store.Store) *Projector { return &Projector{store: st} }
 
-// ValidateRecords 校验完整章节记录集能否被确定性重放，不写入任何投影。
+// ValidateRecords checks whether the complete set of chapter records can be replayed deterministically, without writing any projection.
 func ValidateRecords(records []domain.ChapterRecord) error {
 	records = slices.Clone(records)
 	slices.SortFunc(records, func(a, b domain.ChapterRecord) int { return a.Chapter - b.Chapter })

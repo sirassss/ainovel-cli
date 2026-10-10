@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// --- 辅助函数 ---
+// --- Helper functions ---
 
 func renderField(label, value string) string {
 	if value == "" {
@@ -36,9 +36,9 @@ func contextPercentColor(percent float64) lipgloss.AdaptiveColor {
 	}
 }
 
-// formatContextWindow 把 token 数格式化成紧凑窗口标记："128K" / "200K" / "1M" / "2M"。
-// Gemini 的 1048576 (2^20) 等技术意义上的 1M 会展示为 "1M" 而非 "1.0M"。
-// n<=0 返回空串，调用方应据此决定是否展示。
+// formatContextWindow formats a token count into a compact window label: "128K" / "200K" / "1M" / "2M".
+// Gemini's 1048576 (2^20) and similar technical 1M values are shown as "1M" rather than "1.0M".
+// n<=0 returns an empty string; the caller should decide from that whether to show it.
 func formatContextWindow(n int) string {
 	if n <= 0 {
 		return ""
@@ -57,7 +57,7 @@ func formatContextWindow(n int) string {
 	return fmt.Sprintf("%d", n)
 }
 
-// formatCostUSD 格式化美元成本。<$0.01 用 4 位小数，否则 2 位。0 返回空。
+// formatCostUSD formats a USD cost. Below $0.01 it uses 4 decimal places, otherwise 2. 0 returns empty.
 func formatCostUSD(usd float64) string {
 	if usd <= 0 {
 		return ""
@@ -83,9 +83,9 @@ func formatNumber(n int) string {
 	return string(result)
 }
 
-// truncate 按视觉宽度截断（中文算 2 列），超宽时以"..."收尾。
-// 不能按 rune 数截：纯中文行会溢出近一倍列宽，被外层 viewport 贴边硬裁，
-// 连省略号一起裁掉，用户看到的就是"文本贴边截断、不换行"。
+// truncate truncates by visual width (CJK counts as 2 columns), ending with "..." when too wide.
+// It must not cut by rune count: a pure-CJK line would overflow by nearly double the column width, get hard-clipped at the edge by the outer viewport,
+// and the ellipsis would be clipped with it, so the user sees "text cut off at the edge, not wrapped".
 func truncate(s string, max int) string {
 	if max <= 0 {
 		return ""

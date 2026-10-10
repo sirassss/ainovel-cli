@@ -8,16 +8,16 @@ import (
 	"sync"
 )
 
-// IO 封装文件系统读写操作，提供加锁和原子写入。
-// 每个子存储持有独立的 IO 实例，拥有各自的 sync.RWMutex。
+// IO wraps file-system read/write operations, providing locking and atomic writes.
+// Each sub-store holds its own IO instance with its own sync.RWMutex.
 type IO struct {
 	dir  string
 	lang string
 	mu   sync.RWMutex
 }
 
-// SetLanguage 设定作品语种（"vi" / "zh"），影响派生 Markdown 视图的标签。
-// 启动时设一次；空值按上游默认走中文。
+// SetLanguage sets the work language ("vi" / "zh"), which affects the labels of derived Markdown views.
+// Set once at startup; an empty value follows the upstream default (Chinese).
 func (io *IO) SetLanguage(lang string) { io.lang = lang }
 
 func (io *IO) labels() mdLabels { return labelsFor(io.lang) }
@@ -104,11 +104,11 @@ func (io *IO) WriteMarkdown(rel string, content string) error {
 	return io.WriteFileUnlocked(rel, []byte(content))
 }
 
-// WriteMarkdownUnlocked 写出 .md sidecar。约定：每个 .md 都是对应 .json 的
-// best-effort 人类可读视图，绝非数据源——运行时与导出一律从 .json 重新渲染。
-// 各 Save 方法在同一写锁内先写 .json 再写此 .md，是两次独立的 tmp+rename；
-// 二者之间崩溃会留下 .md 落后于 .json，这是可接受的（无人把 .md 当数据读，
-// 下次写同一 scope 即自愈）。故意不为此加两文件原子提交——那是过度设计。
+// WriteMarkdownUnlocked writes the .md sidecar. Convention: every .md is a best-effort human-readable
+// view of the corresponding .json, never a data source — runtime and export always re-render from the .json.
+// Each Save method writes the .json and then this .md inside the same write lock, as two independent tmp+rename operations;
+// a crash between the two leaves the .md behind the .json, which is acceptable (nobody reads the .md as data, and
+// the next write to the same scope self-heals it). We deliberately do not add an atomic two-file commit for this — that would be over-engineering.
 func (io *IO) WriteMarkdownUnlocked(rel string, content string) error {
 	return io.WriteFileUnlocked(rel, []byte(content))
 }
@@ -135,8 +135,8 @@ func (io *IO) AppendLineUnlocked(rel string, data []byte) error {
 	return f.Sync()
 }
 
-// syncFileUnlocked 在幂等重放时确认已存在的追加记录已持久化。
-// 调用方负责持有 io.mu 写锁。
+// syncFileUnlocked confirms during an idempotent replay that an already-existing appended record has been persisted.
+// The caller must hold the io.mu write lock.
 func (io *IO) syncFileUnlocked(rel string) error {
 	f, err := os.OpenFile(io.path(rel), os.O_WRONLY, 0)
 	if err != nil {
@@ -169,7 +169,7 @@ func (io *IO) WithWriteLock(fn func() error) error {
 	return fn()
 }
 
-// EnsureDirs 创建指定的子目录。
+// EnsureDirs creates the given subdirectories.
 func (io *IO) EnsureDirs(dirs []string) error {
 	for _, d := range dirs {
 		if err := os.MkdirAll(filepath.Join(io.dir, d), 0o755); err != nil {

@@ -7,13 +7,13 @@ import (
 	"unicode/utf8"
 )
 
-// Lint 内置产品底线检查：扫描正文中的机制残留，与用户规则无关，commit 时始终执行。
-// 与 Check 同契约——仅返事实（铁律一），不阻断流程，由评审/用户裁定。
+// Lint is the built-in product-baseline check: it scans chapter content for mechanical residue, independent of user rules, and always runs at commit time.
+// Same contract as Check: facts only (Iron Rule 1), never blocks the flow; the editor/user decides.
 //
-// 当前三类（全部来自真实长跑产物的实证缺陷）：
-//   - markdown_residue：正文残留 ** 加粗、首行之外的 # 标题行（导出 txt 会裸露符号）
-//   - non_cjk_fragments / cjk_leak：文字混杂片段，方向按正文主文字自动判定
-//     （中文正文报拉丁片段；越南语等拉丁文字正文报汉字片段）
+// Three categories at present (all backed by evidence from real long-run output):
+//   - markdown_residue: leftover ** bold and # heading lines other than the first line in the content (an exported txt would expose the raw symbols)
+//   - non_cjk_fragments / cjk_leak: mixed-script fragments; the direction is determined automatically by the dominant script of the content
+//     (Chinese content reports Latin fragments; content in Latin script such as Vietnamese reports Han fragments)
 func Lint(text string) []Violation {
 	var vs []Violation
 	vs = appendMarkdownResidue(vs, text)
@@ -40,7 +40,7 @@ func appendMarkdownResidue(vs []Violation, text string) []Violation {
 		if t == "" {
 			continue
 		}
-		// 第一个非空行的 # 标题是章文件的合法格式（不按行号写死，容忍前导空行）
+		// A # heading on the first non-empty line is the legal format of a chapter file (not hard-coded by line number, so leading blank lines are tolerated)
 		first := !seenContent
 		seenContent = true
 		if !first && strings.HasPrefix(t, "#") {
@@ -60,30 +60,30 @@ func appendMarkdownResidue(vs []Violation, text string) []Violation {
 
 var (
 	latinFragmentRe = regexp.MustCompile(`[A-Za-z]{2,}`)
-	// 含 CJK 标点：漏进越南语正文的不只是汉字，还有「。，、？！」这类全角标点。
-	// 实测第 4 章正文里一个孤立的「。」——纯汉字规则完全看不见。
+	// Includes CJK punctuation: what leaks into Vietnamese content is not only Han characters but also full-width punctuation.
+	// Measured: a lone full-width period in the content of chapter 4 - a Han-only rule could not see it at all.
 	cjkFragmentRe = regexp.MustCompile(`[\p{Han}\x{3000}-\x{303f}\x{ff01}-\x{ff5e}]+`)
 )
 
-// appendScriptMixing 报告正文里「另一种文字」的混入片段。
+// appendScriptMixing reports fragments of "another script" mixed into the chapter content.
 //
-// 哪种文字算混入由正文自身决定，不读配置：中文正文里裸混 "pattern" 是缺陷，
-// 而越南语正文每个词都是拉丁字母，按同一条规则会在每章误报上千次，把评审
-// 上下文淹掉——实测一章命中 1021 次而全章并无一个汉字。反过来，越南语正文
-// 里漏出「根系之力」才是真缺陷，旧规则完全看不见。
+// Which script counts as the intruder is decided by the content itself, not read from config: a bare "pattern" mixed into Chinese content is a defect,
+// whereas every word of Vietnamese content is in Latin letters, so the same rule would raise false alarms over a thousand times per chapter and drown the review
+// context - measured: one chapter hit 1021 times though it contained not a single Han character. Conversely, a leaked Han phrase
+// in Vietnamese content is a real defect that the old rule could not see at all.
 //
-// 因此先按字符占比判定正文主文字，再只报少数派。两种题材各自成立，且配置
-// 写错也不会失效。合法外来词（品牌名/缩写）仍会命中——warning 级事实，由评审裁定。
+// So first determine the dominant script by character share, then report only the minority. Both genres hold on their own, and a misconfigured
+// setting cannot make it stop working. Legitimate loanwords (brand names/abbreviations) still hit - a warning-level fact, adjudicated by the review.
 func appendScriptMixing(vs []Violation, text string) []Violation {
 	latin := latinFragmentRe.FindAllString(text, -1)
 	han := cjkFragmentRe.FindAllString(text, -1)
 
-	// 比的是「汉字个数」与「拉丁词个数」，不是两边的字符数：一个汉字约等于一个词，
-	// 而一个拉丁词有好几个字母。按字符数比，中文正文里混几个 "pattern"/"DNA"
-	// 就会把拉丁字符数顶过汉字数，从而误判正文语种。
+	// What is compared is the "number of Han characters" against the "number of Latin words", not the character counts on each side: a Han character is about one word,
+	// while a Latin word has several letters. Comparing by character count, a few "pattern"/"DNA" mixed into Chinese content
+	// would push the Latin character count above the Han count and misjudge the language of the content.
 	rule, matches := "non_cjk_fragments", latin
 	if runeCount(han) <= len(latin) {
-		// 正文是拉丁文字（越南语等）：汉字才是混入。
+		// The content is in Latin script (Vietnamese etc.): Han characters are the intruders.
 		rule, matches = "cjk_leak", han
 	}
 	if len(matches) == 0 {
@@ -117,9 +117,9 @@ func runeCount(ss []string) int {
 	return n
 }
 
-// brokenWordRe 匹配被段落分隔切断的单词：一行以字母结尾，跨过空行后又以小写字母开头。
-// 越南语正文实测：「n Tông, Ng」+ 空行 +「ọc Lâm dừng bước」——人名 Ngọc 被劈成两半。
-// 拉丁文字里一个词不会跨段落，因此这个形状没有正当写法，可直接判为缺陷。
+// brokenWordRe matches a word cut apart by a paragraph break: a line ends with a letter and, after a blank line, continues with a lowercase letter.
+// Measured on Vietnamese content: a person's name was split in two - the first half ended one paragraph and the rest started the next after a blank line.
+// A word in Latin script never spans paragraphs, so this shape has no legitimate form and can be judged a defect directly.
 var brokenWordRe = regexp.MustCompile(`(?m)[\p{L}]\n\s*\n[[:space:]]*[\p{Ll}]`)
 
 func appendBrokenWords(vs []Violation, text string) []Violation {
@@ -135,11 +135,11 @@ func appendBrokenWords(vs []Violation, text string) []Violation {
 	})
 }
 
-// paraMinRunes 是参与重复比对的段落下限。短段落天然会重复（"Hắn gật đầu."、
-// 一声"Bắt đầu!"），只有成段的文字逐字重现才是生成事故。
+// paraMinRunes is the minimum paragraph length that takes part in duplicate comparison. Short paragraphs naturally repeat
+// (a short action beat, a one-word exclamation); only verbatim recurrence of full paragraphs of text is a generation incident.
 const paraMinRunes = 20
 
-// paragraphs 切出够长、值得比对的正文段落，跳过标题行。
+// paragraphs splits out content paragraphs long enough to be worth comparing, skipping heading lines.
 func paragraphs(text string) []string {
 	var out []string
 	for _, p := range strings.Split(text, "\n\n") {
@@ -154,12 +154,12 @@ func paragraphs(text string) []string {
 	return out
 }
 
-// selfDupThreshold / crossDupThreshold 是重复字符占本章的比例上限。
+// selfDupThreshold / crossDupThreshold are the upper limits of the proportion of duplicated characters in this chapter.
 //
-// 阈值来自实测：一本 22 章的书里 19 章两项都是 0.0%，出事的三章分别是
-// 自重复 43.5%（第21章，同一段落出现 5 次）、跨章 32.2%（第14章照抄第13章）
-// 与 12.9%（第22章照抄第21章）。信号是二元的，中间没有灰区，因此取 10%
-// 给"刻意重复的副歌/咒诀"留足余地。
+// The thresholds come from measurement: in a 22-chapter book, 19 chapters were 0.0% on both, and the three problem chapters were
+// self-duplication 43.5% (chapter 21, the same paragraph appearing 5 times), cross-chapter 32.2% (chapter 14 copied chapter 13)
+// and 12.9% (chapter 22 copied chapter 21). The signal is binary with no gray zone, so 10% is chosen
+// to leave ample room for "deliberately repeated refrains/incantations".
 const (
 	selfDupThreshold  = 0.10
 	crossDupThreshold = 0.10
@@ -197,13 +197,13 @@ func appendSelfDuplication(vs []Violation, text string) []Violation {
 	})
 }
 
-// CheckAgainstPrevious 检出"新章其实是上一章的副本"。
+// CheckAgainstPrevious detects "the new chapter is actually a copy of the previous one".
 //
-// Writer 有 read_chapter，会先看上一章写了什么，然后把它抄下来当续写——实测
-// 第14章 32.2% 的字符逐字来自第13章，第22章 12.9% 来自第21章。
+// The Writer has read_chapter and first looks at what the previous chapter wrote, then copies it down as the continuation - measured:
+// 32.2% of the characters of chapter 14 came verbatim from chapter 13, and 12.9% of chapter 22 from chapter 21.
 //
-// self_duplication 看不见这类事故：它只在单章范围内统计，而照抄的那一章内部
-// 完全干净。因此必须单独按"上文"比对。previous 为空则跳过。
+// self_duplication cannot see this kind of incident: it only counts within a single chapter, and the copied chapter is
+// perfectly clean internally. So it must be compared separately against the "preceding text". Skipped when previous is empty.
 func CheckAgainstPrevious(text string, previous []string) []Violation {
 	cur := paragraphs(text)
 	if len(cur) == 0 || len(previous) == 0 {
@@ -263,26 +263,26 @@ func truncateRunes(s string, n int) string {
 	return string(r[:n]) + "…"
 }
 
-// englishFunctionWordRe 只收英语虚词——它们绝不会作为借词进入越南语正文。
-// 内容词（flow / lesson / footsteps 之类）故意不收：现代题材里可能是合理外来语，
-// 而"the flow"这类短语已被其中的 the 命中，不必冒误报的风险。
+// englishFunctionWordRe collects English function words only - they never enter Vietnamese content as loanwords.
+// Content words (flow / lesson / footsteps and the like) are deliberately excluded: in modern-setting genres they may be legitimate loanwords,
+// and a phrase such as "the flow" is already hit by the "the" in it, so there is no need to risk a false alarm.
 var englishFunctionWordRe = regexp.MustCompile(
 	`(?i)\b(not|the|and|but|for|from|with|they|this|that|just|one|was|were|have|when|which|while|into|over)\b`)
 
-// vietnameseMarkRe 匹配越南语专有字母：7 个基字母（ăâđêôơư，含大写）加上
-// Latin Extended Additional 区 U+1EA0-U+1EF9——该区几乎专供越南语声调字母。
-// 只列少数预组合字符是不够的：一句普通越南语里大半声调字母都落在那个区间内。
+// vietnameseMarkRe matches letters specific to Vietnamese: the 7 base letters (a-breve, a-circumflex, d-stroke, e-circumflex, o-circumflex, o-horn, u-horn, including uppercase) plus
+// the Latin Extended Additional block U+1EA0-U+1EF9 - that block is used almost exclusively for Vietnamese tone letters.
+// Listing only a few precomposed characters is not enough: most tone letters of an ordinary Vietnamese sentence fall within that range.
 var vietnameseMarkRe = regexp.MustCompile(`[ăâđêôơưĂÂĐÊÔƠƯ\x{1ea0}-\x{1ef9}]`)
 
-// vietnameseMarkFloor 是判定"正文为越南语"所需的专有字母数。真实一章有成百上千个；
-// 设下限只为在英文/中文作品里让本规则彻底静音。
+// vietnameseMarkFloor is the number of Vietnamese-specific letters required to judge "the content is Vietnamese". A real chapter has hundreds or thousands;
+// the floor exists only to keep this rule completely silent in English/Chinese works.
 const vietnameseMarkFloor = 12
 
-// appendEnglishResidue 报告越南语正文里夹带的英语虚词。
+// appendEnglishResidue reports English function words mixed into Vietnamese content.
 //
-// cjk_leak 对此完全无能：越南语与英语同属拉丁字母，混进来的 "not"/"the" 与正文
-// 在字符层面无从区分。而这不是小事——实测第18章出现 27 次 not、9 次 the、3 次 from，
-// 例如「Lá cây bắt đầu chuyển động—not nhanh chóng mà nhẹ nhàng」。
+// cjk_leak is helpless here: Vietnamese and English share the Latin alphabet, so an intruding "not"/"the" is indistinguishable from the content
+// at the character level. And this is no small matter - measured: chapter 18 had 27 "not", 9 "the" and 3 "from",
+// for example an English "not" in the middle of a Vietnamese sentence after a dash.
 func appendEnglishResidue(vs []Violation, text string) []Violation {
 	if len(vietnameseMarkRe.FindAllString(text, vietnameseMarkFloor)) < vietnameseMarkFloor {
 		return vs
