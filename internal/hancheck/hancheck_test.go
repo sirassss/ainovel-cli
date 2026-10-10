@@ -26,11 +26,6 @@ var pendingFlag = flag.String("pending", "", "directory (e.g. internal/domain) t
 const keepMarker = "han:keep"
 
 var pending = map[string]string{
-	"internal/diag":      "phase2",
-	"internal/eval":      "phase2",
-	"internal/version":   "phase2",
-	"internal/stylestat": "phase2",
-	"internal/models":    "phase2",
 }
 
 // pendingComments lists directories whose comments are not yet English; delete the
@@ -43,12 +38,10 @@ var pendingComments = map[string]string{
 	"internal/arbiter":        "phase2",
 	"internal/bootstrap":      "phase2",
 	"internal/chapterfacts":   "phase2",
-	"internal/diag":           "phase2",
 	"internal/domain":         "phase2",
 	"internal/entry/headless": "phase2",
 	"internal/entry/startup":  "phase2",
 	"internal/entry/tui":      "phase2",
-	"internal/eval":           "phase2",
 	"internal/flow":           "phase2",
 	"internal/host":           "phase2",
 	"internal/host/exp":       "phase2",
@@ -57,16 +50,13 @@ var pendingComments = map[string]string{
 	"internal/llmcontract":    "phase2",
 	"internal/llmretry":       "phase2",
 	"internal/logger":         "phase2",
-	"internal/models":         "phase2",
 	"internal/notify":         "phase2",
 	"internal/revision":       "phase2",
 	"internal/rules":          "phase2",
 	"internal/store":          "phase2",
-	"internal/stylestat":      "phase2",
 	"internal/tools":          "phase2",
 	"internal/userrules":      "phase2",
 	"internal/utils":          "phase2",
-	"internal/version":        "phase2",
 }
 
 type violation struct {

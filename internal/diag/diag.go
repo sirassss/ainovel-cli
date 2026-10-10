@@ -7,23 +7,23 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// ── 诊断阈值 ─────────────────────────────────────────────
+// ── Diagnostic thresholds ────────────────────────────────
 
 const (
-	ThresholdDimScoreLow      = 70  // ChronicLowDimension: 维度均分低于此值告警
-	ThresholdContractMissRate = 0.3 // ContractMissPattern: 合同未达成率上限
-	ThresholdRewriteRate      = 0.5 // ExcessiveRewrites: 改写率上限
-	ThresholdWordShortRatio   = 0.4 // WordCountAnomaly: 字数低于均值此比例视为异常
-	ThresholdWordLongRatio    = 2.5 // WordCountAnomaly: 字数高于均值此比例视为异常
-	ThresholdHookWeakScore    = 75  // HookWeakChain: hook 低于此分视为偏弱
-	ThresholdHookWeakChain    = 3   // HookWeakChain: 连续偏弱章数阈值
-	ThresholdPayoffMissRate   = 0.4 // PayoffMissPattern: payoff 未兑现率上限
-	ThresholdCompassDrift     = 15  // CompassDrift: 指南针未更新章数上限
-	ThresholdTimelineGapRate  = 0.3 // TimelineGaps: 缺失率容忍上限
-	ThresholdForeshadowMin    = 8   // StaleForeshadow: 伏笔停滞最小章数
+	ThresholdDimScoreLow      = 70  // ChronicLowDimension: warn when a dimension's mean score is below this
+	ThresholdContractMissRate = 0.3 // ContractMissPattern: upper bound of the chapter-requirement miss rate
+	ThresholdRewriteRate      = 0.5 // ExcessiveRewrites: upper bound of the rewrite rate
+	ThresholdWordShortRatio   = 0.4 // WordCountAnomaly: word count below this fraction of the mean is anomalous
+	ThresholdWordLongRatio    = 2.5 // WordCountAnomaly: word count above this multiple of the mean is anomalous
+	ThresholdHookWeakScore    = 75  // HookWeakChain: a hook scoring below this is weak
+	ThresholdHookWeakChain    = 3   // HookWeakChain: threshold of consecutive weak chapters
+	ThresholdPayoffMissRate   = 0.4 // PayoffMissPattern: upper bound of the unfulfilled payoff rate
+	ThresholdCompassDrift     = 15  // CompassDrift: upper bound of chapters without a compass update
+	ThresholdTimelineGapRate  = 0.3 // TimelineGaps: tolerated upper bound of the missing rate
+	ThresholdForeshadowMin    = 8   // StaleForeshadow: minimum chapters before a foreshadow counts as stale
 )
 
-// allRules 按 flow → quality → planning → context 排列。
+// allRules is ordered flow → quality → planning → context.
 var allRules = []RuleFunc{
 	// Flow
 	InvalidPendingRewrites,
@@ -49,7 +49,7 @@ var allRules = []RuleFunc{
 	RelationshipStagnation,
 }
 
-// Analyze 是诊断系统的唯一入口。
+// Analyze is the single entry point of the diagnostic system.
 func Analyze(s *store.Store) Report {
 	snap := Load(s)
 
@@ -62,8 +62,8 @@ func Analyze(s *store.Store) Report {
 			Confidence: ConfHigh,
 			AutoLevel:  AutoNone,
 			Target:     "runtime.flow",
-			Title:      fmt.Sprintf("工件加载失败: %s", e),
-			Suggestion: "文件可能损坏或权限不足，相关诊断规则的结果可能不完整。",
+			Title:      fmt.Sprintf("Failed to load artifact: %s", e),
+			Suggestion: "The file may be corrupt or unreadable; results of related diagnostic rules may be incomplete.",
 		})
 	}
 	for _, rule := range allRules {
@@ -98,7 +98,7 @@ func buildStats(snap *Snapshot) Stats {
 		st.PlanningTier = string(snap.RunMeta.PlanningTier)
 	}
 
-	// 评审统计
+	// review statistics
 	st.ReviewCount = len(snap.Reviews)
 	var totalScore float64
 	var dimCount int
@@ -115,7 +115,7 @@ func buildStats(snap *Snapshot) Stats {
 		st.AvgReviewScore = totalScore / float64(dimCount)
 	}
 
-	// 伏笔统计
+	// foreshadow statistics
 	latest := snap.LatestCompleted()
 	for _, f := range snap.Foreshadow {
 		if f.Status == "planted" || f.Status == "advanced" {
@@ -128,7 +128,7 @@ func buildStats(snap *Snapshot) Stats {
 	return st
 }
 
-// sortFindings 按严重程度排序：critical > warning > info。
+// sortFindings sorts by severity: critical > warning > info.
 func sortFindings(findings []Finding) {
 	order := map[Severity]int{SevCritical: 0, SevWarning: 1, SevInfo: 2}
 	sort.SliceStable(findings, func(i, j int) bool {
@@ -136,7 +136,7 @@ func sortFindings(findings []Finding) {
 	})
 }
 
-// staleForeshadowThreshold 根据总章节数计算伏笔停滞阈值。
+// staleForeshadowThreshold derives the stale-foreshadow threshold from the number of completed chapters.
 func staleForeshadowThreshold(completedChapters int) int {
 	t := completedChapters / 3
 	if t < ThresholdForeshadowMin {

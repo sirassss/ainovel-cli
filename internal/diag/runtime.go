@@ -19,52 +19,53 @@ import (
 )
 
 const (
-	logTailCap   = 200 << 10 // 日志只取尾部 200KB（循环是近端现象）
-	sessionTail  = 80        // 骨架尾巴条数（看派发先后顺序）
-	repeatWindow = 150       // 重复聚合只看近端这么多条事件——长跑里正常工具累计上百次，
-	// 真循环是近端高度集中；用窗口而非累计，避免把"正常推进"误判成"死循环"。
-	recentAgents = 2  // 额外扫描最近活跃的子代理会话数
-	repeatMin    = 3  // 重复达到几次才算"高频信号"
-	repeatTopN   = 12 // 重复签名最多列几条
+	logTailCap   = 200 << 10 // only the last 200KB of the log (loops are a recent-tail phenomenon)
+	sessionTail  = 80        // number of skeleton tail events (to read the dispatch order)
+	repeatWindow = 150       // repeat aggregation only looks at this many recent events: in a long run normal tools
+	// accumulate hundreds of calls, while a real loop is highly concentrated near the tail;
+	// a window instead of a running total avoids mistaking "normal progress" for a "dead loop".
+	recentAgents = 2  // extra number of recently active sub-agent sessions to scan
+	repeatMin    = 3  // repeats needed before it counts as a "frequent signal"
+	repeatTopN   = 12 // maximum number of repeat signatures listed
 )
 
-// RuntimeCapture 是一次运行时抓取的脱敏结果。只承载运行时信号；
-// phase/flow/章节等创作态由 Report.Stats 携带，不在此重复。
+// RuntimeCapture is the redacted result of one runtime capture. It only carries runtime
+// signals; authoring state such as phase/flow/chapters lives in Report.Stats and is not repeated here.
 type RuntimeCapture struct {
 	GoOS, GoArch  string
-	Models        []RoleModel  // 各会话实际生效的 provider/model（从 _meta 收集）
-	CurrentStep   string       // 最新 checkpoint：scope.step
-	StuckStep     string       // 尾部连续同 step；"" = 不卡
-	StuckCount    int          // 连续次数
-	Repeats       []RepeatStat // 重复签名 top-N（循环信号）
-	DupContent    []DupStat    // 同 sha 文本反复出现（反复生成同段）
+	Models        []RoleModel  // provider/model actually in effect per session (collected from _meta)
+	CurrentStep   string       // latest checkpoint: scope.step
+	StuckStep     string       // trailing run of the same step; "" = not stuck
+	StuckCount    int          // length of the run
+	Repeats       []RepeatStat // top-N repeat signatures (loop signal)
+	DupContent    []DupStat    // same-sha text recurring (the same passage generated repeatedly)
 	LogKinds      map[string]int
 	LogErrors     int
 	LogWarns      int
 	StopGuard     int
-	Tail          []SkelEvent // 末 N 条骨架（看顺序）
-	RedactedTexts int         // 打码文本块总数（脱敏自检）
-	Sources       []string    // 实际读到的源（自检）
+	Tail          []SkelEvent // last N skeleton events (to read the order)
+	RedactedTexts int         // total redacted text blocks (redaction self-check)
+	Sources       []string    // sources actually read (self-check)
 }
 
-// RoleModel 记录某会话实际用的 provider/model。
+// RoleModel records the provider/model a session actually used.
 type RoleModel struct {
 	Agent, Provider, Model string
 }
 
-// RepeatStat 是一条重复签名及其次数。
+// RepeatStat is one repeat signature and its count.
 type RepeatStat struct {
 	Sig   string
 	Count int
 }
 
-// DupStat 是同一段脱敏文本反复出现的次数。
+// DupStat is how many times the same redacted text recurred.
 type DupStat struct {
 	Sha   string
 	Count int
 }
 
-// sessionLine 解析 sessions/*.jsonl 的一行：内嵌 agentcore.Message + 可选 _meta。
+// sessionLine parses one line of sessions/*.jsonl: an embedded agentcore.Message plus an optional _meta.
 type sessionLine struct {
 	agentcore.Message
 	Meta *struct {
@@ -75,8 +76,8 @@ type sessionLine struct {
 
 var kindRe = regexp.MustCompile(`kind=(\S+)`)
 
-// CaptureRuntime 从 output 目录只读抓取运行时信号并脱敏聚合。
-// 任何源缺失都安全降级（不报错），尽力而为。
+// CaptureRuntime reads runtime signals from the output directory (read-only) and aggregates them with redaction.
+// A missing source degrades safely (no error); it is best effort.
 func CaptureRuntime(s *store.Store) RuntimeCapture {
 	rc := RuntimeCapture{GoOS: runtime.GOOS, GoArch: runtime.GOARCH, LogKinds: map[string]int{}}
 
@@ -86,7 +87,7 @@ func CaptureRuntime(s *store.Store) RuntimeCapture {
 	return rc
 }
 
-// analyzeCheckpoints 取最新 step，并算尾部连续同 step（卡住信号）。
+// analyzeCheckpoints takes the latest step and counts the trailing run of the same step (stuck signal).
 func analyzeCheckpoints(cps []domain.Checkpoint) (current, stuck string, count int) {
 	if len(cps) == 0 {
 		return "", "", 0
@@ -107,7 +108,7 @@ func analyzeCheckpoints(cps []domain.Checkpoint) (current, stuck string, count i
 	return current, stuck, count
 }
 
-// captureSessions 扫描最近活跃的 Worker 会话，脱敏聚合。
+// captureSessions scans the most recently active Worker sessions and aggregates them with redaction.
 func captureSessions(dir string, rc *RuntimeCapture) {
 	sessDir := filepath.Join(dir, "meta", "sessions")
 	files := sessionFiles(sessDir)
@@ -118,10 +119,10 @@ func captureSessions(dir string, rc *RuntimeCapture) {
 
 	for _, f := range files {
 		evs := scanSession(filepath.Join(sessDir, f.path), f.agent, rc, models)
-		// 聚合只看近端窗口：长跑里 subagent/novel_context 累计上百次是正常推进，
-		// 不是循环；真死循环是近端高度集中。
+		// Aggregate only the recent window: in a long run, hundreds of subagent/novel_context
+		// calls are normal progress, not a loop; a real dead loop is concentrated near the tail.
 		aggregateRepeats(f.agent, tailEvents(evs, repeatWindow), repeats, dups)
-		// files 按活跃时间降序；取第一个非空会话作为当前现场。
+		// files are sorted by activity time descending; the first non-empty session is the current scene.
 		if len(rc.Tail) == 0 && len(evs) > 0 {
 			rc.Tail = tailEvents(evs, sessionTail)
 		}
@@ -134,11 +135,11 @@ func captureSessions(dir string, rc *RuntimeCapture) {
 }
 
 type sessionFile struct {
-	path  string // 相对 sessDir
+	path  string // relative to sessDir
 	agent string
 }
 
-// sessionFiles 返回最近活跃的 Worker 会话。
+// sessionFiles returns the most recently active Worker sessions.
 func sessionFiles(sessDir string) []sessionFile {
 	agentsDir := filepath.Join(sessDir, "agents")
 	entries, err := os.ReadDir(agentsDir)
@@ -170,8 +171,8 @@ func sessionFiles(sessDir string) []sessionFile {
 	return out
 }
 
-// scanSession 读一个会话文件，逐行脱敏，收集事件序列与 per-agent 模型。
-// 重复/同段聚合不在这里做——交给 aggregateRepeats 在近端窗口上算。
+// scanSession reads one session file, redacts it line by line, and collects the event sequence and per-agent models.
+// Repeat / same-text aggregation is not done here; aggregateRepeats computes it over the recent window.
 func scanSession(path, agent string, rc *RuntimeCapture, models map[string]RoleModel) []SkelEvent {
 	f, err := os.Open(path)
 	if err != nil {
@@ -197,7 +198,7 @@ func scanSession(path, agent string, rc *RuntimeCapture, models map[string]RoleM
 	return evs
 }
 
-// aggregateRepeats 在给定事件窗口上累计重复签名与同段文本。
+// aggregateRepeats accumulates repeat signatures and same-text counts over the given event window.
 func aggregateRepeats(agent string, evs []SkelEvent, repeats, dups map[string]int) {
 	for _, ev := range evs {
 		for _, t := range ev.Tools {
@@ -223,8 +224,8 @@ func tailEvents(evs []SkelEvent, n int) []SkelEvent {
 	return evs[len(evs)-n:]
 }
 
-// captureLog 读日志尾部，只聚合结构信号（kind/error/warn/stop_guard），
-// 不把原始日志行入包——Detail 可能夹带正文。
+// captureLog reads the log tail and only aggregates structural signals (kind/error/warn/stop_guard);
+// raw log lines never enter the capture because Detail may carry novel text.
 func captureLog(dir string, rc *RuntimeCapture) {
 	path := filepath.Join(dir, "logs", "tui.log")
 	tail, ok := readTail(path)
@@ -235,7 +236,7 @@ func captureLog(dir string, rc *RuntimeCapture) {
 	if !ok {
 		return
 	}
-	rc.Sources = append(rc.Sources, "logs/"+filepath.Base(path)+" (尾部)")
+	rc.Sources = append(rc.Sources, "logs/"+filepath.Base(path)+" (tail)")
 
 	sc := bufio.NewScanner(bytes.NewReader(tail))
 	sc.Buffer(make([]byte, 0, 64<<10), 1<<20)
@@ -256,7 +257,7 @@ func captureLog(dir string, rc *RuntimeCapture) {
 	}
 }
 
-// readTail 读文件尾部 logTailCap 字节，并丢弃首个可能被截断的半行。
+// readTail reads the last logTailCap bytes of a file and drops the first, possibly truncated, partial line.
 func readTail(path string) ([]byte, bool) {
 	f, err := os.Open(path)
 	if err != nil {

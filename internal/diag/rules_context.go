@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// GhostCharacter 检测 core/important 角色长期未出现。
+// GhostCharacter detects core/important characters that have been absent for a long time.
 func GhostCharacter(snap *Snapshot) []Finding {
 	if snap.Progress == nil || len(snap.Characters) == 0 || len(snap.Summaries) == 0 {
 		return nil
@@ -15,7 +15,7 @@ func GhostCharacter(snap *Snapshot) []Finding {
 		return nil
 	}
 
-	// 计算每个角色最后出现的章节号
+	// compute the last chapter each character appeared in
 	lastSeen := make(map[string]int)
 	for ch, s := range snap.Summaries {
 		for _, name := range s.Characters {
@@ -38,7 +38,7 @@ func GhostCharacter(snap *Snapshot) []Finding {
 		}
 		seen, ok := lastSeen[c.Name]
 		if !ok {
-			// 也检查别名
+			// also check aliases
 			for _, alias := range c.Aliases {
 				if s, exists := lastSeen[alias]; exists && s > seen {
 					seen = s
@@ -48,9 +48,9 @@ func GhostCharacter(snap *Snapshot) []Finding {
 		}
 		gap := latest - seen
 		if !ok {
-			ghosts = append(ghosts, fmt.Sprintf("%s(从未出现在摘要中)", c.Name))
+			ghosts = append(ghosts, fmt.Sprintf("%s(never appeared in any summary)", c.Name))
 		} else if gap > threshold {
-			ghosts = append(ghosts, fmt.Sprintf("%s(最后出现ch%d,已缺席%d章)", c.Name, seen, gap))
+			ghosts = append(ghosts, fmt.Sprintf("%s(last seen in ch%d, absent for %d chapters)", c.Name, seen, gap))
 		}
 	}
 	if len(ghosts) == 0 {
@@ -63,13 +63,13 @@ func GhostCharacter(snap *Snapshot) []Finding {
 		Confidence: ConfMedium,
 		AutoLevel:  AutoNone,
 		Target:     "context.characters",
-		Title:      fmt.Sprintf("角色消失: %d 个核心角色长期缺席", len(ghosts)),
+		Title:      fmt.Sprintf("Characters vanished: %d core characters absent for a long time", len(ghosts)),
 		Evidence:   strings.Join(ghosts, "; "),
-		Suggestion: "Writer 可能丢失了该角色的追踪。考虑直接在输入框提交干预指令重新引入该角色，或在 characters.json 中降级其 tier。",
+		Suggestion: "The Writer may have lost track of the character. Consider submitting an intervention in the input box to reintroduce it, or downgrade its tier in characters.json.",
 	}}
 }
 
-// TimelineGaps 检测已完成章节缺少时间线事件。
+// TimelineGaps detects completed chapters that lack timeline events.
 func TimelineGaps(snap *Snapshot) []Finding {
 	if snap.Progress == nil || len(snap.Progress.CompletedChapters) == 0 {
 		return nil
@@ -82,13 +82,13 @@ func TimelineGaps(snap *Snapshot) []Finding {
 			Confidence: ConfMedium,
 			AutoLevel:  AutoNone,
 			Target:     "context.timeline",
-			Title:      "时间线为空",
+			Title:      "Timeline is empty",
 			Evidence:   fmt.Sprintf("completed=%d, timeline_events=0", snap.CompletedCount()),
-			Suggestion: "commit_chapter 的时间线提取可能未生效。检查 Writer 输出是否包含 timeline 字段。",
+			Suggestion: "Timeline extraction in commit_chapter may not be working. Check whether the Writer output contains a timeline field.",
 		}}
 	}
 
-	// 建立章节→事件映射
+	// build the chapter → events map
 	chaptersWithEvents := make(map[int]bool)
 	for _, e := range snap.Timeline {
 		chaptersWithEvents[e.Chapter] = true
@@ -100,7 +100,7 @@ func TimelineGaps(snap *Snapshot) []Finding {
 			missing = append(missing, ch)
 		}
 	}
-	// 允许少量缺失（某些过渡章可能确实无重大事件）
+	// tolerate a few misses (some transition chapters may genuinely have no major events)
 	if len(missing) == 0 || float64(len(missing))/float64(snap.CompletedCount()) < ThresholdTimelineGapRate {
 		return nil
 	}
@@ -111,13 +111,13 @@ func TimelineGaps(snap *Snapshot) []Finding {
 		Confidence: ConfMedium,
 		AutoLevel:  AutoNone,
 		Target:     "context.timeline",
-		Title:      fmt.Sprintf("时间线缺口: %d 章无事件记录", len(missing)),
+		Title:      fmt.Sprintf("Timeline gaps: %d chapters have no event records", len(missing)),
 		Evidence:   fmt.Sprintf("missing=[%s]", intsToStr(missing)),
-		Suggestion: "commit_chapter 的时间线提取可能部分失效。检查 Writer 输出的 timeline 字段格式。",
+		Suggestion: "Timeline extraction in commit_chapter may be partly broken. Check the format of the timeline field in the Writer output.",
 	}}
 }
 
-// RelationshipStagnation 检测关系数据停止更新。
+// RelationshipStagnation detects relationship data that has stopped updating.
 func RelationshipStagnation(snap *Snapshot) []Finding {
 	if snap.Progress == nil || len(snap.Relationships) == 0 {
 		return nil
@@ -127,7 +127,7 @@ func RelationshipStagnation(snap *Snapshot) []Finding {
 		return nil
 	}
 
-	// 找到关系数据的最新章节
+	// find the latest chapter that has relationship data
 	latestRelCh := 0
 	for _, r := range snap.Relationships {
 		if r.Chapter > latestRelCh {
@@ -135,7 +135,7 @@ func RelationshipStagnation(snap *Snapshot) []Finding {
 		}
 	}
 
-	// 如果最新关系数据在前 1/3，判定为停滞
+	// if the newest relationship data falls in the first third, treat it as stagnant
 	cutoff := snap.LatestCompleted() - completed/3
 	if latestRelCh >= cutoff {
 		return nil
@@ -147,8 +147,8 @@ func RelationshipStagnation(snap *Snapshot) []Finding {
 		Confidence: ConfLow,
 		AutoLevel:  AutoNone,
 		Target:     "context.relationships",
-		Title:      fmt.Sprintf("关系数据停滞: 最新更新在第 %d 章", latestRelCh),
+		Title:      fmt.Sprintf("Relationship data stagnant: latest update in chapter %d", latestRelCh),
 		Evidence:   fmt.Sprintf("relationship_entries=%d, latest_update=ch%d, latest_completed=ch%d", len(snap.Relationships), latestRelCh, snap.LatestCompleted()),
-		Suggestion: "commit_chapter 的关系更新可能停止工作，或故事关系确实无变化。检查 Writer 输出的 relationships 字段。",
+		Suggestion: "Relationship updates in commit_chapter may have stopped working, or the story relationships genuinely did not change. Check the relationships field in the Writer output.",
 	}}
 }

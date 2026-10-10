@@ -10,7 +10,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/stylestat"
 )
 
-// writerSmokeCase 是一个典型的 writer 第一章 smoke case，用于门禁测试。
+// writerSmokeCase is a typical writer first-chapter smoke case used by the gate tests.
 func writerSmokeCase() Case {
 	c := Case{
 		ID:          "writer_first_chapter",
@@ -25,11 +25,12 @@ func writerSmokeCase() Case {
 			NoPending:            []string{"pending_commit", "pending_steer"},
 		},
 	}
-	_ = c.Validate() // 填默认 max_severity
+	_ = c.Validate() // fills the default max_severity
 	return c
 }
 
-// cleanCollected 构造一个"一章正常完成"的采集结果（无 findings、无残留、契约齐备）。
+// cleanCollected builds a collected result for "one chapter completed normally" (no findings, no
+// leftovers, contract satisfied).
 func cleanCollected() Collected {
 	return Collected{
 		Dir:      "/fake",
@@ -47,49 +48,49 @@ func cleanCollected() Collected {
 func TestGradePassesCleanRun(t *testing.T) {
 	r := Grade(writerSmokeCase(), cleanCollected())
 	if r.Outcome != Pass {
-		t.Fatalf("期望 PASS，得到 %s；hard fails=%v", r.Outcome, r.HardFails)
+		t.Fatalf("expected PASS, got %s; hard fails=%v", r.Outcome, r.HardFails)
 	}
 	if len(r.Passed) == 0 {
-		t.Fatal("期望有通过的契约记录")
+		t.Fatal("expected passed contract records")
 	}
 }
 
-// 核心假设：writer 跳过 commit 必须被拦下。
+// Core assumption: a writer that skips commit must be stopped.
 func TestGradeCatchesMissingCommit(t *testing.T) {
 	col := cleanCollected()
-	col.Checkpoints = col.Checkpoints[:2] // 去掉 commit
+	col.Checkpoints = col.Checkpoints[:2] // drop commit
 	r := Grade(writerSmokeCase(), col)
 	if r.Outcome != Fail {
-		t.Fatalf("缺 commit 应 FAIL，得到 %s", r.Outcome)
+		t.Fatalf("missing commit should FAIL, got %s", r.Outcome)
 	}
 	if !hasIssue(r.HardFails, "contract:checkpoint", "chapter:1:commit") {
-		t.Fatalf("应报告缺少 chapter:1:commit，实际 %+v", r.HardFails)
+		t.Fatalf("should report missing chapter:1:commit, got %+v", r.HardFails)
 	}
 }
 
-// 核心假设：pending 残留必须被拦下。
+// Core assumption: leftover pending signals must be stopped.
 func TestGradeCatchesPendingResidual(t *testing.T) {
 	col := cleanCollected()
 	col.Pending["pending_commit"] = true
 	r := Grade(writerSmokeCase(), col)
 	if r.Outcome != Fail {
-		t.Fatalf("pending 残留应 FAIL，得到 %s", r.Outcome)
+		t.Fatalf("leftover pending should FAIL, got %s", r.Outcome)
 	}
 	if !hasIssue(r.HardFails, "contract:no_pending", "pending_commit") {
-		t.Fatalf("应报告 pending_commit 残留，实际 %+v", r.HardFails)
+		t.Fatalf("should report leftover pending_commit, got %+v", r.HardFails)
 	}
 }
 
-// 核心假设：phase 不符必须被拦下。
+// Core assumption: a phase mismatch must be stopped.
 func TestGradeCatchesPhaseMismatch(t *testing.T) {
 	col := cleanCollected()
-	col.Progress.Phase = domain.PhaseOutline // 还没进入 writing
+	col.Progress.Phase = domain.PhaseOutline // has not entered writing yet
 	r := Grade(writerSmokeCase(), col)
 	if r.Outcome != Fail {
-		t.Fatalf("phase 不符应 FAIL，得到 %s", r.Outcome)
+		t.Fatalf("phase mismatch should FAIL, got %s", r.Outcome)
 	}
 	if !hasIssue(r.HardFails, "contract:phase", "outline") {
-		t.Fatalf("应报告 phase 不符，实际 %+v", r.HardFails)
+		t.Fatalf("should report the phase mismatch, got %+v", r.HardFails)
 	}
 }
 
@@ -98,34 +99,35 @@ func TestGradeMinChaptersNotMet(t *testing.T) {
 	col.Report.Stats.CompletedChapters = 0
 	r := Grade(writerSmokeCase(), col)
 	if r.Outcome != Fail {
-		t.Fatalf("未达 min_completed_chapters 应 FAIL，得到 %s", r.Outcome)
+		t.Fatalf("not reaching min_completed_chapters should FAIL, got %s", r.Outcome)
 	}
 }
 
-// critical finding 触发 hard fail；warning finding 仅 WARN（默认 max_severity=warning）。
+// A critical finding triggers a hard fail; a warning finding only WARNs (default
+// max_severity=warning).
 func TestGradeFindingSeverity(t *testing.T) {
 	crit := cleanCollected()
-	crit.Report.Findings = []diag.Finding{{Rule: "PhaseFlowMismatch", Severity: diag.SevCritical, Title: "状态机异常"}}
+	crit.Report.Findings = []diag.Finding{{Rule: "PhaseFlowMismatch", Severity: diag.SevCritical, Title: "state machine anomaly"}}
 	if r := Grade(writerSmokeCase(), crit); r.Outcome != Fail {
-		t.Fatalf("critical finding 应 FAIL，得到 %s", r.Outcome)
+		t.Fatalf("critical finding should FAIL, got %s", r.Outcome)
 	}
 
 	warn := cleanCollected()
-	warn.Report.Findings = []diag.Finding{{Rule: "RewritePendingPressure", Severity: diag.SevWarning, Title: "重写积压"}}
+	warn.Report.Findings = []diag.Finding{{Rule: "RewritePendingPressure", Severity: diag.SevWarning, Title: "rewrite backlog"}}
 	r := Grade(writerSmokeCase(), warn)
 	if r.Outcome != Warn {
-		t.Fatalf("warning finding 应 WARN，得到 %s", r.Outcome)
+		t.Fatalf("warning finding should WARN, got %s", r.Outcome)
 	}
 
-	// info finding 是信息性 Note，不应把干净的 case 推成 WARN。
+	// An info finding is an informational Note and must not push a clean case to WARN.
 	info := cleanCollected()
-	info.Report.Findings = []diag.Finding{{Rule: "GhostCharacter", Severity: diag.SevInfo, Title: "角色长期未出场"}}
+	info.Report.Findings = []diag.Finding{{Rule: "GhostCharacter", Severity: diag.SevInfo, Title: "character absent for a long time"}}
 	ri := Grade(writerSmokeCase(), info)
 	if ri.Outcome != Pass {
-		t.Fatalf("info finding 不应改变门禁，期望 PASS，得到 %s", ri.Outcome)
+		t.Fatalf("info finding must not change the gate, expected PASS, got %s", ri.Outcome)
 	}
 	if len(ri.Notes) != 1 {
-		t.Fatalf("info finding 应进 Notes，得到 %d 条", len(ri.Notes))
+		t.Fatalf("info finding should go to Notes, got %d", len(ri.Notes))
 	}
 }
 
@@ -134,20 +136,20 @@ func TestGradeRuntimeErrorFails(t *testing.T) {
 	col.RuntimeErr = "stream EOF"
 	r := Grade(writerSmokeCase(), col)
 	if r.Outcome != Fail {
-		t.Fatalf("运行时错误应 FAIL，得到 %s", r.Outcome)
+		t.Fatalf("runtime error should FAIL, got %s", r.Outcome)
 	}
 }
 
-// 契约依赖工件读坏不能 false pass，必须 hard fail（fail-loud）。
+// A broken artifact the contract depends on must not falsely pass; it must hard fail (fail-loud).
 func TestGradeLoadErrorFails(t *testing.T) {
 	col := cleanCollected()
 	col.LoadErrors = []string{"pending_commit: unexpected end of JSON input"}
 	r := Grade(writerSmokeCase(), col)
 	if r.Outcome != Fail {
-		t.Fatalf("工件读取失败应 FAIL，得到 %s", r.Outcome)
+		t.Fatalf("artifact read failure should FAIL, got %s", r.Outcome)
 	}
 	if !hasIssue(r.HardFails, "load", "pending_commit") {
-		t.Fatalf("应报告 load 失败，实际 %+v", r.HardFails)
+		t.Fatalf("should report the load failure, got %+v", r.HardFails)
 	}
 }
 
@@ -168,19 +170,19 @@ func TestGradeDeltaStylestatWarnAndBlock(t *testing.T) {
 	c.Gate.StylestatRegression = "warn"
 	d := GradeDelta(c, base, variant)
 	if d.Outcome != Warn {
-		t.Fatalf("stylestat 回归默认应 WARN，得到 %s", d.Outcome)
+		t.Fatalf("stylestat regression should WARN by default, got %s", d.Outcome)
 	}
-	if !hasIssue(d.Warnings, "delta:stylestat", "文体指标回归") {
-		t.Fatalf("应报告 stylestat warning，实际 %+v", d.Warnings)
+	if !hasIssue(d.Warnings, "delta:stylestat", "style metrics regressed") {
+		t.Fatalf("should report the stylestat warning, got %+v", d.Warnings)
 	}
 
 	c.Gate.StylestatRegression = "block"
 	d = GradeDelta(c, base, variant)
 	if d.Outcome != Fail {
-		t.Fatalf("stylestat block 应 FAIL，得到 %s", d.Outcome)
+		t.Fatalf("stylestat block should FAIL, got %s", d.Outcome)
 	}
-	if !hasIssue(d.HardFails, "delta:stylestat", "文体指标回归") {
-		t.Fatalf("应报告 stylestat hard fail，实际 %+v", d.HardFails)
+	if !hasIssue(d.HardFails, "delta:stylestat", "style metrics regressed") {
+		t.Fatalf("should report the stylestat hard fail, got %+v", d.HardFails)
 	}
 }
 
@@ -196,13 +198,13 @@ func TestGradeDeltaTitleMixedUsesMinorityCount(t *testing.T) {
 
 	d := GradeDelta(writerSmokeCase(), base, variant)
 	if d.Metrics.Stylestat == nil {
-		t.Fatal("应产生 stylestat delta")
+		t.Fatal("should produce a stylestat delta")
 	}
 	if d.Metrics.Stylestat.TitleMixedDelta != 0 {
-		t.Fatalf("少数派格式未增加时不应误报标题混用回归，得到 %+d", d.Metrics.Stylestat.TitleMixedDelta)
+		t.Fatalf("must not misreport a mixed-title regression when the minority format did not grow, got %+d", d.Metrics.Stylestat.TitleMixedDelta)
 	}
 	if d.Outcome != Pass {
-		t.Fatalf("仅增加多数派标题数量不应改变门禁，得到 %s issues=%+v", d.Outcome, d.Warnings)
+		t.Fatalf("growing only the majority title count must not change the gate, got %s issues=%+v", d.Outcome, d.Warnings)
 	}
 }
 
@@ -219,23 +221,23 @@ func TestGradeDeltaCostAndToolCallThresholds(t *testing.T) {
 	c.Gate.MaxCostDeltaRatio = float64Ptr(0.3)
 	d := GradeDelta(c, base, variant)
 	if d.Outcome != Warn {
-		t.Fatalf("成本/tool_calls 超阈值应 WARN，得到 %s", d.Outcome)
+		t.Fatalf("cost/tool_calls above threshold should WARN, got %s", d.Outcome)
 	}
-	if !hasIssue(d.Warnings, "delta:tool_calls", "超过阈值") {
-		t.Fatalf("应报告 tool_calls 回归，实际 %+v", d.Warnings)
+	if !hasIssue(d.Warnings, "delta:tool_calls", "above the threshold") {
+		t.Fatalf("should report the tool_calls regression, got %+v", d.Warnings)
 	}
-	if !hasIssue(d.Warnings, "delta:cost", "超过阈值") {
-		t.Fatalf("应报告 cost 回归，实际 %+v", d.Warnings)
+	if !hasIssue(d.Warnings, "delta:cost", "above the threshold") {
+		t.Fatalf("should report the cost regression, got %+v", d.Warnings)
 	}
 }
 
 func TestGradeDeltaInsufficientStylestatIsNote(t *testing.T) {
 	d := GradeDelta(writerSmokeCase(), cleanResult(), cleanResult())
 	if d.Outcome != Pass {
-		t.Fatalf("样本不足不应改变门禁，得到 %s", d.Outcome)
+		t.Fatalf("insufficient sample must not change the gate, got %s", d.Outcome)
 	}
-	if !hasIssue(d.Notes, "stylestat", "样本不足") {
-		t.Fatalf("应记录 stylestat 样本不足 note，实际 %+v", d.Notes)
+	if !hasIssue(d.Notes, "stylestat", "insufficient sample") {
+		t.Fatalf("should record the stylestat insufficient-sample note, got %+v", d.Notes)
 	}
 }
 
@@ -256,16 +258,16 @@ func TestParseCheckpointSpec(t *testing.T) {
 	for _, tc := range cases {
 		scope, step, err := parseCheckpointSpec(tc.spec)
 		if tc.valid && err != nil {
-			t.Errorf("%s: 期望解析成功，得到 %v", tc.spec, err)
+			t.Errorf("%s: expected parse success, got %v", tc.spec, err)
 		}
 		if !tc.valid {
 			if err == nil {
-				t.Errorf("%s: 期望解析失败", tc.spec)
+				t.Errorf("%s: expected parse failure", tc.spec)
 			}
 			continue
 		}
 		if scope.Kind != tc.kind || step != tc.step {
-			t.Errorf("%s: 解析为 kind=%s step=%s", tc.spec, scope.Kind, step)
+			t.Errorf("%s: parsed as kind=%s step=%s", tc.spec, scope.Kind, step)
 		}
 	}
 }
@@ -276,7 +278,8 @@ func cleanResult() Result {
 	return r
 }
 
-// TestCollectReadsCheckpoints 验证真实 store 读取路径：写入 checkpoint 后 Collect 能命中契约。
+// TestCollectReadsCheckpoints verifies the real store read path: after writing a checkpoint,
+// Collect can satisfy the contract.
 func TestCollectReadsCheckpoints(t *testing.T) {
 	dir := t.TempDir()
 	s := store.NewStore(dir)
@@ -287,13 +290,13 @@ func TestCollectReadsCheckpoints(t *testing.T) {
 	col := Collect(dir, nil)
 	ok, err := col.HasCheckpoint("chapter:1:commit")
 	if err != nil || !ok {
-		t.Fatalf("应命中 chapter:1:commit，ok=%v err=%v", ok, err)
+		t.Fatalf("should match chapter:1:commit, ok=%v err=%v", ok, err)
 	}
 	if miss, _ := col.HasCheckpoint("chapter:2:commit"); miss {
-		t.Fatal("不应命中不存在的 chapter:2:commit")
+		t.Fatal("must not match the nonexistent chapter:2:commit")
 	}
 	if col.Pending["pending_commit"] {
-		t.Fatal("干净目录不应有 pending_commit 残留")
+		t.Fatal("a clean directory must not have a leftover pending_commit")
 	}
 }
 
@@ -304,4 +307,14 @@ func hasIssue(issues []Issue, source, detailContains string) bool {
 		}
 	}
 	return false
+}
+
+// TestSeverityRanksMatchDiag pins the severity strings eval matches on to the diag constants
+// that produce them.
+func TestSeverityRanksMatchDiag(t *testing.T) {
+	for want, sev := range map[int]diag.Severity{0: diag.SevCritical, 1: diag.SevWarning, 2: diag.SevInfo} {
+		if !validSeverity(string(sev)) || severityRank(string(sev)) != want {
+			t.Errorf("severity %q: rank=%d, want %d", sev, severityRank(string(sev)), want)
+		}
+	}
 }

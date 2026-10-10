@@ -9,9 +9,9 @@ import (
 	"github.com/voocel/ainovel-cli/internal/host"
 )
 
-// fakeEngine 模拟 host：Abort 后像 waitDone 那样向 done 发送一次。done 带 1 缓冲，
-// 测试据此断言 drive 是否 drain 了 Done（len(done)==0 即已消费）——这是防 send-on-closed-channel
-// panic 的关键不变量。
+// fakeEngine simulates the host: after Abort it sends on done once, like waitDone. done has a
+// buffer of 1, and the tests use it to assert whether drive drained Done (len(done)==0 means it
+// was consumed); this is the key invariant against a send-on-closed-channel panic.
 type fakeEngine struct {
 	events chan host.Event
 	stream chan string
@@ -44,7 +44,7 @@ func (f *fakeEngine) Abort() bool {
 	f.mu.Lock()
 	f.aborted = true
 	f.mu.Unlock()
-	select { // 模拟 waitDone：abort 触发后向 done 发送一次
+	select { // simulates waitDone: send on done once after abort fires
 	case f.done <- struct{}{}:
 	default:
 	}
@@ -57,52 +57,53 @@ func (f *fakeEngine) wasAborted() bool {
 	return f.aborted
 }
 
-// 超时路径必须 Abort 后 drain 到 Done 再返回超时错误——否则 RunCase 的 Close 会与
-// waitDone 竞争关闭 done 通道而 panic（Codex review #1）。
+// The timeout path must Abort, drain to Done and only then return the timeout error; otherwise
+// RunCase's Close would race with waitDone over closing the done channel and panic (Codex
+// review #1).
 func TestDriveTimeoutDrainsToDone(t *testing.T) {
 	f := newFakeEngine()
 	err := drive(f, 1, RunOptions{Timeout: 30 * time.Millisecond})
-	if err == nil || !strings.Contains(err.Error(), "超时") {
-		t.Fatalf("超时应返回超时错误，得到 %v", err)
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("a timeout should return a timeout error, got %v", err)
 	}
 	if !f.wasAborted() {
-		t.Fatal("超时应触发 Abort")
+		t.Fatal("a timeout should trigger Abort")
 	}
 	if len(f.done) != 0 {
-		t.Fatal("drive 必须 drain Done 后才返回（否则与 Close 竞争关闭通道 panic）")
+		t.Fatal("drive must drain Done before returning (otherwise it races with Close over closing the channel and panics)")
 	}
 }
 
-// 达到章数上限：Abort 后 drain 到 Done，返回 nil（正常截停，不是超时）。
+// Chapter cap reached: Abort, drain to Done, and return nil (a normal cap stop, not a timeout).
 func TestDriveCapStopsAndDrains(t *testing.T) {
 	f := newFakeEngine()
 	f.mu.Lock()
 	f.snap = host.UISnapshot{CompletedCount: 1}
 	f.mu.Unlock()
-	f.events <- host.Event{Category: "SYSTEM", Summary: "committed"} // 触发 cap 检查
+	f.events <- host.Event{Category: "SYSTEM", Summary: "committed"} // triggers the cap check
 
 	err := drive(f, 1, RunOptions{Timeout: time.Second})
 	if err != nil {
-		t.Fatalf("正常截停应返回 nil，得到 %v", err)
+		t.Fatalf("a normal cap stop should return nil, got %v", err)
 	}
 	if !f.wasAborted() {
-		t.Fatal("达到章数上限应 Abort")
+		t.Fatal("reaching the chapter cap should Abort")
 	}
 	if len(f.done) != 0 {
-		t.Fatal("应 drain Done 后返回")
+		t.Fatal("should return only after draining Done")
 	}
 }
 
-// 引擎自然 Done（书写完）：无需 Abort，返回 nil。
+// The engine reaches Done naturally (writing finished): no Abort needed, returns nil.
 func TestDriveNaturalDoneReturnsNil(t *testing.T) {
 	f := newFakeEngine()
 	f.done <- struct{}{}
 
 	err := drive(f, 1, RunOptions{Timeout: time.Second})
 	if err != nil {
-		t.Fatalf("自然完成应返回 nil，得到 %v", err)
+		t.Fatalf("a natural finish should return nil, got %v", err)
 	}
 	if f.wasAborted() {
-		t.Fatal("自然完成不应 Abort")
+		t.Fatal("a natural finish should not Abort")
 	}
 }

@@ -58,16 +58,16 @@ func TestCollectReadsStyleUsageAndToolCalls(t *testing.T) {
 
 	col := Collect(dir, nil)
 	if len(col.LoadErrors) != 0 {
-		t.Fatalf("不应有读取错误: %v", col.LoadErrors)
+		t.Fatalf("unexpected load errors: %v", col.LoadErrors)
 	}
 	if col.Style.Status != "ok" || col.Style.Stats == nil {
-		t.Fatalf("stylestat 应可计算，得到 status=%s stats=%v", col.Style.Status, col.Style.Stats)
+		t.Fatalf("stylestat should be computable, got status=%s stats=%v", col.Style.Status, col.Style.Stats)
 	}
 	if col.Style.Stats.TitleFormats == nil {
-		t.Fatal("标题混用应被 stylestat 捕获")
+		t.Fatal("stylestat should catch the mixed title formats")
 	}
 	if !col.Usage.UsageRecorded || col.Usage.Input != 100 || col.Usage.Output != 40 || col.Usage.CostUSD != 0.12 {
-		t.Fatalf("usage 读取不正确: %+v", col.Usage)
+		t.Fatalf("usage read incorrectly: %+v", col.Usage)
 	}
 	if col.ToolCalls != 2 {
 		t.Fatalf("tool calls = %d want 2", col.ToolCalls)
@@ -85,7 +85,7 @@ func TestCollectStyleInsufficientSample(t *testing.T) {
 	}
 	col := Collect(dir, nil)
 	if col.Style.Status != "insufficient_sample" {
-		t.Fatalf("一章样本应 insufficient_sample，得到 %s", col.Style.Status)
+		t.Fatalf("a one-chapter sample should be insufficient_sample, got %s", col.Style.Status)
 	}
 }
 
@@ -96,8 +96,8 @@ func TestCollectFailsLoudWhenCompletedChapterMissing(t *testing.T) {
 		t.Fatalf("save progress: %v", err)
 	}
 	col := Collect(dir, nil)
-	if !containsString(col.LoadErrors, "progress 标记已完成但终稿为空") {
-		t.Fatalf("缺终稿应进入 LoadErrors，实际 %v", col.LoadErrors)
+	if !containsString(col.LoadErrors, "progress marks the chapter completed but the final text is empty") {
+		t.Fatalf("a missing final text should go into LoadErrors, got %v", col.LoadErrors)
 	}
 }
 
@@ -108,7 +108,7 @@ func TestChapterTitleUsesLayeredEntryChapter(t *testing.T) {
 		{
 			Index: 1,
 			Arcs: []domain.ArcOutline{
-				{Index: 1}, // 未展开 arc 不应让后续章节位置漂移
+				{Index: 1}, // an unexpanded arc must not shift the positions of later chapters
 				{
 					Index: 2,
 					Chapters: []domain.OutlineEntry{
@@ -123,7 +123,7 @@ func TestChapterTitleUsesLayeredEntryChapter(t *testing.T) {
 
 	got := chapterTitle(s, 7, "# 正文兜底标题\n\n内容", func(string, error) {})
 	if got != "第七章 真标题" {
-		t.Fatalf("应按 entry.Chapter 匹配分层标题，得到 %q", got)
+		t.Fatalf("the layered title should match by entry.Chapter, got %q", got)
 	}
 }
 

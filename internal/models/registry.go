@@ -1,5 +1,5 @@
-// Package models 提供 LLM 模型元数据注册表（上下文窗口、输出上限、价格），
-// 数据源 OpenRouter API，编译期基线 + 运行期刷新。
+// Package models provides the LLM model metadata registry (context window, output limit, pricing),
+// sourced from the OpenRouter API: a compile-time baseline plus a runtime refresh.
 package models
 
 //go:generate go run gen_models.go
@@ -9,26 +9,26 @@ import (
 	"sync"
 )
 
-// ModelEntry 描述一个已知的 LLM 模型。
+// ModelEntry describes a known LLM model.
 type ModelEntry struct {
-	Provider            string  `json:"provider"`               // OpenRouter 规范化后的厂商名 (anthropic/openai/gemini/...)
-	ID                  string  `json:"id"`                     // 模型 ID (不含厂商前缀)
-	Name                string  `json:"name"`                   // 展示名
-	ContextWindow       int     `json:"context_window"`         // 输入窗口
-	MaxTokens           int     `json:"max_tokens"`             // 单次输出上限
-	InputCostPer1M      float64 `json:"input_cost_per_1m"`      // 输入价格 (USD/1M tokens)
-	OutputCostPer1M     float64 `json:"output_cost_per_1m"`     // 输出价格
-	CacheReadCostPer1M  float64 `json:"cache_read_cost_per_1m"` // 缓存读取价格
+	Provider            string  `json:"provider"`               // OpenRouter-normalized vendor name (anthropic/openai/gemini/...)
+	ID                  string  `json:"id"`                     // model ID (without vendor prefix)
+	Name                string  `json:"name"`                   // display name
+	ContextWindow       int     `json:"context_window"`         // input window
+	MaxTokens           int     `json:"max_tokens"`             // max output per request
+	InputCostPer1M      float64 `json:"input_cost_per_1m"`      // input price (USD/1M tokens)
+	OutputCostPer1M     float64 `json:"output_cost_per_1m"`     // output price
+	CacheReadCostPer1M  float64 `json:"cache_read_cost_per_1m"` // cache read price
 	CacheWriteCostPer1M float64 `json:"cache_write_cost_per_1m"`
 }
 
-// ModelRegistry 保存已知模型，支持模糊解析与运行期合并。
+// ModelRegistry holds known models, with fuzzy resolution and runtime merging.
 type ModelRegistry struct {
 	mu     sync.RWMutex
 	models []ModelEntry
 }
 
-// NewModelRegistry 返回一个已加载编译期基线的注册表。
+// NewModelRegistry returns a registry preloaded with the compile-time baseline.
 func NewModelRegistry() *ModelRegistry {
 	r := &ModelRegistry{}
 	r.models = append(r.models, generatedModels...)
@@ -40,8 +40,8 @@ var (
 	defaultRegistryOnce sync.Once
 )
 
-// DefaultRegistry 返回全局注册表（懒加载，线程安全）。
-// 启动阶段调用 StartPricingRefresh 可让后台刷新价格/窗口信息。
+// DefaultRegistry returns the global registry (lazily initialized, goroutine-safe).
+// Calling StartPricingRefresh at startup lets the background refresh update pricing and window info.
 func DefaultRegistry() *ModelRegistry {
 	defaultRegistryOnce.Do(func() {
 		defaultRegistry = NewModelRegistry()
@@ -49,14 +49,14 @@ func DefaultRegistry() *ModelRegistry {
 	return defaultRegistry
 }
 
-// Resolve 按照一个模型标识（可能是 "provider/model"、完整 ID、或局部名）查找条目。
+// Resolve looks up an entry by a model identifier (which may be "provider/model", a full ID, or a partial name).
 //
-// 匹配顺序：
-//  1. 若包含 "/"，按 "provider/model" 精确查找
-//  2. 精确/日期后缀匹配
-//  3. 子串匹配（ID 或 Name 包含 pattern）
+// Match order:
+//  1. If it contains "/", look up exactly by "provider/model"
+//  2. Exact or date-suffix match
+//  3. Substring match (ID or Name contains the pattern)
 //
-// 命中多个时，优先返回不含日期后缀的别名（例如 claude-sonnet-4 优先于 claude-sonnet-4-20250514）。
+// When several match, an alias without a date suffix is preferred (e.g. claude-sonnet-4 over claude-sonnet-4-20250514).
 func (r *ModelRegistry) Resolve(pattern string) (*ModelEntry, bool) {
 	pattern = strings.TrimSpace(pattern)
 	if pattern == "" {
@@ -72,8 +72,8 @@ func (r *ModelRegistry) Resolve(pattern string) (*ModelEntry, bool) {
 		if entry, ok := lookupModelEntry(r.models, prov, modelID); ok {
 			return &entry, true
 		}
-		// OpenRouter 的 vendor 前缀（google/、x-ai/）不一定等于本地 Provider 名，
-		// 退回仅用 modelID 查，保证 "google/gemini-2.5-pro" 能命中 gemini 条目。
+		// OpenRouter vendor prefixes (google/, x-ai/) do not always equal the local Provider name,
+		// so fall back to looking up by modelID alone, ensuring "google/gemini-2.5-pro" hits the gemini entry.
 		if entry, ok := lookupModelEntry(r.models, "", modelID); ok {
 			return &entry, true
 		}
@@ -107,7 +107,7 @@ func (r *ModelRegistry) Resolve(pattern string) (*ModelEntry, bool) {
 	return &entry, true
 }
 
-// ResolveContextWindow 返回某个模型的上下文窗口；未命中返回 0。
+// ResolveContextWindow returns a model's context window; 0 if there is no match.
 func (r *ModelRegistry) ResolveContextWindow(pattern string) int {
 	if e, ok := r.Resolve(pattern); ok {
 		return e.ContextWindow
@@ -115,7 +115,7 @@ func (r *ModelRegistry) ResolveContextWindow(pattern string) int {
 	return 0
 }
 
-// List 返回所有模型（可选 filter，空字符串表示全量）。
+// List returns all models (optionally filtered; an empty string means all).
 func (r *ModelRegistry) List(filter string) []ModelEntry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -137,8 +137,8 @@ func (r *ModelRegistry) List(filter string) []ModelEntry {
 	return out
 }
 
-// MergeModels 按 provider+id 大小写不敏感合并。
-// 非零价格/窗口/MaxTokens/Name 会覆盖已有条目；新增条目直接追加。
+// MergeModels merges by provider+id, case-insensitively.
+// Non-zero price/window/MaxTokens/Name values overwrite existing entries; new entries are appended.
 func (r *ModelRegistry) MergeModels(fetched []ModelEntry) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

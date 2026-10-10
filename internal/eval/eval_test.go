@@ -28,6 +28,6 @@ func TestRunDir(t *testing.T) {
 func TestCommandRejectsInvalidRepeat(t *testing.T) {
 	code := Command([]string{"--cases", "evals/cases/smoke", "--repeat", "0"})
 	if code != 2 {
-		t.Fatalf("repeat=0 应返回用法错误 2，得到 %d", code)
+		t.Fatalf("repeat=0 should return usage error 2, got %d", code)
 	}
 }

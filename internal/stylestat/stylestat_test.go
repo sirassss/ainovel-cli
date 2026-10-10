@@ -27,14 +27,14 @@ func TestComputePatterns(t *testing.T) {
 		t.Fatal("expected stats")
 	}
 	want := map[string]int{
-		"矫正句『不是…(而)是…』":        6,
-		"计时量词『X息/X瞬』":          6,
-		"明喻『像一/仿佛/如同/宛如』":      6,
-		"沉默节拍『沉默了/没有说话/没有回头』":  6,
-		"神态模板『眼中闪过/嘴角勾起/咬了咬唇』": 6,
-		"躯体反应『心头一紧/身子一颤/倒吸凉气』": 6,
-		"思维标记『心想/意识到/感到/觉得』":   6,
-		"抽象套话『一种说不出的/的意义在于』":   6,
+		"câu chỉnh lý『không phải…mà là…』":                                  6,
+		"lượng từ đếm thời gian『X hơi thở/X chớp mắt』":                     6,
+		"so sánh ví von『như một/phảng phất/như thể/tựa như』":               6,
+		"nhịp im lặng『đã im lặng/không nói gì/không ngoảnh lại』":           6,
+		"khuôn thần thái『trong mắt lóe lên/khóe môi nhếch/cắn môi』":        6,
+		"phản ứng cơ thể『lòng thắt lại/người run lên/hít một hơi lạnh』":    6,
+		"dấu hiệu suy nghĩ『nghĩ thầm/nhận ra/cảm thấy/thấy rằng』":          6,
+		"câu sáo rỗng trừu tượng『một thứ không nói nên lời/ý nghĩa nằm ở』": 6,
 	}
 	for _, p := range s.Patterns {
 		if w, ok := want[p.Name]; ok && p.Total != w {
@@ -50,7 +50,7 @@ func TestComputePatterns(t *testing.T) {
 }
 
 func TestComputeTopPhrasesWithStopwords(t *testing.T) {
-	// 「青云山巅」高频出现；「陆九渊」是角色名应被过滤
+	// The mountain-peak phrase appears often; the character name must be filtered out
 	line := "众人望向青云山巅，陆九渊负手而立。\n"
 	chapters := make([]string, 10)
 	for i := range chapters {
@@ -124,14 +124,49 @@ func TestComputeTitleFormats(t *testing.T) {
 	for i := range chapters {
 		chapters[i] = chapterWith("正文。")
 	}
-	// 混用 → 上报
+	// Mixed -> reported
 	s := Compute(Input{Chapters: chapters, Titles: []string{"第一章 风起", "云涌", "第3章 雷动"}})
 	if s.TitleFormats == nil || s.TitleFormats.WithPrefix != 2 || s.TitleFormats.WithoutPrefix != 1 {
 		t.Errorf("title formats: %+v", s.TitleFormats)
 	}
-	// 统一 → 不上报
+	// Uniform -> not reported
 	s = Compute(Input{Chapters: chapters, Titles: []string{"风起", "云涌"}})
 	if s.TitleFormats != nil {
 		t.Errorf("uniform titles should not report: %+v", s.TitleFormats)
+	}
+}
+
+// TestZhPatternsStillMatch locks the Chinese matching data: translating the pattern
+// labels must never change which text the regexes hit.
+func TestZhPatternsStillMatch(t *testing.T) {
+	samples := []string{
+		"他不是愤怒，而是恐惧", // corrective sentence
+		"沉默了几息",      // time-counting measure word
+		"像一盏灯",       // simile
+		"她沉默了",       // silence beat
+		"她眼中闪过慌乱",    // facial-expression template
+		"他心头一紧",      // bodily reaction
+		"他心想这不对",     // thought marker
+		"这是一种说不出的寒意", // abstract filler
+	}
+	if len(samples) != len(patternDefs) {
+		t.Fatalf("want one sample per pattern: %d samples, %d patterns", len(samples), len(patternDefs))
+	}
+	for i, def := range patternDefs {
+		if !def.re.MatchString(samples[i]) {
+			t.Errorf("pattern %d (%s) does not match %q", i, def.name, samples[i])
+		}
+	}
+
+	if !openingTimeRe.MatchString("清晨的风很冷") || openingTimeRe.MatchString("白天的事") {
+		t.Error("openingTimeRe behavior changed")
+	}
+	for title, want := range map[string]bool{"第一章 风起": true, "# 第3章 雷动": true, "云涌": false} {
+		if titlePrefixRe.MatchString(title) != want {
+			t.Errorf("titlePrefixRe(%q) want %v", title, want)
+		}
+	}
+	if got := sentenceSplit.Split("甲。乙！丙？\n丁", -1); len(got) != 4 {
+		t.Errorf("sentenceSplit: got %q", got)
 	}
 }
