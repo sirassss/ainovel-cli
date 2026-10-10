@@ -84,13 +84,13 @@ func (n *Normalizer) Normalize(ctx context.Context, source, text string) (rules.
 		Agent: "rules",
 		Hooks: llmcontract.Hooks{
 			Resolved: func(res llmcontract.Resolution) {
-				slog.Debug("Chọn giao thức chuẩn hóa quy tắc", "module", "rules", "source", source,
+				slog.Debug("rules normalization structured mode resolved", "module", "rules", "source", source,
 					"contract", normalizeContract.Name, "structured_mode", res.Mode,
 					"capability_source", res.Source, "provider", res.Provider, "model", res.Model,
 					"schema_fingerprint", normalizeContract.Fingerprint())
 			},
 			Correction: func(ev llmcontract.Correction) {
-				slog.Warn("Tự phục hồi đầu ra chuẩn hóa quy tắc", "module", "rules", "source", source,
+				slog.Warn("rules normalization output self-correction", "module", "rules", "source", source,
 					"attempt", ev.Attempt, "layer", ev.Layer, "structured_mode", ev.Mode, "err", ev.Err)
 			},
 		},

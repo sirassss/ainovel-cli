@@ -100,7 +100,7 @@ func newCoCreateState(initial string) *cocreateState {
 }
 
 const stageCoCreateOpener = "Tôi muốn tạm dừng một chút để cùng bạn lập kế hoạch hướng đi tiếp theo."
-const stageCoCreateSystemLine = "Đã tạm dừng sáng tác để vào chế độ Đồng sáng tác giai đoạn — AI sẽ kết hợp tiến độ hiện tại để cùng bạn định hướng cốt truyện."
+const stageCoCreateSystemLine = "Đã tạm dừng sáng tác để vào chế độ đồng sáng tác giai đoạn — AI sẽ kết hợp tiến độ hiện tại để cùng bạn định hướng cốt truyện."
 
 func newStageCoCreateState() *cocreateState {
 	s := newCoCreateState(stageCoCreateOpener)
@@ -352,9 +352,9 @@ func renderCoCreateModal(width, height int, state *cocreateState, errMsg, inputV
 		contentH = 10
 	}
 
-	titleText, subtitleText := "Đồng Sáng Tác Kế hoạch", "Trao đổi làm rõ nhu cầu trước khi bắt đầu viết truyện"
+	titleText, subtitleText := "Đồng sáng tác kế hoạch", "Trao đổi làm rõ nhu cầu trước khi bắt đầu viết truyện"
 	if state.stage {
-		titleText, subtitleText = "Đồng Sáng Tác Giai Đoạn", "Lập kế hoạch các bước tiếp theo trước khi tiếp tục sáng tác"
+		titleText, subtitleText = "Đồng sáng tác giai đoạn", "Lập kế hoạch các bước tiếp theo trước khi tiếp tục sáng tác"
 	}
 	headerStyle := lipgloss.NewStyle().Width(boxW).AlignHorizontal(lipgloss.Center)
 	title := headerStyle.Foreground(colorMuted).Bold(true).Render(titleText)
@@ -390,7 +390,7 @@ func coCreateHint(state *cocreateState) string {
 	case state.canStart():
 		action := "Ctrl+S Bắt đầu sáng tác"
 		if state.stage {
-			action = "Ctrl+S Áp dụng & Tiếp tục"
+			action = "Ctrl+S Áp dụng & tiếp tục"
 		}
 		return "Enter Tiếp tục bổ sung · " + action + " · ↑↓ Cuộn hội thoại · Esc Thoát"
 	default:
@@ -481,7 +481,7 @@ func renderCoCreateConversationPanel(width, height int, state *cocreateState, er
 		Width(contentW).
 		Height(height).
 		Padding(0, 1)
-	return style.Render(panelTitleStyle.Render(":: Hội Thoại Đồng Sáng Tác") + "\n" + state.convVP.View())
+	return style.Render(panelTitleStyle.Render(":: Hội thoại đồng sáng tác") + "\n" + state.convVP.View())
 }
 
 func renderCoCreatePromptPanel(width, height int, state *cocreateState) string {
@@ -502,11 +502,11 @@ func renderCoCreatePromptPanel(width, height int, state *cocreateState) string {
 		contentW = 8
 	}
 
-	emptyHint := "AI sẽ liên tục tổng hợp bản yêu cầu chỉ thị sáng tác hoàn chỉnh tại đây."
-	panelTitle := ":: Chỉ Thị Sáng Tác Hiện Tại"
+	emptyHint := "AI sẽ liên tục tổng hợp chỉ thị sáng tác hoàn chỉnh tại đây."
+	panelTitle := ":: Chỉ thị sáng tác hiện tại"
 	if state.stage {
 		emptyHint = "AI sẽ liên tục tổng hợp bản định hướng giai đoạn tiếp theo tại đây."
-		panelTitle = ":: Định Hướng Giai Đoạn Tiếp Theo"
+		panelTitle = ":: Định hướng giai đoạn tiếp theo"
 	}
 	text := strings.TrimSpace(state.draftPrompt())
 	if text == "" {

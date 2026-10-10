@@ -65,10 +65,10 @@ func Analyze(ctx context.Context, model agentcore.ChatModel, systemPrompt string
 		Validate: validateAnalysis,
 		Hooks: llmcontract.Hooks{
 			Resolved: func(res llmcontract.Resolution) {
-				slog.Debug("Chọn giao thức có cấu trúc cho sửa đổi chương", "mode", res.Mode, "provider", res.Provider, "model", res.Model)
+				slog.Debug("structured mode resolved for chapter revision", "mode", res.Mode, "provider", res.Provider, "model", res.Model)
 			},
 			Correction: func(ev llmcontract.Correction) {
-				slog.Warn("Chỉnh đầu ra sửa đổi chương", "attempt", ev.Attempt, "layer", ev.Layer, "err", ev.Err)
+				slog.Warn("chapter revision output self-correction", "attempt", ev.Attempt, "layer", ev.Layer, "err", ev.Err)
 			},
 		},
 	})

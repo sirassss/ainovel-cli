@@ -89,7 +89,7 @@ func AvailableThinkingForModel(model agentcore.ChatModel) []agentcore.ThinkingLe
 func roleThinking(cfg bootstrap.Config, role string) agentcore.ThinkingLevel {
 	lv, err := ParseThinkingLevel(cfg.ResolveReasoningEffort(role))
 	if err != nil {
-		slog.Warn("Bỏ qua cấu hình cường độ suy luận không hợp lệ", "module", "agent", "role", role, "err", err)
+		slog.Warn("ignored invalid reasoning effort setting", "module", "agent", "role", role, "err", err)
 		return ""
 	}
 	return lv
@@ -149,7 +149,7 @@ func BuildWorkers(
 
 	// Provider failover 只记日志,不通知宿主
 	reportFailover := func(ev bootstrap.FailoverEvent) {
-		slog.Warn("Chuyển provider",
+		slog.Warn("provider failover",
 			"module", "agent",
 			"role", ev.Role,
 			"reason", ev.Reason,

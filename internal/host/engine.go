@@ -163,7 +163,7 @@ func (e *engine) run(ctx context.Context) {
 			if op.dispatch != nil {
 				if op.text != "" {
 					if err := e.store.RunMeta.SetPendingSteer(op.text); err != nil {
-						slog.Warn("Lưu lại can thiệp còn sót thất bại", "module", "engine", "err", err)
+						slog.Warn("saving leftover intervention failed", "module", "engine", "err", err)
 					}
 				}
 				e.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "warn",
@@ -173,7 +173,7 @@ func (e *engine) run(ctx context.Context) {
 			if op.hold != nil || op.reopen != nil {
 				if err := e.applyControlOp(context.Background(), op); err != nil {
 					e.emitEvent(Event{Time: time.Now(), Category: "ERROR", Level: "error",
-						Summary: "Nộp bù can thiệp khi Engine thoát thất bại: " + err.Error()})
+						Summary: "Không nộp bù được can thiệp khi Engine thoát: " + err.Error()})
 				}
 			}
 		}
@@ -197,7 +197,7 @@ func (e *engine) run(ctx context.Context) {
 		if inst == nil {
 			state, err := flow.LoadState(e.store)
 			if err != nil {
-				e.pauseWithNotify(notify.KindWorkerFailure, "Đọc sự thật định tuyến thất bại, đã tạm dừng: "+err.Error())
+				e.pauseWithNotify(notify.KindWorkerFailure, "Không đọc được dữ kiện định tuyến, đã tạm dừng: "+err.Error())
 				return
 			}
 			// 卷摘要可能已落盘而进程尚未来得及 MarkComplete。聚合工件全部齐备时
@@ -207,7 +207,7 @@ func (e *engine) run(ctx context.Context) {
 				state.ArcBoundary.IsVolumeEnd && state.HasArcReview && state.HasArcSummary && state.HasVolumeSummary {
 				complete, reconcileErr := tools.ReconcileLayeredCompletion(e.store)
 				if reconcileErr != nil {
-					e.pauseWithNotify(notify.KindWorkerFailure, "Khôi phục trạng thái kết thúc truyện thất bại, đã tạm dừng: "+reconcileErr.Error())
+					e.pauseWithNotify(notify.KindWorkerFailure, "Không khôi phục được trạng thái kết thúc truyện, đã tạm dừng: "+reconcileErr.Error())
 					return
 				}
 				if complete {
@@ -220,7 +220,7 @@ func (e *engine) run(ctx context.Context) {
 			var err error
 			inst, err = e.planStartFallback(ctx)
 			if err != nil {
-				e.pauseWithNotify(notify.KindPlanStart, "Đọc sự thật khôi phục kế hoạch thất bại, đã tạm dừng: "+err.Error())
+				e.pauseWithNotify(notify.KindPlanStart, "Không đọc được dữ kiện khôi phục kế hoạch, đã tạm dừng: "+err.Error())
 				return
 			}
 		}
@@ -231,7 +231,7 @@ func (e *engine) run(ctx context.Context) {
 		}
 		replaced, err := e.precheck(inst)
 		if err != nil {
-			e.pauseWithNotify(notify.KindWorkerFailure, "Kiểm tra tiền điều kiện trước khi phân công thất bại, đã tạm dừng: "+err.Error())
+			e.pauseWithNotify(notify.KindWorkerFailure, "Không kiểm tra được điều kiện trước khi phân công, đã tạm dừng: "+err.Error())
 			return
 		}
 		if replaced != nil {
@@ -352,10 +352,10 @@ func (e *engine) retryPlanStart(ctx context.Context, prompt string) *flow.Instru
 	}
 	rec, recErr := e.store.Decisions.Append(rec)
 	if recErr != nil {
-		slog.Warn("Lưu bản ghi kiểm toán khởi động bổ sung thất bại", "module", "engine", "err", recErr)
+		slog.Warn("saving supplemental startup audit record failed", "module", "engine", "err", recErr)
 	}
 	if derr != nil {
-		e.pauseWithNotify(notify.KindPlanStart, "Phân xử khởi động thất bại, đã tạm dừng (hãy kiểm tra cấu hình model/mạng rồi tiếp tục): "+derr.Error())
+		e.pauseWithNotify(notify.KindPlanStart, "Không phân xử khởi động được, đã tạm dừng (hãy kiểm tra cấu hình model/mạng rồi tiếp tục): "+derr.Error())
 		return nil
 	}
 	if err := e.store.RunMeta.SetPlanStart(domain.PlanStartRecord{
@@ -365,7 +365,7 @@ func (e *engine) retryPlanStart(ctx context.Context, prompt string) *flow.Instru
 		return nil
 	}
 	e.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "info",
-		Summary: fmt.Sprintf("Đã bổ sung phân xử khởi động (kiến trúc sư: %s — %s)", decision.Planner, decision.Reason)})
+		Summary: fmt.Sprintf("Đã bổ sung phân xử khởi động (Architect: %s — %s)", decision.Planner, decision.Reason)})
 	return &flow.Instruction{Agent: decision.Planner, Task: decision.Task, Reason: decision.Reason}
 }
 
@@ -377,7 +377,7 @@ func (e *engine) precheck(inst *flow.Instruction) (*flow.Instruction, error) {
 	}
 	if progress != nil && progress.Phase == domain.PhaseComplete {
 		// 完本期唯一合法出路是 reopen(干预动作),任何派发直接丢弃。
-		slog.Warn("Phân công sau khi kết thúc truyện bị loại bỏ", "module", "engine", "agent", inst.Agent)
+		slog.Warn("dispatch after book completion discarded", "module", "engine", "agent", inst.Agent)
 		return &flow.Instruction{}, nil // 置空:下轮 Route 归 nil 自然停机
 	}
 	if inst.Agent == "writer" {
@@ -447,7 +447,7 @@ func (e *engine) trackDeadlock(ctx context.Context, inst **flow.Instruction) (st
 		return false
 	}
 	if e.repeats >= deadlockAbortAt {
-		e.pauseStuck(notify.KindDeadlock, in, fmt.Sprintf("Ngắt mạch bế tắc: chỉ thị %d lần liên tiếp không tiến triển (%s), đã tạm dừng chờ con người can thiệp", e.repeats, in.Agent))
+		e.pauseStuck(notify.KindDeadlock, in, fmt.Sprintf("Ngắt mạch bế tắc: chỉ thị %d lần liên tiếp không tiến triển (%s), đã tạm dừng chờ bạn can thiệp", e.repeats, in.Agent))
 		return true
 	}
 	// Arbiter 僵局咨询(repeats ∈ [consultAt, abortAt))。裁定 retry 不清零计数。
@@ -457,7 +457,7 @@ func (e *engine) trackDeadlock(ctx context.Context, inst **flow.Instruction) (st
 	})
 	e.recordFailureDecision("deadlock", in, facts, decision, err)
 	if err != nil {
-		e.pauseWithNotify(notify.KindDeadlock, "Phân xử bế tắc thất bại, đã tạm dừng chờ con người can thiệp: "+err.Error())
+		e.pauseWithNotify(notify.KindDeadlock, "Không phân xử bế tắc được, đã tạm dừng chờ bạn can thiệp: "+err.Error())
 		return true
 	}
 	switch decision.Action {
@@ -483,7 +483,7 @@ func (e *engine) runWorker(ctx context.Context, inst *flow.Instruction) error {
 			return runErr
 		}
 		if err := e.store.Progress.StartChapter(inst.Chapter); err != nil {
-			runErr := fmt.Errorf("%w: đánh dấu chương %d đang tiến hành thất bại: %w", errInvalidWriteTarget, inst.Chapter, err)
+			runErr := fmt.Errorf("%w: không đánh dấu được chương %d đang tiến hành: %w", errInvalidWriteTarget, inst.Chapter, err)
 			e.observer.dispatchFinish(inst.Agent, runErr)
 			return runErr
 		}
@@ -516,12 +516,12 @@ func (e *engine) handleWorkerError(ctx context.Context, inst *flow.Instruction, 
 	}
 	e.failedKey = ""
 	facts := e.failureFacts("worker_failure", inst, werr)
-	decision, err := runObservedDecision(e.observer, "Phân xử thất bại", func() (arbiter.FailureDecision, error) {
+	decision, err := runObservedDecision(e.observer, "Phân xử lỗi", func() (arbiter.FailureDecision, error) {
 		return arbiter.DecideFailure(ctx, e.arbiterModel, e.failurePrompt, facts)
 	})
 	e.recordFailureDecision("worker_failure", inst, facts, decision, err)
 	if err != nil {
-		e.pauseWithNotify(notify.KindWorkerFailure, "Phân xử thất bại không dùng được, đã tạm dừng chờ con người can thiệp: "+msg+contentFilterAdvice(werr))
+		e.pauseWithNotify(notify.KindWorkerFailure, "Phân xử lỗi không dùng được, đã tạm dừng chờ bạn can thiệp: "+msg+contentFilterAdvice(werr))
 		return true
 	}
 	switch decision.Action {
@@ -534,7 +534,7 @@ func (e *engine) handleWorkerError(ctx context.Context, inst *flow.Instruction, 
 		e.mu.Unlock()
 		return false
 	default: // abort
-		e.pauseStuck(notify.KindWorkerFailure, inst, "Phân xử thất bại: "+decision.Reason+contentFilterAdvice(werr))
+		e.pauseStuck(notify.KindWorkerFailure, inst, "Phân xử lỗi: "+decision.Reason+contentFilterAdvice(werr))
 		return true
 	}
 }
@@ -561,7 +561,7 @@ func (e *engine) dropStuckRewrite(inst *flow.Instruction) bool {
 		return false
 	}
 	if err := e.store.Progress.CompleteRewrite(inst.Chapter); err != nil {
-		slog.Warn("Đưa chương viết lại bị kẹt ra khỏi hàng đợi thất bại", "module", "engine", "chapter", inst.Chapter, "err", err)
+		slog.Warn("dequeuing stuck rewrite chapter failed", "module", "engine", "chapter", inst.Chapter, "err", err)
 		return false
 	}
 	return true
@@ -634,7 +634,7 @@ func contentFilterAdvice(werr error) string {
 	if !errors.Is(werr, agentcore.ErrProviderContentFilter) {
 		return ""
 	}
-	return ". Đây là nhà cung cấp chặn nội dung (không phải lỗi cục bộ), có thể: dùng /model chuyển sang nhà cung cấp không có tầng kiểm duyệt rồi nhập \"tiếp tục\"; hoặc sửa lại cách diễn đạt của bản nháp chương này (drafts/) rồi tiếp tục; thử lại nguyên trạng nhiều khả năng vẫn bị chặn"
+	return ". Đây là provider chặn nội dung (không phải lỗi cục bộ), có thể: dùng /model chuyển sang provider không có tầng kiểm duyệt rồi nhập \"tiếp tục\"; hoặc sửa lại cách diễn đạt của bản nháp chương này (drafts/) rồi tiếp tục; thử lại nguyên trạng nhiều khả năng vẫn bị chặn"
 }
 
 // errInvalidWriteTarget 标记 runWorker 前置校验拦下的非法写作目标，供错误链和
@@ -681,7 +681,7 @@ func (e *engine) recordFailureDecision(kind string, inst *flow.Instruction, fact
 		rec.Error = derr.Error()
 	}
 	if _, err := e.store.Decisions.Append(rec); err != nil {
-		slog.Warn("Lưu bản ghi kiểm toán thất bại", "module", "engine", "kind", kind, "err", err)
+		slog.Warn("saving audit record failed", "module", "engine", "kind", kind, "err", err)
 	}
 }
 
@@ -706,11 +706,11 @@ func (e *engine) applyPendingOps(ctx context.Context) (deferGate bool) {
 				// 这里回存整条干预,恢复/继续时重新裁定重试(动作幂等 + 重询按新事实)。
 				if op.text != "" {
 					if serr := e.store.RunMeta.SetPendingSteer(op.text); serr != nil {
-						slog.Warn("Lưu lại can thiệp thất bại", "module", "engine", "err", serr)
+						slog.Warn("saving intervention failed", "module", "engine", "err", serr)
 					}
 				}
 				e.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "warn",
-					Summary: "Thực hiện hành động can thiệp thất bại, đã giữ lại; sẽ tự thử lại khi khôi phục/tiếp tục"})
+					Summary: "Không thực hiện được hành động can thiệp, đã giữ lại; sẽ tự thử lại khi khôi phục/tiếp tục"})
 			} else if pairedHoldDispatch && e.nextDefersGate() {
 				// 只有 hold 与配对派单都成功落地，才允许绕过本次 Gate。
 				// hold 写入失败或派单因事实过期被丢弃时继续绕过，都会让
@@ -736,12 +736,12 @@ func (e *engine) applyControlOp(ctx context.Context, op controlOp) error {
 		// 会残留，并与按新事实重新裁定出的 hold 冲突，最终只暂停却漏做修改。
 		fresh, err := arbiter.CollectInterventionFacts(e.store)
 		if err != nil {
-			return fmt.Errorf("Làm mới sự thật can thiệp: %w", err)
+			return fmt.Errorf("Làm mới dữ kiện can thiệp: %w", err)
 		}
 		if fresh.Phase != op.facts.Phase || fresh.Flow != op.facts.Flow ||
 			fresh.QueueHead() != op.facts.QueueHead() {
 			e.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "warn",
-				Summary: "Phân công theo phân xử đã lỗi thời (sự thật đã tiến), phân xử lại theo sự thật mới nhất"})
+				Summary: "Phân công theo phân xử đã lỗi thời (dữ kiện đã tiến), phân xử lại theo dữ kiện mới nhất"})
 			e.recordStale(op)
 			if op.text != "" && e.reconsult != nil {
 				// 同步重询:干预必须先于后续创作生效——异步会让引擎在新裁定
@@ -755,12 +755,12 @@ func (e *engine) applyControlOp(ctx context.Context, op controlOp) error {
 		if op.hold.Cancel {
 			meta, err := e.store.RunMeta.Load()
 			if err != nil {
-				e.emitEvent(Event{Time: time.Now(), Category: "ERROR", Summary: "Đọc tạm dừng một lần thất bại: " + err.Error(), Level: "error"})
+				e.emitEvent(Event{Time: time.Now(), Category: "ERROR", Summary: "Không đọc được tạm dừng một lần: " + err.Error(), Level: "error"})
 				return err
 			}
 			if meta != nil && meta.AdvanceHold != nil {
 				if err := e.store.RunMeta.ClearAdvanceHold(*meta.AdvanceHold); err != nil {
-					e.emitEvent(Event{Time: time.Now(), Category: "ERROR", Summary: "Hủy tạm dừng một lần thất bại: " + err.Error(), Level: "error"})
+					e.emitEvent(Event{Time: time.Now(), Category: "ERROR", Summary: "Không hủy được tạm dừng một lần: " + err.Error(), Level: "error"})
 					return err
 				}
 			}
@@ -768,7 +768,7 @@ func (e *engine) applyControlOp(ctx context.Context, op controlOp) error {
 		} else {
 			hold := domain.AdvanceHold{After: op.hold.After, TargetChapter: op.hold.TargetChapter, Reason: op.hold.Reason}
 			if err := e.store.RunMeta.SetAdvanceHold(hold); err != nil {
-				e.emitEvent(Event{Time: time.Now(), Category: "ERROR", Summary: "Đặt tạm dừng một lần thất bại: " + err.Error(), Level: "error"})
+				e.emitEvent(Event{Time: time.Now(), Category: "ERROR", Summary: "Không đặt được tạm dừng một lần: " + err.Error(), Level: "error"})
 				return err // hold 未落盘时关联 dispatch 不得执行
 			}
 			e.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Summary: "Đã đặt tạm dừng một lần: " + op.hold.Reason, Level: "info"})
@@ -777,7 +777,7 @@ func (e *engine) applyControlOp(ctx context.Context, op controlOp) error {
 	if op.reopen != nil {
 		args, _ := json.Marshal(map[string]any{"chapters": op.reopen.Chapters, "reason": op.reopen.Reason})
 		if _, err := tools.NewReopenBookTool(e.store).Execute(ctx, args); err != nil {
-			e.emitEvent(Event{Time: time.Now(), Category: "ERROR", Summary: "Mở lại để viết lại thất bại: " + err.Error(), Level: "error"})
+			e.emitEvent(Event{Time: time.Now(), Category: "ERROR", Summary: "Không mở lại để viết lại được: " + err.Error(), Level: "error"})
 			fail(err)
 		} else {
 			e.emitEvent(Event{Time: time.Now(), Category: "SYSTEM",
@@ -814,7 +814,7 @@ func (e *engine) recordStale(op controlOp) {
 		rec.Facts = data
 	}
 	if _, err := e.store.Decisions.Append(rec); err != nil {
-		slog.Warn("Ghi nhận stale thất bại", "module", "engine", "err", err)
+		slog.Warn("recording stale decision failed", "module", "engine", "err", err)
 	}
 }
 

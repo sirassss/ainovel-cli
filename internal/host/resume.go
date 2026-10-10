@@ -37,7 +37,7 @@ func upgradeProject(st *storepkg.Store) error {
 		if err := st.SaveProjectFormatVersion(next); err != nil {
 			return fmt.Errorf("Lưu phiên bản định dạng dự án v%d: %w", next, err)
 		}
-		slog.Info("Nâng cấp dữ liệu dự án hoàn tất", "module", "migration", "from", version, "to", next)
+		slog.Info("project data migration completed", "module", "migration", "from", version, "to", next)
 		version = next
 	}
 	return nil
@@ -216,15 +216,15 @@ func describeArcEndLabel(store *storepkg.Store, progress *domain.Progress) (stri
 	}
 	switch {
 	case !hasArcReview:
-		return fmt.Sprintf("Khôi phục: đánh giá cuối cung đang chờ (V%d A%d)", vol, arc), nil
+		return fmt.Sprintf("Khôi phục: đánh giá cuối cung đang chờ (tập %d, cung %d)", vol, arc), nil
 	case !hasArcSummary:
-		return fmt.Sprintf("Khôi phục: tóm tắt cung chờ tạo (V%d A%d)", vol, arc), nil
+		return fmt.Sprintf("Khôi phục: tóm tắt cung chờ tạo (tập %d, cung %d)", vol, arc), nil
 	case boundary.IsVolumeEnd && !hasVolumeSummary:
-		return fmt.Sprintf("Khôi phục: tóm tắt tập chờ tạo (V%d)", vol), nil
+		return fmt.Sprintf("Khôi phục: tóm tắt tập chờ tạo (tập %d)", vol), nil
 	case boundary.NeedsExpansion && boundary.NextArc > 0:
-		return fmt.Sprintf("Khôi phục: cung kế chờ mở rộng (V%d A%d)", boundary.NextVolume, boundary.NextArc), nil
+		return fmt.Sprintf("Khôi phục: cung kế chờ mở rộng (tập %d, cung %d)", boundary.NextVolume, boundary.NextArc), nil
 	case boundary.NeedsNewVolume:
-		return fmt.Sprintf("Khôi phục: chờ quyết định tập kế (cuối V%d)", vol), nil
+		return fmt.Sprintf("Khôi phục: chờ quyết định tập kế (cuối tập %d)", vol), nil
 	}
 	return "", nil
 }

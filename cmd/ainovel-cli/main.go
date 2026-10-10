@@ -42,7 +42,7 @@ func main() {
 	}
 	if opts.Update {
 		if err := runSelfUpdate(opts.UpdateVersion); err != nil {
-			fmt.Fprintf(os.Stderr, "Cập nhật thất bại: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Không cập nhật được: %v\n", err)
 			os.Exit(1)
 		}
 		return
@@ -56,7 +56,7 @@ func main() {
 		}
 		setupCfg, err := bootstrap.RunSetup()
 		if err != nil {
-			die("Thiết lập thất bại: %v", err)
+			die("Không thiết lập được: %v", err)
 		}
 		runWithConfig(setupCfg, opts, args)
 		return
@@ -226,7 +226,7 @@ func loadPromptFrom(opts cliOptions, stdin io.Reader) (string, error) {
 	if opts.PromptFile == "-" {
 		data, err := io.ReadAll(stdin)
 		if err != nil {
-			return "", fmt.Errorf("đọc prompt thất bại: %w", err)
+			return "", fmt.Errorf("Không đọc được prompt: %w", err)
 		}
 		return strings.TrimSpace(string(data)), nil
 	}

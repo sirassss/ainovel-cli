@@ -65,13 +65,13 @@ func RunImport(ctx context.Context, st *store.Store, path string) (<-chan Event,
 			case <-ctx.Done():
 			}
 		}
-		emit(StageImport, "Đang nhập chân dung mô phỏng...", nil)
+		emit(StageImport, "Đang nhập style profile...", nil)
 		result, err := ImportProfile(ctx, st, path)
 		if err != nil {
-			emit(StageError, "Nhập chân dung mô phỏng thất bại", err)
+			emit(StageError, "Không nhập được style profile", err)
 			return
 		}
-		emit(StageDone, fmt.Sprintf("Đã nhập chân dung mô phỏng: thêm %d bài, bỏ qua %d bài trùng", result.ImportedSources, result.SkippedSources), nil)
+		emit(StageDone, fmt.Sprintf("Đã nhập style profile: thêm %d bài, bỏ qua %d bài trùng", result.ImportedSources, result.SkippedSources), nil)
 	}()
 	return events, nil
 }

@@ -42,7 +42,7 @@ func decodeSource(raw []byte) (decoded, error) {
 	}
 	out, err := simplifiedchinese.GB18030.NewDecoder().Bytes(raw)
 	if err != nil {
-		return decoded{}, fmt.Errorf("Không phải UTF-8 hợp lệ, và giải mã GB18030 cũng thất bại: %w", err)
+		return decoded{}, fmt.Errorf("Không phải UTF-8 hợp lệ, và giải mã GB18030 cũng lỗi: %w", err)
 	}
 	if !utf8.Valid(out) {
 		return decoded{}, fmt.Errorf("Kết quả giải mã GB18030 vẫn không phải UTF-8 hợp lệ, không thể giải mã đáng tin cậy")

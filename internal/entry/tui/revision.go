@@ -48,14 +48,14 @@ func formatRevisionResult(result *revision.Result) string {
 		}
 		part := fmt.Sprintf("Chương %d: %s", result.Applied[i], analysis.ChangeSummary)
 		if analysis.StoryChanged {
-			part += " (sự thật cốt truyện đã cập nhật)"
+			part += " (dữ kiện cốt truyện đã cập nhật)"
 		}
 		if len(analysis.DownstreamIssues) > 0 {
-			part += fmt.Sprintf(" (phát hiện %d xung đột phía sau)", len(analysis.DownstreamIssues))
+			part += fmt.Sprintf(" (phát hiện %d xung đột ở các chương sau)", len(analysis.DownstreamIssues))
 		}
 		parts = append(parts, part)
 	}
-	summary := fmt.Sprintf("Đã tiếp nhận tu chỉnh các chương: %v", result.Applied)
+	summary := fmt.Sprintf("Đã tiếp nhận các chương đã sửa: %v", result.Applied)
 	if len(parts) > 0 {
 		summary += "; " + strings.Join(parts, "; ")
 	}

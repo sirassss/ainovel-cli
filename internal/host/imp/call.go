@@ -100,7 +100,7 @@ func briefErr(err error) string {
 
 // errTypeLabels 把 litellm 错误分类翻成一眼可读的中文短标签。
 var errTypeLabels = map[litellm.ErrorType]string{
-	litellm.ErrorTypeAuth:            "xác thực thất bại",
+	litellm.ErrorTypeAuth:            "lỗi xác thực",
 	litellm.ErrorTypeRateLimit:       "bị giới hạn tốc độ",
 	litellm.ErrorTypeNetwork:         "lỗi mạng",
 	litellm.ErrorTypeValidation:      "tham số yêu cầu không hợp lệ",
@@ -109,7 +109,7 @@ var errTypeLabels = map[litellm.ErrorType]string{
 	litellm.ErrorTypeQuota:           "không đủ hạn mức",
 	litellm.ErrorTypeModel:           "model không khả dụng",
 	litellm.ErrorTypeInternal:        "lỗi nội bộ",
-	litellm.ErrorTypeContextOverflow: "vượt giới hạn ngữ cảnh",
+	litellm.ErrorTypeContextOverflow: "vượt context window",
 	litellm.ErrorTypeOverloaded:      "upstream quá tải",
 	litellm.ErrorTypeContentFilter:   "bị bộ lọc nội dung chặn",
 }
@@ -160,18 +160,18 @@ func callStructured[T any](ctx context.Context, m callModel, contract llmcontrac
 		Agent:        "import",
 		Hooks: llmcontract.Hooks{
 			Resolved: func(res llmcontract.Resolution) {
-				prof.logger().Debug("Chọn giao thức có cấu trúc của imp",
+				prof.logger().Debug("imp structured mode resolved",
 					"contract", contract.Name, "structured_mode", res.Mode,
 					"capability_source", res.Source, "provider", res.Provider,
 					"model", res.Model, "schema_fingerprint", contract.Fingerprint())
 			},
 			RequestRetry: func(ev llmretry.Event) {
-				prof.sayRetry(time.Now().Add(ev.Delay), "Yêu cầu model thất bại (%s), thử lại lần %d", briefErr(ev.Err), ev.Attempt)
-				prof.logger().Warn("imp thử lại yêu cầu model", "attempt", ev.Attempt, "delay", ev.Delay, "err", ev.Err)
+				prof.sayRetry(time.Now().Add(ev.Delay), "Gọi model lỗi (%s), thử lại lần %d", briefErr(ev.Err), ev.Attempt)
+				prof.logger().Warn("imp retrying model request", "attempt", ev.Attempt, "delay", ev.Delay, "err", ev.Err)
 			},
 			Correction: func(ev llmcontract.Correction) {
 				prof.say("Kiểm tra đầu ra không đạt (%s), hỏi lại lần %d kèm phản hồi lỗi", briefErr(ev.Err), ev.Attempt+1)
-				prof.logger().Warn("imp tự phục hồi đầu ra có cấu trúc", "attempt", ev.Attempt,
+				prof.logger().Warn("imp structured output self-correction", "attempt", ev.Attempt,
 					"layer", ev.Layer, "structured_mode", ev.Mode, "err", ev.Err)
 			},
 		},
@@ -195,7 +195,7 @@ func callStructured[T any](ctx context.Context, m callModel, contract llmcontrac
 		}
 	case llmcontract.FailureRequest:
 		if detail := modelErrDetail(failure); detail != "" {
-			return out, fmt.Errorf("imp: gọi model thất bại (%s): %w", detail, failure)
+			return out, fmt.Errorf("imp: không gọi được model (%s): %w", detail, failure)
 		}
 	}
 	return out, fmt.Errorf("imp: %w", failure)

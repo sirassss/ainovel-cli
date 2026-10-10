@@ -228,7 +228,7 @@ func (o *observer) persistEvent(ev Event) {
 		Summary:  ev.Summary,
 		Payload:  ev,
 	}); err != nil {
-		slog.Warn("Lưu sự kiện chạy thất bại", "module", "observer", "category", ev.Category, "err", err)
+		slog.Warn("saving run event failed", "module", "observer", "category", ev.Category, "err", err)
 	}
 }
 

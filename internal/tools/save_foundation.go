@@ -503,7 +503,7 @@ func (t *SaveFoundationTool) recordVolumeEndDecision(action, reason string, fact
 	}
 	raw, err := json.Marshal(decision)
 	if err != nil {
-		slog.Error("Tuần tự hóa phán định cuối tập thất bại", "module", "tools", "action", action, "err", err)
+		slog.Error("serializing volume-end verdict failed", "module", "tools", "action", action, "err", err)
 		return
 	}
 	if _, err := t.store.Decisions.Append(store.DecisionRecord{
@@ -513,7 +513,7 @@ func (t *SaveFoundationTool) recordVolumeEndDecision(action, reason string, fact
 		Decision: raw,
 		Reason:   reason,
 	}); err != nil {
-		slog.Error("Lưu kiểm toán phán định cuối tập thất bại", "module", "tools", "action", action, "err", err)
+		slog.Error("saving volume-end verdict audit failed", "module", "tools", "action", action, "err", err)
 	}
 }
 

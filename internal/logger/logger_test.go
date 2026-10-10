@@ -38,7 +38,7 @@ func TestSetupFileWritesDefaultLog(t *testing.T) {
 	if !regexp.MustCompile(`time=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(Z|[+-]\d{2}:\d{2})`).Match(data) {
 		t.Fatalf("日志时间应包含日期、毫秒和时区: %q", data)
 	}
-	if !strings.Contains(string(data), `msg="Phiên nhật ký bắt đầu"`) || !strings.Contains(string(data), "session=") {
+	if !strings.Contains(string(data), `msg="log session started"`) || !strings.Contains(string(data), "session=") {
 		t.Fatalf("日志应包含可关联的会话边界与 session 属性: %q", data)
 	}
 	for _, want := range []string{"version=v1.2.3", "commit=abc123", "built=2026-08-03"} {

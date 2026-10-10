@@ -149,7 +149,7 @@ func TestModelListRendersEditableColumnsAndReferences(t *testing.T) {
 		},
 	}
 	plain := ansi.Strip(renderModelConfigModal(120, st))
-	for _, want := range []string{"Tên/ID Model", "Cửa sổ ngữ cảnh", "Vai trò gán", "deepseek-chat", "128K", "default", "+ Thêm Model mới"} {
+	for _, want := range []string{"Tên/ID model", "Context window", "Vai trò gán", "deepseek-chat", "128K", "default", "+ Thêm model mới"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("单页模型表缺少 %q:\n%s", want, plain)
 		}

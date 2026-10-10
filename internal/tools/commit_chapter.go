@@ -313,7 +313,7 @@ func (t *CommitChapterTool) Execute(_ context.Context, args json.RawMessage) (js
 				return nil, fmt.Errorf("load core characters for cast ledger: %w: %w", errs.ErrStoreRead, err)
 			}
 			if err := t.store.Cast.MergeAppearances(a.Chapter, a.Characters, a.CastIntros, coreNames); err != nil {
-				slog.Warn("Cộng dồn danh sách nhân vật phụ thất bại, bỏ qua", "module", "commit", "chapter", a.Chapter, "err", err)
+				slog.Warn("accumulating minor character list failed, skipped", "module", "commit", "chapter", a.Chapter, "err", err)
 			}
 		}
 
@@ -451,7 +451,7 @@ func (t *CommitChapterTool) Execute(_ context.Context, args json.RawMessage) (js
 	// 持久化违规事实:editor 评审经 novel_context 消费(返回值只是镜像——
 	// writer 在 commit 后立即硬停,返回值无人可读)。best-effort。
 	if err := t.store.World.SaveRuleViolations(a.Chapter, violations); err != nil {
-		slog.Warn("Lưu vi phạm cơ học thất bại", "module", "tools", "chapter", a.Chapter, "err", err)
+		slog.Warn("saving mechanical violations failed", "module", "tools", "chapter", a.Chapter, "err", err)
 	}
 	t.refreshStyleStats(a.Chapter, content)
 	return output, nil
@@ -645,7 +645,7 @@ func (t *CommitChapterTool) executeRewriteCommit(a commitArgs, progress *domain.
 			return nil, fmt.Errorf("rewrite: save chapter record: %w: %w", errs.ErrStoreWrite, err)
 		}
 		if len(recovered) > 0 {
-			slog.Warn("Đã khôi phục từ sổ chi tiết gài trước các sự kiện gieo mầm bị mất ở phiên bản cũ", "module", "commit", "chapter", chapter, "foreshadows", recovered)
+			slog.Warn("recovered foreshadow plant events lost in an older version from the foreshadow ledger", "module", "commit", "chapter", chapter, "foreshadows", recovered)
 		}
 		if err := revision.NewProjector(t.store).Apply(records); err != nil {
 			return nil, fmt.Errorf("rewrite: rebuild chapter projections: %w: %w", errs.ErrStoreWrite, err)
@@ -761,7 +761,7 @@ func (t *CommitChapterTool) executeRewriteCommit(a commitArgs, progress *domain.
 	}
 
 	if err := t.store.World.SaveRuleViolations(chapter, violations); err != nil {
-		slog.Warn("Lưu vi phạm cơ học thất bại", "module", "tools", "chapter", chapter, "err", err)
+		slog.Warn("saving mechanical violations failed", "module", "tools", "chapter", chapter, "err", err)
 	}
 	t.refreshStyleStats(chapter, content)
 	return output, nil
@@ -816,11 +816,11 @@ func (t *CommitChapterTool) refreshStyleStats(chapter int, content string) {
 		var err error
 		content, err = t.store.Drafts.LoadChapterText(chapter)
 		if err != nil {
-			slog.Error("Cập nhật chỉ mục thống kê văn phong thất bại", "module", "tools", "chapter", chapter, "err", err)
+			slog.Error("updating style stats index failed", "module", "tools", "chapter", chapter, "err", err)
 			return
 		}
 		if content == "" {
-			slog.Error("Cập nhật chỉ mục thống kê văn phong thất bại", "module", "tools", "chapter", chapter, "err", errors.New("Chưa có bản chính thức"))
+			slog.Error("updating style stats index failed", "module", "tools", "chapter", chapter, "err", errors.New("Chưa có bản chính thức"))
 			return
 		}
 	}

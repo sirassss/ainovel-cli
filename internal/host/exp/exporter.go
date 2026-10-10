@@ -40,14 +40,14 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 
 	progress, err := deps.Store.Progress.Load()
 	if err != nil {
-		return nil, fmt.Errorf("Tải progress thất bại: %w", err)
+		return nil, fmt.Errorf("Không tải được progress: %w", err)
 	}
 	if progress == nil || len(progress.CompletedChapters) == 0 {
 		return nil, fmt.Errorf("Chưa có chương nào hoàn thành, không có nội dung để xuất")
 	}
 	book, err := deps.Store.Book.Load()
 	if err != nil {
-		return nil, fmt.Errorf("Tải thông tin tác phẩm thất bại: %w", err)
+		return nil, fmt.Errorf("Không tải được thông tin tác phẩm: %w", err)
 	}
 	if book == nil {
 		return nil, fmt.Errorf("Thông tin tác phẩm không tồn tại, không thể xuất")
@@ -90,7 +90,7 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 	for _, ch := range chapters {
 		text, err := deps.Store.Drafts.LoadChapterText(ch)
 		if err != nil {
-			return nil, fmt.Errorf("Đọc chương %d thất bại: %w", ch, err)
+			return nil, fmt.Errorf("Không đọc được chương %d: %w", ch, err)
 		}
 		if strings.TrimSpace(text) == "" {
 			return nil, fmt.Errorf("progress đánh dấu chương %d đã hoàn thành, nhưng chapters/%02d.md thiếu hoặc rỗng", ch, ch)
@@ -113,7 +113,7 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 		if _, err := os.Stat(outPath); err == nil {
 			return nil, fmt.Errorf("Tệp đã tồn tại: %s (thêm --overwrite để ghi đè)", outPath)
 		} else if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("Kiểm tra đường dẫn đầu ra thất bại: %w", err)
+			return nil, fmt.Errorf("Không kiểm tra được đường dẫn đầu ra: %w", err)
 		}
 	}
 
@@ -121,7 +121,7 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 	for _, ch := range chapters {
 		summary, err := deps.Store.Summaries.LoadSummary(ch)
 		if err != nil {
-			return nil, fmt.Errorf("Đọc tóm tắt chương %d thất bại: %w", ch, err)
+			return nil, fmt.Errorf("Không đọc được tóm tắt chương %d: %w", ch, err)
 		}
 		if summary != nil && strings.TrimSpace(summary.Title) != "" {
 			titleIdx[ch] = summary.Title
@@ -139,13 +139,13 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 	case FormatEPUB:
 		buf, err := renderEPUB(labelsFor(deps.Store.Language()), *book, chapters, titleIdx, locations, bodies)
 		if err != nil {
-			return nil, fmt.Errorf("Kết xuất EPUB thất bại: %w", err)
+			return nil, fmt.Errorf("Không tạo được EPUB: %w", err)
 		}
 		data = buf
 	}
 
 	if err := atomicWrite(outPath, data); err != nil {
-		return nil, fmt.Errorf("Ghi tệp thất bại: %w", err)
+		return nil, fmt.Errorf("Không ghi được tệp: %w", err)
 	}
 
 	return &Result{

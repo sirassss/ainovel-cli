@@ -141,11 +141,11 @@ func (s *simulationState) refresh(contentW int) {
 	case !s.done:
 		b.WriteString(dimStyle.Render("Esc Hủy"))
 	case s.err != nil:
-		b.WriteString(errStyle.Render("Xử lý hồ sơ mô phỏng thất bại"))
+		b.WriteString(errStyle.Render("Không xử lý được style profile"))
 		b.WriteString("\n")
 		b.WriteString(dimStyle.Render("Esc Đóng bảng"))
 	default:
-		b.WriteString(okStyle.Render("Hồ sơ mô phỏng văn phong đã sẵn sàng, các Agent sẽ đọc từ novel_context"))
+		b.WriteString(okStyle.Render("Style profile đã sẵn sàng, các Agent sẽ đọc từ novel_context"))
 		b.WriteString("\n")
 		b.WriteString(dimStyle.Render("Esc Đóng bảng"))
 	}
@@ -170,7 +170,7 @@ func renderSimulationModal(width, height int, s *simulationState) string {
 		s.viewport.Height = boxH - 4
 	}
 	hint := "  ↑↓ Cuộn · Esc Hủy/Đóng"
-	modal := renderPaddedModalFrame(boxW, boxH, "Hồ Sơ Mô Phỏng Văn Phong", hint, strings.Split(s.viewport.View(), "\n"))
+	modal := renderPaddedModalFrame(boxW, boxH, "Style profile", hint, strings.Split(s.viewport.View(), "\n"))
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, modal)
 }
 
@@ -208,7 +208,7 @@ func startSimulate(rt *host.Host, reqID int, args []string, width, height int) (
 		cancel()
 		return nil, nil, err
 	}
-	state := newSimulationState(reqID, "Tạo Hồ Sơ Mô Phỏng", "./simulate", width, height, cancel)
+	state := newSimulationState(reqID, "Tạo style profile", "./simulate", width, height, cancel)
 	return state, listenSimulationEvent(reqID, ch), nil
 }
 
@@ -222,7 +222,7 @@ func startImportSimulation(rt *host.Host, reqID int, args []string, width, heigh
 		cancel()
 		return nil, nil, err
 	}
-	state := newSimulationState(reqID, "Nhập Hồ Sơ Mô Phỏng", args[0], width, height, cancel)
+	state := newSimulationState(reqID, "Nhập style profile", args[0], width, height, cancel)
 	return state, listenSimulationEvent(reqID, ch), nil
 }
 

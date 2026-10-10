@@ -54,11 +54,11 @@ func renderHelpText(width int) string {
 	for _, line := range []string{
 		"• Gõ / để mở bảng gợi ý và tìm kiếm lệnh nhanh",
 		"• Phím ↑↓ để chọn lệnh trong danh sách gợi ý",
-		"• Phím Tab hoặc Enter để chấp nhận hoàn thành lệnh",
+		"• Phím Tab hoặc Enter để hoàn thành lệnh",
 		"• Phím Esc để đóng bảng lệnh / modal hiện tại",
 		"• Phím Tab ở màn hình chính: Chuyển đổi giữa chế độ Nhanh và Đồng sáng tác",
-		"• Ctrl+R: Bật/tắt chế độ chọn sao chép văn bản (tắt báo chuột để bôi đen copy, nhấn lại để khôi phục)",
-		"• Ctrl+C (2 lần): Lưu an toàn toàn bộ tiến độ và thoát ứng dụng",
+		"• Ctrl+R: Bật/tắt chế độ chọn sao chép văn bản (tắt bắt chuột để bôi đen copy, nhấn lại để khôi phục)",
+		"• Ctrl+C (2 lần): Lưu tiến độ an toàn rồi thoát ứng dụng",
 	} {
 		b.WriteString(hintStyle.Render(line))
 		b.WriteString("\n")
@@ -84,7 +84,7 @@ func renderHelpModal(width, height int, state *helpState) string {
 	modal := renderPaddedModalFrame(
 		boxW,
 		boxH,
-		"Hướng Dẫn Lệnh",
+		"Hướng dẫn lệnh",
 		"  ↑↓ Cuộn · Esc Đóng",
 		strings.Split(state.viewport.View(), "\n"),
 	)

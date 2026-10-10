@@ -80,6 +80,6 @@ func contextRewriteCallback(agent string) func(corecontext.RewriteEvent) {
 				"duration_ms", info.Duration.Milliseconds(),
 			)
 		}
-		slog.Warn("Viết lại ngữ cảnh", attrs...)
+		slog.Warn("context rewritten", attrs...)
 	}
 }

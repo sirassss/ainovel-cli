@@ -121,7 +121,7 @@ func (m Model) toggleMouseReporting() (Model, tea.Cmd) {
 }
 
 // donePlaceholder hoàn thành tác phẩm
-const donePlaceholder = "Truyện đã hoàn thành · Có thể nhập yêu cầu sửa đổi (vd: \"viết lại chương 3\"), /reopen để viết tiếp tập mới, hoặc /export để xuất truyện"
+const donePlaceholder = "Truyện đã hoàn thành · có thể nhập yêu cầu sửa đổi (vd: \"viết lại chương 3\"), /reopen để viết tiếp tập mới, hoặc /export để xuất truyện"
 
 // enterRunning 进入创作工作台：开启鼠标上报（工作台需要点击切面板 / 滚轮 /
 // 拖拽侧边栏）。返回的命令需由调用方 Batch 进最终返回值。
@@ -558,7 +558,7 @@ func (m Model) handleRuntimeMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case exportDoneMsg:
 		if msg.err != nil {
 			m.applyEvent(host.Event{
-				Time: time.Now(), Category: "ERROR", Summary: "Xuất file thất bại: " + msg.err.Error(), Level: "error",
+				Time: time.Now(), Category: "ERROR", Summary: "Không xuất được: " + msg.err.Error(), Level: "error",
 			})
 		} else if msg.result != nil {
 			m.applyEvent(host.Event{
@@ -569,11 +569,11 @@ func (m Model) handleRuntimeMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 	case revisionDoneMsg:
 		if msg.err != nil {
-			m.applyEvent(host.Event{Time: time.Now(), Category: "ERROR", Summary: "Đồng bộ chương thất bại: " + msg.err.Error(), Level: "error"})
+			m.applyEvent(host.Event{Time: time.Now(), Category: "ERROR", Summary: "Không đồng bộ được chương: " + msg.err.Error(), Level: "error"})
 		} else if msg.checkOnly {
 			summary := "Không phát hiện chương nào bị chỉnh sửa từ bên ngoài"
 			if len(msg.chapters) > 0 {
-				summary = fmt.Sprintf("Phát hiện nội dung chương đã bị chỉnh sửa từ bên ngoài: %v; Chạy /sync để tiếp nhận", msg.chapters)
+				summary = fmt.Sprintf("Phát hiện nội dung chương đã bị chỉnh sửa từ bên ngoài: %v; chạy /sync để tiếp nhận", msg.chapters)
 			}
 			m.applyEvent(host.Event{Time: time.Now(), Category: "SYSTEM", Summary: summary, Level: "info"})
 		} else {
@@ -746,7 +746,7 @@ func (m Model) handleStartResultMsg(msg startResultMsg) (tea.Model, tea.Cmd) {
 			m.mode = modeRunning
 			m.snapshot.IsRunning = false
 			m.snapshot.RuntimeState = "idle"
-			m.textarea.Placeholder = "Khởi tạo thất bại, vui lòng kiểm tra cấu hình hoặc dùng /model để đổi model"
+			m.textarea.Placeholder = "Không khởi tạo được, vui lòng kiểm tra cấu hình hoặc dùng /model để đổi model"
 			m.refreshStreamViewport()
 			m.refreshStateViewport()
 			return m, m.textarea.Focus()

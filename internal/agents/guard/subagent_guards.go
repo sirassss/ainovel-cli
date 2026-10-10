@@ -63,7 +63,7 @@ func newCheckpointDeltaGuard(st *store.Store, agentName string, requiredSteps []
 	return func(_ context.Context, info agentcore.StopInfo) agentcore.StopDecision {
 		// 不可恢复错误：直接升级，不浪费一次催促。
 		if _, hard := hardStopReasons[info.Message.StopReason]; hard {
-			slog.Error("subagent stop_guard phát hiện dừng không thể phục hồi, leo thang ngay",
+			slog.Error("subagent stop_guard detected unrecoverable stop, escalating immediately",
 				"module", "agent.guard", "agent", agentName,
 				"turn", info.TurnIndex, "stop_reason", info.Message.StopReason)
 			if onBlock != nil {
@@ -100,14 +100,14 @@ func newCheckpointDeltaGuard(st *store.Store, agentName string, requiredSteps []
 		lastBlockSeq.Store(latestSeq)
 		n := consecutive.Add(1)
 		if n > subagentMaxConsecutiveBlocks {
-			slog.Error("subagent stop_guard chặn liên tiếp quá giới hạn, leo thang thành chấm dứt",
+			slog.Error("subagent stop_guard blocked consecutively past the limit, escalating to termination",
 				"module", "agent.guard", "agent", agentName, "turn", info.TurnIndex, "consecutive", n)
 			if onBlock != nil {
 				onBlock(agentName, "escalated", n)
 			}
 			return agentcore.StopDecision{Allow: false, Escalate: true}
 		}
-		slog.Warn("subagent stop_guard chặn end_turn",
+		slog.Warn("subagent stop_guard blocked end_turn",
 			"module", "agent.guard", "agent", agentName, "turn", info.TurnIndex, "consecutive", n)
 		if onBlock != nil {
 			onBlock(agentName, "blocked", n)

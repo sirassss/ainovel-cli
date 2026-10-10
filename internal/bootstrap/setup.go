@@ -49,7 +49,7 @@ type ProviderPreset struct {
 }
 
 var setupProviders = []setupProvider{
-	{name: "ollama", label: "Ollama (Cục bộ / Offline - Miễn phí)", baseURL: "http://localhost:11434/v1", apiKeyOptional: true},
+	{name: "ollama", label: "Ollama (cục bộ / offline, miễn phí)", baseURL: "http://localhost:11434/v1", apiKeyOptional: true},
 	{name: "openrouter", label: "OpenRouter (Claude, Gemini, DeepSeek, Qwen...)", baseURL: "https://openrouter.ai/api/v1"},
 	{name: "gemini", label: "Google Gemini", baseURL: ""},
 	{name: "anthropic", label: "Anthropic Claude", baseURL: ""},
@@ -59,7 +59,7 @@ var setupProviders = []setupProvider{
 	{name: "glm", label: "Zhipu GLM", baseURL: ""},
 	{name: "grok", label: "xAI Grok", baseURL: ""},
 	{name: "bedrock", label: "AWS Bedrock", apiKeyOptional: true},
-	{name: "custom", label: "Custom Proxy (Proxy / API tùy chỉnh)", needType: true, apiKeyOptional: true},
+	{name: "custom", label: "Custom proxy (proxy / API tùy chỉnh)", needType: true, apiKeyOptional: true},
 }
 
 // ProviderPresets trả về danh sách các thiết lập Provider mẫu.
@@ -80,17 +80,17 @@ type setupLanguageOption struct {
 }
 
 var languageOptions = []setupLanguageOption{
-	{code: "vi", label: "Tiếng Việt (Mặc định - Sáng tác văn phong Việt tự nhiên)"},
-	{code: "zh", label: "Tiếng Trung (Nguyên bản - Sáng tác bằng Tiếng Trung)"},
+	{code: "vi", label: "Tiếng Việt (mặc định, sáng tác văn phong Việt tự nhiên)"}, // case:ok (proper noun)
+	{code: "zh", label: "Tiếng Trung (nguyên bản, sáng tác bằng tiếng Trung)"},     // case:ok (proper noun)
 }
 
 // RunSetup chạy trình hướng dẫn thiết lập lần đầu và trả về cấu hình tạo được.
 func RunSetup() (Config, error) {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99")).
-		Render("Chưa tìm thấy tệp cấu hình, bắt đầu khởi tạo thiết lập..."))
+		Render("Chưa có tệp cấu hình, bắt đầu thiết lập lần đầu..."))
 	fmt.Fprintf(os.Stderr, "  Đường dẫn tệp cấu hình: %s\n", lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(DefaultConfigPath()))
-	fmt.Fprintf(os.Stderr, "  Sau khi hoàn tất, bạn có thể chỉnh sửa tệp này để tùy biến nâng cao.\n")
+	fmt.Fprintf(os.Stderr, "  Sau khi xong, bạn có thể sửa tệp này để tùy chỉnh nâng cao.\n")
 	fmt.Fprintln(os.Stderr)
 
 	// Step 1: Chọn Ngôn ngữ Sáng tác Truyện
@@ -108,11 +108,11 @@ func RunSetup() (Config, error) {
 
 	providerName := sp.name
 	var pc ProviderConfig
-	printStepDone("Nhà cung cấp AI", sp.label)
+	printStepDone("Provider AI", sp.label)
 
 	// Tùy biến proxy: hỏi thêm tên và giao thức API
 	if sp.needType {
-		providerName, err = runTextInput("Tên Provider", "my-proxy")
+		providerName, err = runTextInput("Tên provider", "my-proxy")
 		if err != nil {
 			return Config{}, err
 		}
@@ -126,18 +126,18 @@ func RunSetup() (Config, error) {
 	// Step 3: Nhập API Key
 	var apiKey string
 	if sp.apiKeyOptional {
-		apiKey, err = runOptionalTextInput("[3/5] API Key (Nhấn Enter để bỏ qua nếu dùng Ollama/Local)", "Để trống nếu không cần API Key")
+		apiKey, err = runOptionalTextInput("[3/5] API key (Nhấn Enter để bỏ qua nếu dùng Ollama/Local)", "Để trống nếu không cần API key")
 	} else {
-		apiKey, err = runTextInput("[3/5] API Key", "sk-xxx...")
+		apiKey, err = runTextInput("[3/5] API key", "sk-xxx...")
 	}
 	if err != nil {
 		return Config{}, err
 	}
 	pc.APIKey = apiKey
 	if apiKey == "" {
-		printStepDone("API Key", "Không sử dụng (Mặc định cho Ollama/Local)")
+		printStepDone("API key", "Không dùng (mặc định cho Ollama/Local)")
 	} else {
-		printStepDone("API Key", maskKey(apiKey))
+		printStepDone("API key", maskKey(apiKey))
 	}
 
 	// Step 4: Base URL (Nhấn Enter để dùng mặc định)
@@ -162,7 +162,7 @@ func RunSetup() (Config, error) {
 	if providerName == "ollama" {
 		modelPlaceholder = "Ví dụ: qwen2.5:14b / ainovel-qwen / qwen3:14b"
 	}
-	modelName, err := runTextInput("[5/5] Tên Model chính", modelPlaceholder)
+	modelName, err := runTextInput("[5/5] Tên model chính", modelPlaceholder)
 	if err != nil {
 		return Config{}, err
 	}
@@ -181,7 +181,7 @@ func RunSetup() (Config, error) {
 	// Lưu cấu hình
 	path := DefaultConfigPath()
 	if err := SaveConfig(path, cfg); err != nil {
-		return cfg, fmt.Errorf("lỗi lưu cấu hình: %w", err)
+		return cfg, fmt.Errorf("không lưu được cấu hình: %w", err)
 	}
 
 	// Tạo file ví dụ mẫu
@@ -190,7 +190,7 @@ func RunSetup() (Config, error) {
 	rulesDir := rules.DefaultHomeRulesDir()
 
 	fmt.Fprintln(os.Stderr)
-	fmt.Fprintf(os.Stderr, "%s Cấu hình đã được lưu tại: %s\n",
+	fmt.Fprintf(os.Stderr, "%s Đã lưu cấu hình tại: %s\n",
 		lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Render("✓"), path)
 	fmt.Fprintf(os.Stderr, "  Ngôn ngữ truyện: %s\n", selectedLang.label)
 	fmt.Fprintf(os.Stderr, "  Provider mặc định: %s\n", providerName)
@@ -235,7 +235,7 @@ func runLanguageSelect() (setupLanguageOption, error) {
 		items[i] = setupProvider{name: opt.code, label: opt.label}
 	}
 	m := setupSelectModel{
-		title: "[1/5] Chọn Ngôn Ngữ Sáng Tác Nội Dung Truyện (Giao diện luôn là Tiếng Việt)",
+		title: "[1/5] Chọn ngôn ngữ sáng tác nội dung truyện (giao diện luôn là tiếng Việt)",
 		items: items,
 	}
 	p := tea.NewProgram(m, tea.WithOutput(os.Stderr))
@@ -252,7 +252,7 @@ func runLanguageSelect() (setupLanguageOption, error) {
 
 func runProviderSelect() (setupProvider, error) {
 	m := setupSelectModel{
-		title: "[2/5] Chọn Nhà Cung Cấp AI (Provider)",
+		title: "[2/5] Chọn provider AI",
 		items: setupProviders,
 	}
 	p := tea.NewProgram(m, tea.WithOutput(os.Stderr))
@@ -268,14 +268,14 @@ func runProviderSelect() (setupProvider, error) {
 }
 
 var apiTypeOptions = []setupProvider{
-	{name: "openai", label: "Chuẩn OpenAI (Tương thích phần lớn các bên)"},
-	{name: "anthropic", label: "Chuẩn Anthropic"},
-	{name: "gemini", label: "Chuẩn Google Gemini"},
+	{name: "openai", label: "Chuẩn OpenAI (tương thích hầu hết các bên)"}, // case:ok (product name)
+	{name: "anthropic", label: "Chuẩn Anthropic"},                         // case:ok (product name)
+	{name: "gemini", label: "Chuẩn Google Gemini"},                        // case:ok (product name)
 }
 
 func runTypeSelect() (string, error) {
 	m := setupSelectModel{
-		title: "Loại giao thức API (API Protocol Type)",
+		title: "Loại giao thức API",
 		items: apiTypeOptions,
 	}
 	p := tea.NewProgram(m, tea.WithOutput(os.Stderr))

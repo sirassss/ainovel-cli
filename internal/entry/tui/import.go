@@ -156,21 +156,21 @@ func (s *importState) refresh(contentW int) {
 	b.WriteString("\n\n")
 	switch {
 	case s.err != nil:
-		b.WriteString(errStyle.Render("Nhập truyện thất bại"))
+		b.WriteString(errStyle.Render("Không nhập được truyện"))
 		b.WriteString("\n")
 		b.WriteString(dimStyle.Render("Esc Đóng bảng"))
 	case s.paused && s.stage == imp.StageAwaitingConfirmation:
-		b.WriteString(okStyle.Render("Đã phân tách chương xong, chờ bạn kiểm tra"))
+		b.WriteString(okStyle.Render("Đã tách chương xong, chờ bạn kiểm tra"))
 		b.WriteString("\n")
-		b.WriteString(dimStyle.Render("Nhấn 'y' để xác nhận tiếp tục; nếu cần chỉnh phân tách hãy Esc rồi chạy /import --guide=<hướng dẫn>; Esc Đóng bảng"))
+		b.WriteString(dimStyle.Render("Nhấn 'y' để xác nhận tiếp tục; nếu cần chỉnh cách tách chương, hãy nhấn Esc rồi chạy /import --guide=<hướng dẫn>; Esc Đóng bảng"))
 	case s.paused:
 		b.WriteString(okStyle.Render("Đã tạm dừng nhập truyện, chờ thao tác của bạn"))
 		b.WriteString("\n")
 		b.WriteString(dimStyle.Render("Làm theo hướng dẫn phía trên (ví dụ /import --story=open|closed); Esc Đóng bảng"))
 	case s.done:
-		b.WriteString(okStyle.Render("Nhập truyện hoàn tất, Thiết lập nền tảng và các chương đã sẵn sàng"))
+		b.WriteString(okStyle.Render("Nhập truyện xong, thiết lập nền tảng và các chương đã sẵn sàng"))
 		b.WriteString("\n")
-		b.WriteString(dimStyle.Render("Esc Đóng bảng và chuyển sang trạng thái viết tiếp (dừng ở ranh giới chờ bạn duyệt)"))
+		b.WriteString(dimStyle.Render("Esc Đóng bảng và chuyển sang trạng thái viết tiếp (dừng lại chờ bạn duyệt)"))
 	default:
 		b.WriteString(dimStyle.Render("Esc Hủy nhập truyện"))
 	}
@@ -283,7 +283,7 @@ func renderImportModal(width, height int, s *importState, frame int) string {
 	hint := "  ↑↓ Cuộn · Esc Hủy/Đóng"
 	switch {
 	case s.paused && s.stage == imp.StageAwaitingConfirmation:
-		hint = "  ↑↓ Cuộn · 'y' Xác nhận phân tách · Esc Đóng"
+		hint = "  ↑↓ Cuộn · 'y' Xác nhận tách chương · Esc Đóng"
 	case running:
 		hint = "  ↑↓ Cuộn · Esc Hủy"
 	}
@@ -293,10 +293,10 @@ func renderImportModal(width, height int, s *importState, frame int) string {
 		star := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).
 			Render(streamCursorFrames[frame%len(streamCursorFrames)])
 		status := lipgloss.NewStyle().Foreground(colorMuted).
-			Render(fmt.Sprintf(" Đang thực hiện · Thời gian: %s", formatElapsed(time.Since(s.startedAt))))
+			Render(fmt.Sprintf(" Đang chạy · Thời gian: %s", formatElapsed(time.Since(s.startedAt))))
 		body = append([]string{star + status, ""}, body...)
 	}
-	modal := renderPaddedModalFrame(boxW, boxH, "Nhập Tiểu Thuyết", hint, body)
+	modal := renderPaddedModalFrame(boxW, boxH, "Nhập tiểu thuyết", hint, body)
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, modal)
 }
 
@@ -350,7 +350,7 @@ func (m Model) confirmImportSegmentation() (tea.Model, tea.Cmd) {
 	state, listenCmd, err := startImportRun(m.runtime, m.importSeq, imp.Options{AcceptSegmentation: true}, m.width, m.height)
 	if err != nil {
 		m.applyEvent(host.Event{
-			Time: time.Now(), Category: "ERROR", Summary: "Xác nhận phân tách thất bại: " + err.Error(), Level: "error",
+			Time: time.Now(), Category: "ERROR", Summary: "Không xác nhận được việc tách chương: " + err.Error(), Level: "error",
 		})
 		return m, nil
 	}

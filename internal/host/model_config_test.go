@@ -234,7 +234,7 @@ func TestConfigureModelsRejectsMissingRequiredAPIKeyForUnusedProvider(t *testing
 		Models:       []bootstrap.ModelConfig{{Name: "claude-test"}},
 		APIKeyAction: APIKeyKeep,
 	})
-	if err == nil || !strings.Contains(err.Error(), "bắt buộc phải cấu hình API Key") {
+	if err == nil || !strings.Contains(err.Error(), "bắt buộc phải cấu hình API key") {
 		t.Fatalf("未使用但要求凭证的 Provider 也应拒绝空 Key，得到 %v", err)
 	}
 	if _, exists := h.cfg.Providers["anthropic"]; exists {

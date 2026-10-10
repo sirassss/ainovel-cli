@@ -77,7 +77,7 @@ func LoadConfig() (Config, error) {
 		global, found, err := loadOptionalJSON(p)
 		switch {
 		case err != nil:
-			slog.Warn("Phân tích cấu hình toàn cục thất bại, đã bỏ qua (có thể bị cấu hình cấp dự án ghi đè)", "module", "config", "path", p, "err", err)
+			slog.Warn("parsing global config failed, skipped (may be overridden by project config)", "module", "config", "path", p, "err", err)
 		case found:
 			cfg = global
 		}
@@ -87,7 +87,7 @@ func LoadConfig() (Config, error) {
 	//    "配了不生效"无从排查（issue #37）。
 	project, found, err := loadOptionalJSON(projectConfigPath())
 	if err != nil {
-		return cfg, fmt.Errorf("Phân tích cấu hình cấp dự án ./.ainovel/config.json thất bại (hãy kiểm tra cú pháp JSON): %w", err)
+		return cfg, fmt.Errorf("Không phân tích được cấu hình cấp dự án ./.ainovel/config.json (hãy kiểm tra cú pháp JSON): %w", err)
 	}
 	if found {
 		cfg = mergeConfig(cfg, project)

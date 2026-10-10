@@ -358,7 +358,7 @@ func Segment(ctx context.Context, m callModel, systemPrompt string, normalized [
 			if errors.As(err, &tr) && owned[1]-owned[0] > 1 {
 				mid := (owned[0] + owned[1]) / 2
 				prof.step(0, 0, "Đầu ra ranh giới của khối %s..%s bị cắt (chương quá dày), chia đôi khối rồi thử lại", lo.ID, hi.ID)
-				prof.logger().Warn("imp đầu ra chia tách bị cắt, chia đôi khối", "chunk", lo.ID+".."+hi.ID)
+				prof.logger().Warn("imp segment output truncated, halving block", "chunk", lo.ID+".."+hi.ID)
 				left, lerr := chunk([2]int{owned[0], mid}, cur, total)
 				if lerr != nil {
 					return nil, lerr
@@ -408,14 +408,14 @@ func Segment(ctx context.Context, m callModel, systemPrompt string, normalized [
 		// 确定性复现同一失败。清缓存换取下次重新切分的模型机会；决策快照经 errSemantic
 		// 统一落 failures/ 供事后排查。清除失败必须如实报告——谎称已清除会让用户重跑
 		// 时再次复读坏缓存（Debug-First）。
-		hint := "Đã xóa bộ nhớ đệm khối, chạy lại sẽ chia lại"
+		hint := "Đã xóa cache khối, chạy lại sẽ chia lại"
 		if w != nil {
 			if cerr := w.clearDir(dirSegmentChunks); cerr != nil {
-				hint = fmt.Sprintf("Xóa bộ nhớ đệm khối thất bại: %v, trước khi chạy lại hãy xóa thủ công meta/import/segment-chunks/", cerr)
+				hint = fmt.Sprintf("Không xóa được cache khối: %v; trước khi chạy lại hãy xóa thủ công meta/import/segment-chunks/", cerr)
 			}
 		}
 		raw, _ := json.MarshalIndent(decisions, "", "  ")
-		return nil, &errSemantic{Raw: string(raw), Err: fmt.Errorf("Tích hợp chia tách toàn sách thất bại (%s): %w", hint, err)}
+		return nil, &errSemantic{Raw: string(raw), Err: fmt.Errorf("Không tích hợp được kết quả chia tách toàn sách (%s): %w", hint, err)}
 	}
 	return seg, nil
 }

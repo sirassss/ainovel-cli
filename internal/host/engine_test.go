@@ -777,7 +777,7 @@ func TestEngine_PlanStartRetryFailurePauses(t *testing.T) {
 	}
 	var paused bool
 	for _, ev := range *events {
-		if strings.Contains(ev.Summary, "Phân xử khởi động thất bại") {
+		if strings.Contains(ev.Summary, "Không phân xử khởi động được") {
 			paused = true
 		}
 	}

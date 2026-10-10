@@ -197,7 +197,7 @@ func (t *UsageTracker) noteCacheBreak(role, task string, u agentcore.Usage) {
 	} else if gap > 5*time.Minute {
 		hint = "nghi TTL 5m đã hết hạn"
 	}
-	slog.Warn("Chuỗi cache bị đứt: tiền tố không ngắn đi nhưng lượng cache hit sụt mạnh",
+	slog.Warn("cache chain broken: prefix did not shrink but cache hits dropped sharply",
 		"module", "usage", "role", role,
 		"cache_read", fmt.Sprintf("%d→%d", prevRead, u.CacheRead),
 		"prefix", fmt.Sprintf("%d→%d", prevPrefix, prefix),
@@ -221,7 +221,7 @@ func (t *UsageTracker) flagMissingUsage(agentName string) {
 	t.loggedMissingUsage = true
 	t.mu.Unlock()
 	if shouldLog {
-		slog.Warn("Phản hồi LLM không kèm dữ liệu usage, bảng điều khiển cache/chi phí sẽ không có số cộng dồn — thường do upstream streaming không gửi final usage chunk theo giao thức include_usage của OpenAI",
+		slog.Warn("LLM response carried no usage data, so the cache/cost panel will have no running totals; usually the streaming upstream does not send the final usage chunk per OpenAI's include_usage protocol",
 			"module", "usage", "agent", agentName)
 		if t.onMissingUsage != nil {
 			t.onMissingUsage()
@@ -529,7 +529,7 @@ func (t *UsageTracker) autoSaveLoop(ctx context.Context) {
 	var pending bool
 	flush := func() {
 		if err := t.SaveNow(); err != nil {
-			slog.Warn("Lưu usage thất bại", "module", "usage", "err", err)
+			slog.Warn("saving usage failed", "module", "usage", "err", err)
 		}
 		pending = false
 	}

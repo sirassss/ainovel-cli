@@ -278,7 +278,7 @@ func renderEventFlowViewport(vp viewport.Model, width, height int, focused bool)
 	if focused {
 		titleColor = colorAccent
 	}
-	title := lipgloss.NewStyle().Foreground(titleColor).Render(":: Nhật Ký Tiến Độ (Activity Stream)")
+	title := lipgloss.NewStyle().Foreground(titleColor).Render(":: Activity stream")
 	lineW := width - lipgloss.Width(title) - 4
 	if lineW < 0 {
 		lineW = 0
@@ -301,7 +301,7 @@ func renderEventFlowViewport(vp viewport.Model, width, height int, focused bool)
 // renderStreamPanel 渲染流式输出面板（中间列下半部分）。
 func renderStreamPanel(vp viewport.Model, width, height int, focused, running bool, frame int) string {
 	titleStyle := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Underline(focused)
-	title := titleStyle.Render("▍Luồng Viết Trực Tiếp (Live Stream)")
+	title := titleStyle.Render("▍Live stream")
 	if running {
 		status := renderStreamActivity(frame)
 		title += " " + status

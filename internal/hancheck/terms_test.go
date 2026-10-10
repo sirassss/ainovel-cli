@@ -17,7 +17,7 @@ import (
 // Flip to false once the matching cleanup task has landed, so the gate is enforced.
 var (
 	termsPending     = false
-	titleCasePending = true
+	titleCasePending = false
 )
 
 // legacyTerms are the old Vietnamese terms replaced by the approved glossary (lowercase,
@@ -41,7 +41,7 @@ const (
 )
 
 // keyNames are keyboard key names that stay capitalized in TUI hints.
-var keyNames = map[string]bool{"Enter": true, "Esc": true, "Tab": true, "Ctrl": true, "Shift": true, "PgUp": true, "PgDn": true}
+var keyNames = map[string]bool{"Enter": true, "End": true, "Home": true, "Delete": true, "Backspace": true, "Esc": true, "Tab": true, "Ctrl": true, "Shift": true, "PgUp": true, "PgDn": true}
 
 // titleCaseViolation reports whether a Vietnamese string has 2+ consecutive
 // capitalized words (key names excepted).

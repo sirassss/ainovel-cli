@@ -70,7 +70,7 @@ func commandRegistryInstance() commandRegistry {
 			Name:        "model",
 			Group:       "system",
 			Usage:       "/model [vai-trò]",
-			Description: "Chuyển đổi Model và mức độ suy luận cho từng vai trò",
+			Description: "Đổi model và mức suy luận cho từng vai trò",
 			AutoExecute: true,
 			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
 				roleHint := ""
@@ -93,7 +93,7 @@ func commandRegistryInstance() commandRegistry {
 			Name:        "config",
 			Group:       "system",
 			Usage:       "/config",
-			Description: "Thêm hoặc chỉnh sửa Provider, Model và Cửa sổ ngữ cảnh",
+			Description: "Thêm hoặc sửa provider, model và context window",
 			AutoExecute: true,
 			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
 				if len(args) != 0 {
@@ -135,7 +135,7 @@ func commandRegistryInstance() commandRegistry {
 					mode = domain.ChapterAdvanceAuto
 				}
 				if err := m.runtime.SetAdvanceMode(mode); err != nil {
-					m.applyEvent(host.Event{Time: time.Now(), Category: "ERROR", Summary: "Chuyển chế độ tiến độ thất bại: " + err.Error(), Level: "error"})
+					m.applyEvent(host.Event{Time: time.Now(), Category: "ERROR", Summary: "Không chuyển được chế độ duyệt từng chương: " + err.Error(), Level: "error"})
 					m.refreshEventViewport()
 					return m, nil
 				}
@@ -156,7 +156,7 @@ func commandRegistryInstance() commandRegistry {
 					return m, nil
 				}
 				if err := m.runtime.AdvanceOneChapter(); err != nil {
-					m.applyEvent(host.Event{Time: time.Now(), Category: "ERROR", Summary: "Cho phép viết chương tiếp theo thất bại: " + err.Error(), Level: "error"})
+					m.applyEvent(host.Event{Time: time.Now(), Category: "ERROR", Summary: "Không duyệt tiếp được chương: " + err.Error(), Level: "error"})
 					m.refreshEventViewport()
 					return m, nil
 				}
@@ -189,14 +189,14 @@ func commandRegistryInstance() commandRegistry {
 			Name:        "import",
 			Group:       "writing",
 			Usage:       "/import <đường-dẫn> [--yes] [--story=open|closed] [--continue] [--guide=<hướng-dẫn>]",
-			Description: "Nhập tiểu thuyết từ bên ngoài theo ngữ nghĩa (không tham số để tiếp tục)",
+			Description: "Nhập tiểu thuyết từ tệp ngoài, tách chương theo ngữ nghĩa (không tham số để tiếp tục)",
 			NeedsIdle:   true,
 			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
 				m.importSeq++
 				state, listenCmd, err := startImport(m.runtime, m.importSeq, args, m.width, m.height)
 				if err != nil {
 					m.applyEvent(host.Event{
-						Time: time.Now(), Category: "ERROR", Summary: "Khởi động nhập truyện thất bại: " + err.Error(), Level: "error",
+						Time: time.Now(), Category: "ERROR", Summary: "Không nhập được truyện: " + err.Error(), Level: "error",
 					})
 					m.refreshEventViewport()
 					return m, nil
@@ -216,7 +216,7 @@ func commandRegistryInstance() commandRegistry {
 			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
 				if err := m.runtime.Reopen(strings.Join(args, " ")); err != nil {
 					m.applyEvent(host.Event{
-						Time: time.Now(), Category: "ERROR", Summary: "Mở lại truyện thất bại: " + err.Error(), Level: "error",
+						Time: time.Now(), Category: "ERROR", Summary: "Không mở lại được truyện: " + err.Error(), Level: "error",
 					})
 					m.refreshEventViewport()
 					return m, nil
@@ -256,14 +256,14 @@ func commandRegistryInstance() commandRegistry {
 			Name:        "simulate",
 			Group:       "writing",
 			Usage:       "/simulate",
-			Description: "Đọc thư mục ./simulate để tạo hoặc cập nhật hồ sơ mô phỏng văn phong",
+			Description: "Đọc thư mục ./simulate để tạo hoặc cập nhật style profile văn phong",
 			NeedsIdle:   true,
 			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
 				m.simSeq++
 				state, listenCmd, err := startSimulate(m.runtime, m.simSeq, args, m.width, m.height)
 				if err != nil {
 					m.applyEvent(host.Event{
-						Time: time.Now(), Category: "ERROR", Summary: "Khởi động mô phỏng văn phong thất bại: " + err.Error(), Level: "error",
+						Time: time.Now(), Category: "ERROR", Summary: "Không chạy được mô phỏng văn phong: " + err.Error(), Level: "error",
 					})
 					m.refreshEventViewport()
 					return m, nil
@@ -277,14 +277,14 @@ func commandRegistryInstance() commandRegistry {
 			Name:        "importsim",
 			Group:       "writing",
 			Usage:       "/importsim <tệp-profile.json>",
-			Description: "Nhập hồ sơ mô phỏng văn phong có sẵn và gộp theo vân tay ngữ liệu",
+			Description: "Nhập style profile văn phong có sẵn và gộp theo vân tay ngữ liệu",
 			NeedsIdle:   true,
 			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
 				m.simSeq++
 				state, listenCmd, err := startImportSimulation(m.runtime, m.simSeq, args, m.width, m.height)
 				if err != nil {
 					m.applyEvent(host.Event{
-						Time: time.Now(), Category: "ERROR", Summary: "Nhập hồ sơ mô phỏng thất bại: " + err.Error(), Level: "error",
+						Time: time.Now(), Category: "ERROR", Summary: "Không nhập được style profile: " + err.Error(), Level: "error",
 					})
 					m.refreshEventViewport()
 					return m, nil
@@ -304,11 +304,11 @@ func commandRegistryInstance() commandRegistry {
 			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
 				cmd, checkOnly, err := startRevisionSync(m.runtime, args)
 				if err != nil {
-					m.applyEvent(host.Event{Time: time.Now(), Category: "ERROR", Summary: "Khởi động đồng bộ chương thất bại: " + err.Error(), Level: "error"})
+					m.applyEvent(host.Event{Time: time.Now(), Category: "ERROR", Summary: "Không đồng bộ được chương: " + err.Error(), Level: "error"})
 					m.refreshEventViewport()
 					return m, nil
 				}
-				summary := "Đang phân tích và tiếp nhận các chương tu chỉnh..."
+				summary := "Đang phân tích và tiếp nhận các chương đã sửa..."
 				if checkOnly {
 					summary = "Đang kiểm tra các chương có chỉnh sửa từ bên ngoài..."
 				}
@@ -327,13 +327,13 @@ func commandRegistryInstance() commandRegistry {
 				cmd, err := startExport(m.runtime, args)
 				if err != nil {
 					m.applyEvent(host.Event{
-						Time: time.Now(), Category: "ERROR", Summary: "Khởi động xuất bản thất bại: " + err.Error(), Level: "error",
+						Time: time.Now(), Category: "ERROR", Summary: "Không xuất được: " + err.Error(), Level: "error",
 					})
 					m.refreshEventViewport()
 					return m, nil
 				}
 				m.applyEvent(host.Event{
-					Time: time.Now(), Category: "SYSTEM", Summary: "Đang tiến hành xuất bản...", Level: "info",
+					Time: time.Now(), Category: "SYSTEM", Summary: "Đang xuất...", Level: "info",
 				})
 				m.refreshEventViewport()
 				return m, cmd
@@ -373,7 +373,7 @@ func (m Model) handleSlashCommand(cmd slashCommand) (tea.Model, tea.Cmd) {
 	}
 	if spec.NeedsIdle && m.snapshot.IsRunning {
 		m.applyEvent(host.Event{
-			Time: time.Now(), Category: "ERROR", Summary: "Lệnh chỉ có thể thực hiện khi hệ thống đang rảnh: /" + spec.Name, Level: "error",
+			Time: time.Now(), Category: "ERROR", Summary: "Chỉ chạy được khi hệ thống đang rảnh: /" + spec.Name, Level: "error",
 		})
 		m.refreshEventViewport()
 		return m, nil

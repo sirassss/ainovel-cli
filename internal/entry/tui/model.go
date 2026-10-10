@@ -455,9 +455,9 @@ func (m *Model) inputHints() string {
 			Render("✂ Chế độ bôi đen copy: Kéo chuột chọn văn bản để sao chép · Ctrl+R Quay lại")
 	}
 	if m.cocreate != nil {
-		scrollHint := " · Tab Cuộn: Hội thoại"
+		scrollHint := " · Tab Cuộn hội thoại"
 		if m.cocreate.focusPrompt {
-			scrollHint = " · Tab Cuộn: Chỉ thị"
+			scrollHint = " · Tab Cuộn chỉ thị"
 		}
 		switch {
 		case m.cocreate.awaiting:
@@ -465,7 +465,7 @@ func (m *Model) inputHints() string {
 		case m.cocreate.canStart():
 			startLabel := "Ctrl+S Bắt đầu sáng tác"
 			if m.cocreate.stage {
-				startLabel = "Ctrl+S Áp dụng & Tiếp tục"
+				startLabel = "Ctrl+S Áp dụng & tiếp tục"
 			}
 			return dimStyle.Render("Enter Gửi · " + startLabel + " · Esc Thoát" + scrollHint + suffix)
 		default:
@@ -484,7 +484,7 @@ func (m *Model) inputHints() string {
 	case "paused":
 		return dimStyle.Render("Gõ / để xem lệnh · Enter Tiếp tục sáng tác · Esc Xóa" + suffix)
 	}
-	return dimStyle.Render("Gõ / để xem lệnh · Click/Tab Đổi panel · ↑↓ Cuộn · End Về cuối · Ctrl+L Xóa màn hình · Esc Tạm dừng · Enter Gửi" + suffix)
+	return dimStyle.Render("Gõ / để xem lệnh · Tab/click đổi panel · ↑↓ Cuộn · End Về cuối · Ctrl+L Xóa màn hình · Esc Tạm dừng · Enter Gửi" + suffix)
 }
 
 func (m *Model) inputLimitHint() string {
@@ -560,14 +560,14 @@ func (m *Model) syncRuntimePlaceholder() {
 		m.textarea.Placeholder = "Đang tạm dừng sáng tác..."
 	case "paused":
 		if m.snapshot.AdvanceMode == "review" && m.snapshot.Phase == "writing" {
-			m.textarea.Placeholder = "Chờ duyệt: Nhập ý kiến chỉnh sửa, hoặc /next để duyệt chương tiếp"
+			m.textarea.Placeholder = "Chờ duyệt: nhập ý kiến chỉnh sửa, hoặc /next để duyệt chương tiếp"
 		} else {
 			m.textarea.Placeholder = "Sáng tác đã tạm dừng, nhập nội dung bất kỳ để tiếp tục"
 		}
 	default:
 		if !m.snapshot.IsRunning {
 			if m.snapshot.AdvanceMode == "review" && m.snapshot.Phase == "writing" {
-				m.textarea.Placeholder = "Chờ duyệt: Nhập ý kiến chỉnh sửa, hoặc /next để duyệt chương tiếp"
+				m.textarea.Placeholder = "Chờ duyệt: nhập ý kiến chỉnh sửa, hoặc /next để duyệt chương tiếp"
 			} else {
 				m.textarea.Placeholder = "Sáng tác bị gián đoạn, nhập nội dung bất kỳ để tiếp tục"
 			}

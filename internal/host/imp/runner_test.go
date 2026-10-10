@@ -181,7 +181,7 @@ func TestConfirmNotesGate(t *testing.T) {
 	if r.confirm() {
 		t.Fatal("--yes 不应放行带容错说明的切分")
 	}
-	if ev := <-r.events; !strings.Contains(ev.Message, "không tự động thông qua") {
+	if ev := <-r.events; !strings.Contains(ev.Message, "không tự động chấp nhận") {
 		t.Fatalf("预览应说明未放行原因：%q", ev.Message)
 	}
 	if !newRunner(Options{AutoConfirm: true}, nil).confirm() {

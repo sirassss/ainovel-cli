@@ -84,12 +84,12 @@ func renderReportText(report diag.Report, width int, exportPath string, exportEr
 
 	if exportPath != "" {
 		exportStyle := lipgloss.NewStyle().Foreground(colorAccent2)
-		b.WriteString(exportStyle.Render("Đã xuất file chẩn đoán ẩn danh (có thể đính kèm khi báo lỗi issue):"))
+		b.WriteString(exportStyle.Render("Đã xuất tệp chẩn đoán ẩn danh (có thể đính kèm khi báo lỗi):"))
 		b.WriteString("\n")
 		b.WriteString(dimStyle.Render(wrapText(exportPath, width)))
 		b.WriteString("\n\n")
 	} else if exportErr != nil {
-		b.WriteString(lipgloss.NewStyle().Foreground(colorError).Render("Xuất chẩn đoán ẩn danh thất bại: " + exportErr.Error()))
+		b.WriteString(lipgloss.NewStyle().Foreground(colorError).Render("Không xuất được chẩn đoán ẩn danh: " + exportErr.Error()))
 		b.WriteString("\n\n")
 	}
 
@@ -147,7 +147,7 @@ func renderReportText(report diag.Report, width int, exportPath string, exportEr
 	b.WriteString("\n")
 	findings := report.Findings
 	if len(findings) == 0 {
-		b.WriteString(lipgloss.NewStyle().Foreground(colorSuccess).Render("Không phát hiện vấn đề nào (Tốt)"))
+		b.WriteString(lipgloss.NewStyle().Foreground(colorSuccess).Render("Không phát hiện vấn đề nào (tốt)"))
 		b.WriteString("\n")
 		return b.String()
 	}
@@ -197,7 +197,7 @@ func renderReportLoadingText(width int, startedAt time.Time) string {
 	b.WriteString("\n\n")
 	b.WriteString(hintStyle.Render("Thời gian bắt đầu: " + formatReportTime(startedAt)))
 	b.WriteString("\n\n")
-	b.WriteString(bodyStyle.Render(wrapText("Đang đọc các sản phẩm trong thư mục output và phân tích quy trình, chất lượng, dàn ý và ngữ cảnh...", width)))
+	b.WriteString(bodyStyle.Render(wrapText("Đang đọc các tệp trong thư mục output và phân tích quy trình, chất lượng, dàn ý và ngữ cảnh...", width)))
 	b.WriteString("\n\n")
 	b.WriteString(hintStyle.Render("Có thể nhấn Esc để đóng bảng, phân tích vẫn tiếp tục chạy ngầm."))
 	return b.String()
@@ -339,7 +339,7 @@ func renderReportModal(width, height int, state *reportState) string {
 	modal := renderPaddedModalFrame(
 		boxW,
 		boxH,
-		"Báo Cáo Chẩn Đoán",
+		"Báo cáo chẩn đoán",
 		"  ↑↓ Cuộn · Esc Đóng",
 		strings.Split(state.viewport.View(), "\n"),
 	)

@@ -58,7 +58,7 @@ func renderStateContent(snap host.UISnapshot, contentW int) string {
 		}
 		overview.WriteString(renderHighlightField(label, truncate(headline, contentW-10)))
 	}
-	sections = append(sections, renderSidebarSection("Tổng Quan", overview.String(), contentW))
+	sections = append(sections, renderSidebarSection("Tổng quan", overview.String(), contentW))
 
 	if len(agents) > 0 {
 		var agentBody strings.Builder
@@ -70,7 +70,7 @@ func renderStateContent(snap host.UISnapshot, contentW int) string {
 			agentBody.WriteString(lipgloss.NewStyle().Foreground(colorDim).Render("Chờ lệnh: " + truncate(strings.Join(idleAgents, " · "), max(8, contentW-2))))
 			agentBody.WriteString("\n")
 		}
-		sections = append(sections, renderSidebarSection("Agent Hoạt Động", agentBody.String(), contentW))
+		sections = append(sections, renderSidebarSection("Agent hoạt động", agentBody.String(), contentW))
 	}
 
 	if len(snap.PendingRewrites) > 0 {
@@ -79,11 +79,11 @@ func renderStateContent(snap host.UISnapshot, contentW int) string {
 		if snap.RewriteReason != "" {
 			rewrite.WriteString(renderField("Lý do", truncate(snap.RewriteReason, contentW-10)))
 		}
-		sections = append(sections, renderSidebarSection("Viết Lại / Sửa Đổi", rewrite.String(), contentW))
+		sections = append(sections, renderSidebarSection("Viết lại / sửa đổi", rewrite.String(), contentW))
 	}
 
 	if snap.PendingSteer != "" {
-		sections = append(sections, renderSidebarSection("Can Thiệp",
+		sections = append(sections, renderSidebarSection("Can thiệp",
 			renderHighlightField("Chờ xử lý", truncate(snap.PendingSteer, contentW-10)), contentW))
 	}
 	if snap.HasAdvanceHold {
@@ -92,11 +92,11 @@ func renderStateContent(snap host.UISnapshot, contentW int) string {
 	}
 
 	if body := renderUsageSidebar(snap, contentW); body != "" {
-		sections = append(sections, renderSidebarSection("Tài Nguyên Đã Dùng", body, contentW))
+		sections = append(sections, renderSidebarSection("Tài nguyên đã dùng", body, contentW))
 	}
 
 	if body := renderCacheSidebar(snap, contentW); body != "" {
-		sections = append(sections, renderSidebarSection("Bộ Nhớ Đệm (Cache)", body, contentW))
+		sections = append(sections, renderSidebarSection("Cache", body, contentW))
 	}
 
 	return strings.Join(sections, "\n\n")
@@ -215,18 +215,18 @@ func inProgressDisplay(snap host.UISnapshot) (label string, chapter int) {
 func snapshotHeadline(snap host.UISnapshot) string {
 	if snap.PendingSteer != "" {
 		if !snap.IsRunning {
-			return "Chờ tiếp tục: Xử lý can thiệp người dùng"
+			return "Chờ tiếp tục để xử lý can thiệp"
 		}
-		return "Đang xử lý can thiệp người dùng"
+		return "Đang xử lý can thiệp"
 	}
 	if len(snap.PendingRewrites) > 0 {
 		if !snap.IsRunning {
-			return "Chờ tiếp tục: Xử lý viết lại/sửa đổi"
+			return "Chờ tiếp tục để viết lại/sửa đổi"
 		}
-		return "Đang chờ xử lý viết lại/sửa đổi"
+		return "Đang chờ viết lại/sửa đổi"
 	}
 	if snap.AdvanceMode == "review" && !snap.IsRunning && snap.Phase == "writing" {
-		return "Duyệt từng chương: Chờ duyệt chương tiếp theo"
+		return "Duyệt từng chương: chờ duyệt chương tiếp theo"
 	}
 	return ""
 }
@@ -414,7 +414,7 @@ func renderCacheSidebar(snap host.UISnapshot, width int) string {
 
 	if snap.TotalCacheBreaks > 0 {
 		v := lipgloss.NewStyle().Foreground(colorReview).Render(fmt.Sprintf("%d lần", snap.TotalCacheBreaks))
-		b.WriteString(renderField("Đứt gãy cache", v))
+		b.WriteString(renderField("Cache break", v))
 	}
 
 	var roles []host.AgentCacheStat

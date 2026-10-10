@@ -32,7 +32,7 @@ func (g *ChapterAdvanceGate) HandleBoundary() bool {
 	}
 	meta, err := g.store.RunMeta.Load()
 	if err != nil {
-		return g.fail(fmt.Errorf("Đọc RunMeta: %w", err))
+		return g.fail(fmt.Errorf("Không đọc được RunMeta: %w", err))
 	}
 	if meta == nil {
 		return g.fail(fmt.Errorf("RunMeta chưa được khởi tạo"))
@@ -59,7 +59,7 @@ func (g *ChapterAdvanceGate) HandleBoundary() bool {
 func (g *ChapterAdvanceGate) handleHold(hold domain.AdvanceHold) bool {
 	progress, err := g.store.Progress.Load()
 	if err != nil {
-		return g.fail(fmt.Errorf("Đọc Progress để phân tích tạm dừng một lần: %w", err))
+		return g.fail(fmt.Errorf("Không đọc được Progress để phân tích tạm dừng một lần: %w", err))
 	}
 	resolution, err := flow.ResolveAdvanceHold(&hold, progress)
 	if err != nil {
@@ -104,7 +104,7 @@ func (g *ChapterAdvanceGate) handleHold(hold domain.AdvanceHold) bool {
 func (g *ChapterAdvanceGate) targetChapterCommitted(progress *domain.Progress, chapter int) (bool, error) {
 	pending, err := g.store.Signals.LoadPendingCommit()
 	if err != nil {
-		return false, fmt.Errorf("Đọc PendingCommit để đối chiếu chương mục tiêu: %w", err)
+		return false, fmt.Errorf("Không đọc được PendingCommit để đối chiếu chương mục tiêu: %w", err)
 	}
 	if pending != nil {
 		return false, nil
@@ -127,14 +127,14 @@ func (g *ChapterAdvanceGate) reconcilePermit(permit int) bool {
 	}
 	progress, err := g.store.Progress.Load()
 	if err != nil {
-		return g.fail(fmt.Errorf("Đọc Progress để đối chiếu giấy phép chương: %w", err))
+		return g.fail(fmt.Errorf("Không đọc được Progress để đối chiếu giấy phép chương: %w", err))
 	}
 	if progress == nil {
-		return g.fail(fmt.Errorf("Thiếu Progress, không thể đối chiếu giấy phép chương %d", permit))
+		return g.fail(fmt.Errorf("Không đối chiếu được giấy phép chương %d vì thiếu Progress", permit))
 	}
 	pending, err := g.store.Signals.LoadPendingCommit()
 	if err != nil {
-		return g.fail(fmt.Errorf("Đọc PendingCommit để đối chiếu giấy phép chương: %w", err))
+		return g.fail(fmt.Errorf("Không đọc được PendingCommit để đối chiếu giấy phép chương: %w", err))
 	}
 	completed := slices.Contains(progress.CompletedChapters, permit)
 	if completed {
@@ -165,7 +165,7 @@ func (g *ChapterAdvanceGate) Allow(inst *flow.Instruction) (bool, error) {
 	}
 	meta, err := g.store.RunMeta.Load()
 	if err != nil {
-		return false, fmt.Errorf("Đọc RunMeta: %w", err)
+		return false, fmt.Errorf("Không đọc được RunMeta: %w", err)
 	}
 	if meta == nil {
 		return false, fmt.Errorf("RunMeta chưa được khởi tạo")
@@ -181,11 +181,11 @@ func (g *ChapterAdvanceGate) Allow(inst *flow.Instruction) (bool, error) {
 	}
 	progress, err := g.store.Progress.Load()
 	if err != nil {
-		return false, fmt.Errorf("Đọc Progress: %w", err)
+		return false, fmt.Errorf("Không đọc được Progress: %w", err)
 	}
 	pending, err := g.store.Signals.LoadPendingCommit()
 	if err != nil {
-		return false, fmt.Errorf("Đọc PendingCommit: %w", err)
+		return false, fmt.Errorf("Không đọc được PendingCommit: %w", err)
 	}
 	if !flow.StartsForwardChapter(inst, progress, pending) {
 		return true, nil

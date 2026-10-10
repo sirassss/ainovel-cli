@@ -46,9 +46,9 @@ func FileLogger(outputDir, filename string) (*slog.Logger, func(), error) {
 		return slog.Default(), func() {}, err
 	}
 	logger, sessionID := newSessionLogger(f, slog.LevelDebug)
-	logger.Info("Phiên nhật ký bắt đầu", "module", "logger", "session_id", sessionID)
+	logger.Info("log session started", "module", "logger", "session_id", sessionID)
 	return logger, func() {
-		logger.Info("Phiên nhật ký kết thúc", "module", "logger", "session_id", sessionID)
+		logger.Info("log session ended", "module", "logger", "session_id", sessionID)
 		_ = f.Close()
 	}, nil
 }
@@ -70,10 +70,10 @@ func SetupFile(outputDir, filename string, alsoStderr bool, sessionAttrs ...slog
 	previous := slog.Default()
 	logger, sessionID := newSessionLogger(w, slog.LevelDebug, sessionAttrs...)
 	slog.SetDefault(logger)
-	logger.Info("Phiên nhật ký bắt đầu", "module", "logger", "session_id", sessionID)
+	logger.Info("log session started", "module", "logger", "session_id", sessionID)
 
 	return func() {
-		logger.Info("Phiên nhật ký kết thúc", "module", "logger", "session_id", sessionID)
+		logger.Info("log session ended", "module", "logger", "session_id", sessionID)
 		slog.SetDefault(previous)
 		_ = f.Close()
 	}, nil

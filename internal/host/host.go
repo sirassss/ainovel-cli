@@ -116,7 +116,7 @@ func New(cfg bootstrap.Config, bundle assets.Bundle, options ...NewOption) (*Hos
 			return
 		}
 		if err := bookLease.Close(); err != nil {
-			slog.Error("Giải phóng thư mục tiểu thuyết đang chiếm giữ thất bại", "module", "host", "dir", cfg.OutputDir, "err", err)
+			slog.Error("releasing held novel directory failed", "module", "host", "dir", cfg.OutputDir, "err", err)
 		}
 		if logCleanup != nil {
 			logCleanup()
@@ -128,11 +128,11 @@ func New(cfg bootstrap.Config, bundle assets.Bundle, options ...NewOption) (*Hos
 		logCleanup, fileLogErr = runtimelog.SetupFile(cfg.OutputDir, opts.logFile, opts.logAlsoStderr, opts.logAttrs...)
 		if fileLogErr != nil {
 			logCleanup = nil
-			slog.Warn("Nhật ký tệp không dùng được, tiếp tục dùng nhật ký của tiến trình hiện tại", "module", "host", "file", opts.logFile, "err", fileLogErr)
+			slog.Warn("file log unavailable, continuing with the current process logger", "module", "host", "file", opts.logFile, "err", fileLogErr)
 		}
 	}
 
-	slog.Info("Khởi động", "module", "boot", "provider", cfg.Provider, "model", cfg.ModelName, "output", cfg.OutputDir)
+	slog.Info("starting", "module", "boot", "provider", cfg.Provider, "model", cfg.ModelName, "output", cfg.OutputDir)
 
 	// 起后台 goroutine 从 OpenRouter 刷新模型元数据（窗口/价格），磁盘缓存 24h。
 	modelreg.StartPricingRefresh(modelreg.DefaultRegistry(), bootstrap.DefaultConfigDir())
@@ -154,7 +154,7 @@ func New(cfg bootstrap.Config, bundle assets.Bundle, options ...NewOption) (*Hos
 	if err != nil {
 		return nil, fmt.Errorf("create models: %w", err)
 	}
-	slog.Info("Model sẵn sàng", "module", "boot", "summary", models.Summary())
+	slog.Info("models ready", "module", "boot", "summary", models.Summary())
 
 	usage := NewUsageTracker(models, store)
 	// 优先读 meta/usage.json；以下情况都走 sessions/*.jsonl 一次性回填：
@@ -164,15 +164,15 @@ func New(cfg bootstrap.Config, bundle assets.Bundle, options ...NewOption) (*Hos
 	// 回填完立即 SaveNow，把结果固化下来，下次启动直接 Load 命中。
 	loaded, loadErr := usage.LoadFromStore()
 	if loadErr != nil {
-		slog.Warn("Tải usage thất bại, sẽ thử điền bù từ sessions", "module", "usage", "err", loadErr)
+		slog.Warn("loading usage failed, will try to backfill from sessions", "module", "usage", "err", loadErr)
 	}
 	if !loaded {
 		if n, err := usage.ReplaySessions(cfg.OutputDir); err != nil {
-			slog.Warn("usage replay thất bại", "module", "usage", "err", err)
+			slog.Warn("usage replay failed", "module", "usage", "err", err)
 		} else if n > 0 {
-			slog.Info("Đã điền bù usage từ session", "module", "usage", "messages", n)
+			slog.Info("usage backfilled from session", "module", "usage", "messages", n)
 			if err := usage.SaveNow(); err != nil {
-				slog.Warn("Lưu sau khi điền bù usage thất bại", "module", "usage", "err", err)
+				slog.Warn("saving after usage backfill failed", "module", "usage", "err", err)
 			}
 		}
 	}
@@ -251,7 +251,7 @@ func New(cfg bootstrap.Config, bundle assets.Bundle, options ...NewOption) (*Hos
 	onGuardBlock = func(agent, reason string, n int32) {
 		switch reason {
 		case "escalated":
-			body := fmt.Sprintf("%s liên tiếp %d lần chạy không mà không lưu sản phẩm cần thiết, nhiệm vụ lượt này bị chấm dứt và trả về Engine xử lý", agent, n)
+			body := fmt.Sprintf("%s chạy %d lần liên tiếp mà không lưu kết quả cần thiết, nhiệm vụ lượt này bị chấm dứt và trả về Engine xử lý", agent, n)
 			h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Agent: agent, Summary: "StopGuard leo thang: " + body, Level: "warn"})
 			h.notifier.Send(notify.Notification{Kind: notify.KindStopGuard, Level: "warn", Title: "ainovel: StopGuard", Body: body})
 		case "hard_stop":
@@ -260,7 +260,7 @@ func New(cfg bootstrap.Config, bundle assets.Bundle, options ...NewOption) (*Hos
 			h.notifier.Send(notify.Notification{Kind: notify.KindStopGuard, Level: "warn", Title: "ainovel: StopGuard", Body: body})
 		default: // blocked
 			h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Agent: agent,
-				Summary: fmt.Sprintf("StopGuard: %s định kết thúc khi chưa hoàn thành sản phẩm cần thiết, đã chặn và thúc giục (lần thứ %d liên tiếp)", agent, n), Level: "info"})
+				Summary: fmt.Sprintf("StopGuard: %s định kết thúc khi chưa lưu kết quả cần thiết, đã chặn và thúc giục (lần thứ %d liên tiếp)", agent, n), Level: "info"})
 		}
 	}
 	// Engine:确定性执行引擎(docs/engine-rfc.md)。arbiter 用 Default 模型(过渡限制,
@@ -306,7 +306,7 @@ func (h *Host) PrepareUserRules(rawPrompt string) error {
 	svc := userrules.NewService(h.store, h.models.Default, rules.DefaultOptions())
 	snap, err := svc.Build(context.Background(), rawPrompt)
 	if err != nil {
-		return fmt.Errorf("Lưu snapshot quy tắc người dùng thất bại, không thể tiếp tục: %w", err)
+		return fmt.Errorf("Không lưu được snapshot quy tắc người dùng nên không thể tiếp tục: %w", err)
 	}
 	logUserRulesSnapshot(snap)
 	return nil
@@ -318,7 +318,7 @@ func (h *Host) ensureUserRules() {
 	svc := userrules.NewService(h.store, h.models.Default, rules.DefaultOptions())
 	snap, err := svc.GetOrBuild(context.Background())
 	if err != nil {
-		slog.Warn("Đọc/tạo snapshot quy tắc người dùng thất bại, khi chạy sẽ lùi về mặc định tích hợp", "module", "rules", "err", err)
+		slog.Warn("reading/creating user rules snapshot failed, falling back to built-in defaults at runtime", "module", "rules", "err", err)
 		return
 	}
 	logUserRulesSnapshot(snap)
@@ -329,7 +329,7 @@ func logUserRulesSnapshot(snap *rules.Snapshot) {
 	if snap == nil {
 		return
 	}
-	slog.Info("Snapshot quy tắc người dùng",
+	slog.Info("user rules snapshot",
 		"module", "rules",
 		"status", string(snap.Status),
 		"sources", snap.Sources,
@@ -337,7 +337,7 @@ func logUserRulesSnapshot(snap *rules.Snapshot) {
 		"fatigue_words", len(snap.Structured.FatigueWords),
 	)
 	if snap.Status == rules.StatusDegraded {
-		slog.Warn("Một số quy tắc không phân tích được, đã chạy theo raw preferences (có thể tạo lại snapshot)",
+		slog.Warn("some rules could not be parsed, running with raw preferences (snapshot can be regenerated)",
 			"module", "rules", "uncertain", snap.Uncertain)
 	}
 }
@@ -401,10 +401,10 @@ func (h *Host) StartPrepared(rawRequirement string) error {
 	}
 	var recErr error
 	if rec, recErr = h.store.Decisions.Append(rec); recErr != nil {
-		slog.Warn("Lưu bản ghi kiểm toán khởi động thất bại", "module", "host", "err", recErr)
+		slog.Warn("saving startup audit record failed", "module", "host", "err", recErr)
 	}
 	if derr != nil {
-		return fmt.Errorf("Phân xử khởi động thất bại: %w", derr)
+		return fmt.Errorf("Không phân xử khởi động được: %w", derr)
 	}
 	if err := h.store.RunMeta.SetPlanStart(domain.PlanStartRecord{
 		RawPrompt: rawRequirement, Planner: decision.Planner, PlannerTask: decision.Task, DecisionID: rec.ID,
@@ -413,7 +413,7 @@ func (h *Host) StartPrepared(rawRequirement string) error {
 	}
 
 	h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM",
-		Summary: fmt.Sprintf("Bắt đầu sáng tác (kiến trúc sư: %s — %s)", decision.Planner, decision.Reason), Level: "info"})
+		Summary: fmt.Sprintf("Bắt đầu sáng tác (Architect: %s — %s)", decision.Planner, decision.Reason), Level: "info"})
 	if !h.startEngine(&flow.Instruction{Agent: decision.Planner, Task: decision.Task, Reason: decision.Reason}) {
 		return fmt.Errorf("Engine đang chạy hoặc đang dừng, không thể bắt đầu truyện mới")
 	}
@@ -453,7 +453,7 @@ func (h *Host) startEngine(initial *flow.Instruction) bool {
 	active, done, importErr := imp.ResumeStatus(h.store)
 	if importErr != nil {
 		h.emitEvent(Event{Time: time.Now(), Category: "ERROR", Level: "error",
-			Summary: "Đọc trạng thái nhập truyện thất bại, đã ngăn sáng tác thông thường ghi đè sản phẩm hiện có: " + importErr.Error()})
+			Summary: "Không đọc được trạng thái nhập truyện, đã ngăn sáng tác thông thường ghi đè nội dung hiện có: " + importErr.Error()})
 		return false
 	}
 	if active && !done {
@@ -519,7 +519,7 @@ func (h *Host) Reopen(direction string) error {
 	h.emitEvent(reopenEvent)
 	if d := strings.TrimSpace(direction); d != "" {
 		if err := h.store.RunMeta.SetPendingSteer(d); err != nil {
-			return fmt.Errorf("Đã mở lại, nhưng đăng ký hướng viết tiếp thất bại: %v, hãy nhập lại hướng đi trực tiếp vào ô nhập", err)
+			return fmt.Errorf("Đã mở lại, nhưng không đăng ký được hướng viết tiếp: %v; hãy nhập lại hướng đi trực tiếp vào ô nhập", err)
 		}
 	}
 	return nil
@@ -606,21 +606,21 @@ func (h *Host) doIntervention(text string, restart bool) error {
 	// 崩溃保护:裁定前先持久化(PendingSteer),成功应用或已当面回显失败后原子清除
 	// (ClearHandledSteer 同时复位 FlowSteering)。裁定期间崩溃 → 下次 Resume 重放。
 	if err := h.store.RunMeta.SetPendingSteer(text); err != nil {
-		wrapped := fmt.Errorf("Lưu bền can thiệp thất bại, đã dừng phân xử: %w", err)
+		wrapped := fmt.Errorf("Không lưu được can thiệp, đã dừng phân xử: %w", err)
 		h.emitEvent(Event{Time: time.Now(), Category: "ERROR", Agent: "arbiter",
 			Summary: wrapped.Error(), Detail: wrapped.Error(), Level: "error"})
 		return wrapped
 	}
 	clearPending := func() error {
 		if err := h.store.ClearHandledSteer(); err != nil {
-			return fmt.Errorf("Xóa can thiệp đã xử lý thất bại: %w", err)
+			return fmt.Errorf("Không xóa được can thiệp đã xử lý: %w", err)
 		}
 		return nil
 	}
 
 	facts, err := arbiter.CollectInterventionFacts(h.store)
 	if err != nil {
-		wrapped := fmt.Errorf("Thu thập sự thật can thiệp thất bại, chưa gọi Arbiter: %w", err)
+		wrapped := fmt.Errorf("Không thu thập được dữ kiện can thiệp, chưa gọi Arbiter: %w", err)
 		h.emitEvent(Event{Time: time.Now(), Category: "ERROR", Agent: "arbiter",
 			Summary: wrapped.Error(), Detail: wrapped.Error(), Level: "error"})
 		return wrapped
@@ -649,7 +649,7 @@ func (h *Host) doIntervention(text string, restart bool) error {
 		rec.Error = derr.Error()
 	}
 	if _, err := h.store.Decisions.Append(rec); err != nil {
-		wrapped := fmt.Errorf("Lưu bản ghi kiểm toán can thiệp thất bại, từ chối thực hiện hành động: %w", err)
+		wrapped := fmt.Errorf("Không lưu được nhật ký kiểm tra can thiệp, từ chối thực hiện hành động: %w", err)
 		h.emitEvent(Event{Time: time.Now(), Category: "ERROR", Agent: "arbiter",
 			Summary: wrapped.Error(), Detail: wrapped.Error(), Level: "error"})
 		return wrapped
@@ -675,10 +675,10 @@ func (h *Host) doIntervention(text string, restart bool) error {
 	var actionErr error
 	if decision.Rules != "" {
 		if snap, _, err := h.userRules.AddRuntimeRule(h.runCtx, decision.Rules); err != nil {
-			h.emitEvent(Event{Time: time.Now(), Category: "ERROR", Summary: "Lưu quy tắc viết thất bại: " + err.Error(), Level: "error"})
+			h.emitEvent(Event{Time: time.Now(), Category: "ERROR", Summary: "Không lưu được quy tắc viết: " + err.Error(), Level: "error"})
 			actionErr = err
 		} else if snap != nil {
-			h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Summary: "Quy tắc viết đã được cập nhật và lưu bền", Level: "info"})
+			h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Summary: "Quy tắc viết đã được cập nhật và lưu", Level: "info"})
 		}
 	}
 
@@ -688,7 +688,7 @@ func (h *Host) doIntervention(text string, restart bool) error {
 			// 引擎未运行:立即执行;持久化失败 → 保留 PendingSteer,恢复时重放整条干预。
 			if err := h.engine.applyControlOp(context.Background(), op); err != nil {
 				h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "warn",
-					Summary: "Thực hiện hành động can thiệp thất bại, đã giữ lại; khi khôi phục/tiếp tục sẽ tự thử lại"})
+					Summary: "Không thực hiện được hành động can thiệp, đã giữ lại; khi khôi phục/tiếp tục sẽ tự thử lại"})
 				return err
 			}
 			// reopen/dispatch 表达了继续创作的意图,拉起引擎。
@@ -732,7 +732,7 @@ func newInterventionFailureEvent(err error) Event {
 		Time:     time.Now(),
 		Category: "ERROR",
 		Agent:    "arbiter",
-		Summary:  "Phân xử can thiệp thất bại: " + detail + " (chưa thay đổi gì)",
+		Summary:  "Không phân xử được can thiệp: " + detail + " (chưa thay đổi gì)",
 		Detail:   detail,
 		Kind:     errorKind(err, detail),
 		Level:    "error",
@@ -941,11 +941,11 @@ func (h *Host) Close() {
 		}
 		h.usage.WaitAutoSave()
 		if err := h.usage.SaveNow(); err != nil {
-			slog.Warn("Lưu usage trước khi thoát thất bại", "module", "usage", "err", err)
+			slog.Warn("saving usage before exit failed", "module", "usage", "err", err)
 		}
 		h.closeOutputChannels()
 		if err := h.bookLease.Close(); err != nil {
-			slog.Error("Giải phóng thư mục tiểu thuyết đang chiếm giữ thất bại", "module", "host", "dir", h.cfg.OutputDir, "err", err)
+			slog.Error("releasing held novel directory failed", "module", "host", "dir", h.cfg.OutputDir, "err", err)
 		}
 		if h.logCleanup != nil {
 			h.logCleanup()
@@ -973,7 +973,7 @@ func (h *Host) runEnded() {
 		}
 		h.mu.Unlock()
 		h.emitEvent(Event{Time: time.Now(), Category: "ERROR", Level: "error",
-			Summary: "Đọc tiến độ khi Engine kết thúc thất bại: " + err.Error()})
+			Summary: "Không đọc được tiến độ khi Engine kết thúc: " + err.Error()})
 		select {
 		case h.done <- struct{}{}:
 		default:
@@ -985,7 +985,7 @@ func (h *Host) runEnded() {
 		h.lifecycle = lifecycleIdle
 		h.mu.Unlock()
 		h.emitEvent(Event{Time: time.Now(), Category: "ERROR", Level: "error",
-			Summary: "Đọc thông tin tác phẩm khi Engine kết thúc thất bại: " + err.Error()})
+			Summary: "Không đọc được thông tin tác phẩm khi Engine kết thúc: " + err.Error()})
 		select {
 		case h.done <- struct{}{}:
 		default:
@@ -997,7 +997,7 @@ func (h *Host) runEnded() {
 			h.lifecycle = lifecycleIdle
 			h.mu.Unlock()
 			h.emitEvent(Event{Time: time.Now(), Category: "ERROR", Level: "error",
-				Summary: "Khi Engine kết thúc, thông tin tác phẩm không tồn tại"})
+				Summary: "Engine kết thúc nhưng không có thông tin tác phẩm"})
 			select {
 			case h.done <- struct{}{}:
 			default:
@@ -1261,7 +1261,7 @@ func (h *Host) fillDetails(snap *UISnapshot, progress *domain.Progress) {
 			if _, ok := completed[e.Chapter]; ok {
 				committedTitle, err := h.store.Summaries.LoadSummaryTitle(e.Chapter)
 				if err != nil {
-					slog.Warn("Chiếu tiêu đề chương thất bại", "module", "host.snapshot", "chapter", e.Chapter, "err", err)
+					slog.Warn("projecting chapter title failed", "module", "host.snapshot", "chapter", e.Chapter, "err", err)
 				} else if strings.TrimSpace(committedTitle) != "" {
 					title = committedTitle
 				}
@@ -1396,7 +1396,7 @@ func (h *Host) SwitchModel(role, provider, model string) error {
 	// 换模型不改动已存的推理强度意图：只在下发时按新模型能力钳制。
 	if h.configPath != "" {
 		if err := bootstrap.SaveConfig(h.configPath, h.cfg); err != nil {
-			slog.Warn("Lưu cấu hình thất bại", "module", "host", "err", err)
+			slog.Warn("saving config failed", "module", "host", "err", err)
 		}
 	}
 	h.applyThinkingLocked(role)
@@ -1486,7 +1486,7 @@ func (h *Host) SetRoleThinking(role, level string) error {
 	}
 	if h.configPath != "" {
 		if err := bootstrap.SaveConfig(h.configPath, h.cfg); err != nil {
-			slog.Warn("Lưu cấu hình thất bại", "module", "host", "err", err)
+			slog.Warn("saving config failed", "module", "host", "err", err)
 		}
 	}
 
@@ -1505,7 +1505,7 @@ func (h *Host) SetRoleThinking(role, level string) error {
 	h.emitEvent(Event{
 		Time:     time.Now(),
 		Category: "SYSTEM",
-		Summary:  fmt.Sprintf("Đã chuyển cường độ suy luận: %s → %s", logRole, shown),
+		Summary:  fmt.Sprintf("Đã đổi mức suy luận: %s → %s", logRole, shown),
 		Level:    "info",
 	})
 	return nil
@@ -1657,7 +1657,7 @@ func (h *Host) SyncChapterRevisions(ctx context.Context) (*revision.Result, erro
 		}
 	}
 	model := h.models.ForRoleWithFailover("editor", func(ev bootstrap.FailoverEvent) {
-		slog.Warn("Chuyển provider khi sửa đổi chương", "module", "revision", "role", ev.Role,
+		slog.Warn("provider failover during chapter revision", "module", "revision", "role", ev.Role,
 			"reason", ev.Reason, "from", fmt.Sprintf("%s/%s", ev.FromProvider, ev.FromModel),
 			"to", fmt.Sprintf("%s/%s", ev.ToProvider, ev.ToModel), "err", ev.Err)
 	})
@@ -1740,7 +1740,7 @@ func (h *Host) importCaller(fn string) imp.Caller {
 		role = "architect"
 	}
 	model := h.models.ForRoleWithFailover(role, func(ev bootstrap.FailoverEvent) {
-		slog.Warn("Chuyển provider khi nhập truyện", "module", "import", "role", ev.Role,
+		slog.Warn("provider failover during import", "module", "import", "role", ev.Role,
 			"reason", ev.Reason,
 			"from", fmt.Sprintf("%s/%s", ev.FromProvider, ev.FromModel),
 			"to", fmt.Sprintf("%s/%s", ev.ToProvider, ev.ToModel),
@@ -1776,7 +1776,7 @@ func (h *Host) importModelRuntime(role string, model agentcore.ChatModel) imp.Mo
 
 // Simulate 读取 simulate 目录并生成或增量更新仿写画像。
 func (h *Host) Simulate(ctx context.Context) (<-chan sim.Event, error) {
-	if err := h.acquireExclusive("Tạo chân dung mô phỏng văn phong"); err != nil {
+	if err := h.acquireExclusive("Tạo style profile"); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(ctx)
@@ -1807,7 +1807,7 @@ func (h *Host) Simulate(ctx context.Context) (<-chan sim.Event, error) {
 
 // ImportSimulationProfile 导入此前生成的仿写画像。
 func (h *Host) ImportSimulationProfile(ctx context.Context, path string) (<-chan sim.Event, error) {
-	if err := h.acquireExclusive("Nhập chân dung mô phỏng văn phong"); err != nil {
+	if err := h.acquireExclusive("Nhập style profile"); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(ctx)
@@ -1949,7 +1949,7 @@ func (h *Host) continueAfterImport(opts imp.Options) bool {
 		in, err := imp.OpenWorkspace(h.store.Dir()).LoadIntent()
 		if err != nil {
 			h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "warn",
-				Summary: "Nhập truyện đã xong, nhưng đọc ý định tự động nối tiếp thất bại: " + err.Error()})
+				Summary: "Nhập truyện đã xong, nhưng không đọc được ý định tự động nối tiếp: " + err.Error()})
 		} else if in != nil {
 			want = in.ContinueAfterImport
 		}
@@ -1959,18 +1959,18 @@ func (h *Host) continueAfterImport(opts imp.Options) bool {
 	}
 	meta, err := h.store.RunMeta.Load()
 	if err != nil || meta == nil {
-		slog.Warn("Đọc RunMeta để tự động nối tiếp sau khi nhập truyện thất bại", "module", "host", "err", err)
+		slog.Warn("reading RunMeta for auto-continue after import failed", "module", "host", "err", err)
 		return false
 	}
 	if meta.AdvanceMode != domain.ChapterAdvanceAuto {
 		h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "info",
-			Summary: "Nhập truyện hoàn tất; hiện ở chế độ duyệt từng chương, nhập tiếp tục hoặc /next để nối tiếp viết"})
+			Summary: "Nhập truyện xong; hiện ở chế độ duyệt từng chương, nhập tiếp tục hoặc /next để nối tiếp viết"})
 		return false
 	}
-	h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "info", Summary: "Nhập truyện hoàn tất, tự động nối tiếp viết"})
+	h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "info", Summary: "Nhập truyện xong, tự động nối tiếp viết"})
 	if !h.startEngine(nil) {
 		h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Level: "warn",
-			Summary: "Tự động nối tiếp khởi động thất bại, hãy nhập lệnh tiếp tục để khôi phục thủ công"})
+			Summary: "Không tự động nối tiếp được, hãy nhập lệnh tiếp tục để khôi phục thủ công"})
 		return false
 	}
 	return true

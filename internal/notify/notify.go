@@ -97,7 +97,7 @@ func (n *Notifier) allows(kind string) bool {
 // deliver 同步执行一次发送并记录失败，由 Send 在 goroutine 中调用。
 func (n *Notifier) deliver(nt Notification) {
 	if err := n.deliverError(nt); err != nil {
-		slog.Warn("Gửi thông báo thất bại", "module", "notify", "kind", nt.Kind, "err", err)
+		slog.Warn("notification send failed", "module", "notify", "kind", nt.Kind, "err", err)
 	}
 }
 
@@ -157,12 +157,12 @@ func runSystem(ctx context.Context, nt Notification) error {
 		return exec.CommandContext(ctx, "osascript", "-e", script).Run()
 	case "linux":
 		if _, err := exec.LookPath("notify-send"); err != nil {
-			slog.Debug("Thông báo hạ xuống log (không có notify-send)", "module", "notify", "title", nt.Title, "body", nt.Body)
+			slog.Debug("notification downgraded to log (no notify-send)", "module", "notify", "title", nt.Title, "body", nt.Body)
 			return nil
 		}
 		return exec.CommandContext(ctx, "notify-send", nt.Title, nt.Body).Run()
 	default:
-		slog.Debug("Thông báo hạ xuống log (nền tảng không có kênh hệ thống)", "module", "notify", "title", nt.Title, "body", nt.Body)
+		slog.Debug("notification downgraded to log (platform has no system channel)", "module", "notify", "title", nt.Title, "body", nt.Body)
 		return nil
 	}
 }

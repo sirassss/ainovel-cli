@@ -59,7 +59,7 @@
 - **Hoặc chạy từ Source**: Máy tính đã cài đặt [Go](https://go.dev/) ≥ 1.21.
 - **LLM**: 
   - Máy có GPU (Nvidia VRAM ≥ 12GB) nếu muốn chạy Ollama cục bộ với model Qwen 2.5 / 3.5.
-  - Hoặc API Key từ OpenRouter, Anthropic, Google Gemini, OpenAI, DeepSeek.
+  - Hoặc API key từ OpenRouter, Anthropic, Google Gemini, OpenAI, DeepSeek.
 
 ---
 
@@ -86,7 +86,7 @@ docker compose run --rm ainovel
 ```
 *(Nếu chạy từ file binary: `./ainovel-cli`)*
 
-Lần đầu chạy, hệ thống sẽ tự động bật **Setup Wizard tương tác bằng Tiếng Việt** để bạn chọn Provider, nhập API Key/Base URL, chọn Model và Ngôn ngữ sáng tác.
+Lần đầu chạy, hệ thống sẽ tự động bật **Setup Wizard tương tác bằng Tiếng Việt** để bạn chọn Provider, nhập API key/Base URL, chọn Model và Ngôn ngữ sáng tác.
 
 ---
 
@@ -242,7 +242,7 @@ Khi đang ở trong giao diện TUI, bạn có thể gõ `/` để mở bảng c
 | :--- | :--- |
 | `/help` | Mở bảng trợ giúp tra cứu danh sách lệnh và phím tắt |
 | `/model` | Chuyển đổi Model hoặc mức độ suy luận (reasoning/thinking) |
-| `/config` | Quản lý cấu hình Provider, Model ID, API Key, Base URL, Context Window |
+| `/config` | Quản lý cấu hình Provider, Model ID, API key, Base URL, Context Window |
 | `/diag` | Xem báo cáo chẩn đoán toàn diện về sức khỏe, tiến độ và chất lượng truyện |
 | `/review [on\|off]` | Bật/tắt chế độ duyệt từng chương (dừng lại sau mỗi chương để bạn duyệt) |
 | `/next` | Phê duyệt cho phép viết chương tiếp theo (khi ở chế độ duyệt) |

@@ -144,7 +144,7 @@ func renderWelcome(width, height int, errMsg string, mode startupMode, importHin
 	subtitle := lipgloss.NewStyle().
 		Foreground(colorMuted).
 		Italic(true).
-		Render("Hệ Thống Trí Tuệ Nhân Tạo Sáng Tác Tiểu Thuyết")
+		Render("Hệ thống AI sáng tác tiểu thuyết")
 
 	divW := 44
 	if divW > width-8 {
@@ -154,7 +154,7 @@ func renderWelcome(width, height int, errMsg string, mode startupMode, importHin
 		Render(strings.Repeat("~", divW))
 
 	features := []struct{ icon, label, desc string }{
-		{">>", "Đa Agent cộng tác", "Architect lập kế hoạch / Writer sáng tác / Editor đánh giá"},
+		{">>", "Cộng tác đa Agent", "Architect lập kế hoạch / Writer sáng tác / Editor đánh giá"},
 		{"::", "Khôi phục điểm dừng", "Tự động tiếp tục từ tiến độ trước sau khi gián đoạn"},
 		{"<>", "Can thiệp thời gian thực", "Tùy chỉnh hướng cốt truyện bất cứ lúc nào khi đang viết"},
 		{"##", "Phân tầng truyện dài", "Hỗ trợ cấu trúc phân tầng Tập - Cung - Chương chuyên nghiệp"},

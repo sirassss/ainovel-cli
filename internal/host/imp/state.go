@@ -102,7 +102,7 @@ func LoadState(w *Workspace) (Facts, error) {
 		return f, nil
 	}
 	if err != nil {
-		return f, fmt.Errorf("Đọc sản phẩm chia tách: %w", err)
+		return f, fmt.Errorf("Đọc kết quả chia tách: %w", err)
 	}
 	if segArt.InputDigest != segmentInputDigest(Digest(src), guidance, segmentPromptVersion) {
 		return f, nil
@@ -114,7 +114,7 @@ func LoadState(w *Workspace) (Facts, error) {
 	// confirmation：绑定 segmentation 工件原始字节。
 	segRaw, err := w.readBytes(fileSegmentation)
 	if err != nil {
-		return f, fmt.Errorf("Đọc nguyên văn sản phẩm chia tách: %w", err)
+		return f, fmt.Errorf("Đọc nguyên văn kết quả chia tách: %w", err)
 	}
 	confirmed, err := artifactFresh[Confirmation](w, fileConfirmation, Digest(segRaw))
 	if err != nil {
@@ -144,7 +144,7 @@ func LoadState(w *Workspace) (Facts, error) {
 		return f, nil
 	}
 	if err != nil {
-		return f, fmt.Errorf("Đọc sản phẩm tổng hợp toàn sách: %w", err)
+		return f, fmt.Errorf("Đọc kết quả tổng hợp toàn sách: %w", err)
 	}
 	if synArt.InputDigest != synthesisInputDigest(facts) {
 		return f, nil
@@ -155,7 +155,7 @@ func LoadState(w *Workspace) (Facts, error) {
 	// story resolution：uncertain 时绑定 synthesis 工件原始字节，或由 intent 预选。
 	synRaw, err := w.readBytes(fileSynthesis)
 	if err != nil {
-		return f, fmt.Errorf("Đọc nguyên văn sản phẩm tổng hợp toàn sách: %w", err)
+		return f, fmt.Errorf("Đọc nguyên văn kết quả tổng hợp toàn sách: %w", err)
 	}
 	resolved, err := artifactFresh[StoryResolution](w, fileStoryResolve, Digest(synRaw))
 	if err != nil {

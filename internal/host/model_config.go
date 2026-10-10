@@ -182,7 +182,7 @@ func (h *Host) prepareProviderDraftLocked(draft ModelConfigurationDraft) (prepar
 			return preparedProviderDraft{}, fmt.Errorf("Tên model không được để trống")
 		}
 		if model.ContextWindow < 0 {
-			return preparedProviderDraft{}, fmt.Errorf("Cửa sổ ngữ cảnh của model %q không được âm", model.Name)
+			return preparedProviderDraft{}, fmt.Errorf("Context window của model %q không được âm", model.Name)
 		}
 		if seen[model.Name] {
 			return preparedProviderDraft{}, fmt.Errorf("Model %q bị trùng", model.Name)
@@ -200,10 +200,10 @@ func (h *Host) prepareProviderDraftLocked(draft ModelConfigurationDraft) (prepar
 	case APIKeyClear:
 		pc.APIKey = ""
 	default:
-		return preparedProviderDraft{}, fmt.Errorf("Thao tác API Key không xác định %q", draft.APIKeyAction)
+		return preparedProviderDraft{}, fmt.Errorf("Thao tác API key không xác định %q", draft.APIKeyAction)
 	}
 	if pc.RequiresAPIKey(draft.Provider) && pc.APIKey == "" {
-		return preparedProviderDraft{}, fmt.Errorf("Provider %q bắt buộc phải cấu hình API Key", draft.Provider)
+		return preparedProviderDraft{}, fmt.Errorf("Provider %q bắt buộc phải cấu hình API key", draft.Provider)
 	}
 
 	if candidate.Providers == nil {
@@ -255,14 +255,14 @@ func (h *Host) ConfigureModels(draft ModelConfigurationDraft) error {
 	}
 	prepared, err := bootstrap.NewModelSet(candidate)
 	if err != nil {
-		return fmt.Errorf("Tạo client model thất bại: %w", err)
+		return fmt.Errorf("Không tạo được client model: %w", err)
 	}
 
 	if h.configPath == "" {
 		return fmt.Errorf("Không xác định được đường dẫn tệp cấu hình")
 	}
 	if err := h.saveModelConfigurationLocked(candidate, draft.Provider, pc, len(renames) > 0); err != nil {
-		return fmt.Errorf("Lưu cấu hình thất bại: %w", err)
+		return fmt.Errorf("Không lưu được cấu hình: %w", err)
 	}
 
 	h.models.ApplyPrepared(prepared)
@@ -270,7 +270,7 @@ func (h *Host) ConfigureModels(draft ModelConfigurationDraft) error {
 	// 模型客户端被重建后重新下发推理强度：applyThinkingLocked 按各角色的新模型能力钳制生效值，
 	// 存储的强度意图保持不变。
 	h.applyThinkingLocked("default")
-	summary := fmt.Sprintf("Đã lưu cấu hình Provider: %s → %s", draft.Provider, h.configPath)
+	summary := fmt.Sprintf("Đã lưu cấu hình provider: %s → %s", draft.Provider, h.configPath)
 	if draft.Provider != h.cfg.Provider {
 		summary += "; dùng /model để chuyển"
 	}
@@ -392,10 +392,10 @@ func (h *Host) TestModelConnection(ctx context.Context, draft ModelConfiguration
 	}
 	models, err := bootstrap.NewModelSet(testConfig)
 	if err != nil {
-		return fmt.Errorf("Tạo client model kiểm tra thất bại: %w", err)
+		return fmt.Errorf("Không tạo được client model để kiểm tra: %w", err)
 	}
 	if _, err := models.Default.Generate(ctx, []agentcore.Message{agentcore.UserMsg("Reply OK.")}, nil); err != nil {
-		return fmt.Errorf("Kiểm tra kết nối thất bại (%s/%s): %w", preparedDraft.draft.Provider, modelName, err)
+		return fmt.Errorf("Không kết nối được (%s/%s): %w", preparedDraft.draft.Provider, modelName, err)
 	}
 	return nil
 }

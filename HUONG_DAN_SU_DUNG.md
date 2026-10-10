@@ -28,7 +28,7 @@
 - **Hoặc Chạy từ Source**: Máy đã cài đặt [Go](https://go.dev/) ≥ 1.21.
 - **LLM**: 
   - Máy có GPU (Nvidia VRAM ≥ 12GB) nếu muốn chạy Ollama cục bộ với model Qwen 2.5 / 3.5.
-  - Hoặc API Key từ OpenRouter, Anthropic, Google Gemini, OpenAI, DeepSeek.
+  - Hoặc API key từ OpenRouter, Anthropic, Google Gemini, OpenAI, DeepSeek.
 
 ---
 
@@ -241,7 +241,7 @@ Khi đang ở trong giao diện TUI, bạn có thể gõ `/` để mở menu l�
 | :--- | :--- |
 | `/help` | Mở bảng trợ giúp tra cứu danh sách lệnh và phím tắt |
 | `/model` | Chuyển đổi Model hoặc mức độ suy luận (reasoning/thinking) |
-| `/config` | Quản lý cấu hình Provider, Model ID, API Key, Base URL |
+| `/config` | Quản lý cấu hình Provider, Model ID, API key, Base URL |
 | `/diag` | Xem báo cáo chẩn đoán toàn diện về sức khỏe, tiến độ và chất lượng truyện |
 | `/review` | Bật/tắt chế độ duyệt từng chương (dừng lại sau mỗi chương để bạn duyệt) |
 | `/next` | Phê duyệt cho phép viết chương tiếp theo (khi ở chế độ duyệt) |
@@ -270,4 +270,4 @@ Trong TUI, gõ `/export` hoặc chạy lệnh:
 
 1. ⚠️ **Quy tắc 1 engine / 1 truyện**: Không mở cùng lúc 2 cửa sổ TUI trên cùng một thư mục truyện để tránh xung đột ghi đè dữ liệu.
 2. ⚠️ **Khớp ngữ cảnh (`num_ctx` == `context_window`)**: Nếu dùng Ollama, luôn đảm bảo `num_ctx` trong Modelfile bằng chính xác giá trị `context_window` trong file config.
-3. 🔒 **Bảo mật**: File `config/config.json`, thư mục `novels/`, và `workspace/` đã được cấu hình trong `.gitignore` để không bị lộ API Key hay bản thảo riêng tư khi push lên GitHub.
+3. 🔒 **Bảo mật**: File `config/config.json`, thư mục `novels/`, và `workspace/` đã được cấu hình trong `.gitignore` để không bị lộ API key hay bản thảo riêng tư khi push lên GitHub.

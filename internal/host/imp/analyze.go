@@ -103,7 +103,7 @@ func analyzedChaptersStrict(w *Workspace, seg *Segmentation, normalized []byte, 
 			break
 		}
 		if err != nil {
-			return n, fmt.Errorf("Đọc sản phẩm phân tích của chương %d: %w", c, err)
+			return n, fmt.Errorf("Đọc kết quả phân tích của chương %d: %w", c, err)
 		}
 		if a.InputDigest != chapterInputDigest(segIdentity, promptVersion, seg, normalized, c-1) {
 			break
@@ -120,7 +120,7 @@ func analyzedChaptersStrict(w *Workspace, seg *Segmentation, normalized []byte, 
 func discardAnalysesAfter(w *Workspace, keep, total int) error {
 	for c := keep + 1; c <= total; c++ {
 		if err := os.Remove(w.path(analysisPath(c))); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("Dọn sản phẩm phân tích cũ %s: %w", analysisPath(c), err)
+			return fmt.Errorf("Dọn kết quả phân tích cũ %s: %w", analysisPath(c), err)
 		}
 	}
 	return nil
@@ -144,7 +144,7 @@ func loadPriorFactsStrict(w *Workspace, count int) ([]ImportedChapterFacts, erro
 	for c := 1; c <= count; c++ {
 		a, err := readArtifact[ChapterAnalysisPayload](w, analysisPath(c))
 		if err != nil {
-			return out, fmt.Errorf("Đọc sự thật phân tích của chương %d: %w", c, err)
+			return out, fmt.Errorf("Đọc dữ kiện phân tích của chương %d: %w", c, err)
 		}
 		out = append(out, a.Payload.Facts)
 	}
@@ -308,7 +308,7 @@ func AnalyzeNext(ctx context.Context, m callModel, systemPrompt string, w *Works
 					}
 					w.writeFailure(FailureMeta{Stage: "analyze", Detail: fmt.Sprintf("Lô %d-%d bị cắt do giới hạn độ dài", start+1, end),
 						StopReason: "length", PrefixSalvage: fmt.Sprintf("available:%d", len(salvaged))}, tr.Raw)
-					prof.logger().Info("imp phân tích bị cắt, vớt phần tiền tố liên tục", "batch_start", start+1, "salvaged", len(salvaged))
+					prof.logger().Info("imp analysis truncated, salvaging contiguous prefix", "batch_start", start+1, "salvaged", len(salvaged))
 					echoChapterFacts(prof, salvaged)
 					return len(salvaged), nil
 				}
@@ -316,7 +316,7 @@ func AnalyzeNext(ctx context.Context, m callModel, systemPrompt string, w *Works
 				w.writeFailure(FailureMeta{Stage: "analyze", Detail: fmt.Sprintf("Lô %d-%d bị cắt do giới hạn độ dài, không có tiền tố nào vớt được", start+1, end),
 					StopReason: "length", PrefixSalvage: "unavailable"}, tr.Raw)
 				if end-start > 1 {
-					prof.logger().Warn("imp phân tích bị cắt, thu nhỏ lô để gộp lại", "batch", fmt.Sprintf("%d-%d", start+1, end), "prefix_salvage", "unavailable")
+					prof.logger().Warn("imp analysis truncated, shrinking batch to regroup", "batch", fmt.Sprintf("%d-%d", start+1, end), "prefix_salvage", "unavailable")
 					end = start + (end-start)/2
 					// 无 Key 的进度行：既让用户看见缩批动作，也隔断前后两次独立调用的
 					// 退避行按同 Key 误合并（Key 契约只覆盖同一调用内的瞬态退避）。

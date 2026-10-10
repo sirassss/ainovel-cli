@@ -45,7 +45,7 @@ func Run(cfg bootstrap.Config, bundle assets.Bundle, opts Options) error {
 	// （外部 kill 的挂死不走 defer，仍需在 TUI 里手动 /diag。）
 	defer func() {
 		if _, err := diag.Export(store.NewStore(eng.Dir())); err != nil {
-			fmt.Fprintf(stderr, "Cảnh báo: xuất báo cáo chẩn đoán thất bại: %v\n", err)
+			fmt.Fprintf(stderr, "Cảnh báo: không xuất được báo cáo chẩn đoán: %v\n", err)
 		}
 	}()
 

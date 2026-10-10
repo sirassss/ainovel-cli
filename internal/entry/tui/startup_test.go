@@ -87,7 +87,7 @@ func TestStartupFailureStaysInWorkbench(t *testing.T) {
 	if got.snapshot.IsRunning {
 		t.Fatal("启动失败后 snapshot 不应仍显示运行中")
 	}
-	if !strings.Contains(got.textarea.Placeholder, "gián đoạn") && !strings.Contains(got.textarea.Placeholder, "thất bại") {
+	if !strings.Contains(got.textarea.Placeholder, "gián đoạn") && !strings.Contains(got.textarea.Placeholder, "Không khởi tạo được") {
 		t.Fatalf("placeholder = %q", got.textarea.Placeholder)
 	}
 	if len(got.events) == 0 || got.events[len(got.events)-1].Category != "ERROR" {

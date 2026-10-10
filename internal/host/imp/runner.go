@@ -163,7 +163,7 @@ func Run(ctx context.Context, deps Deps, opts Options) (<-chan Event, error) {
 	// 引擎/TUI 日志混流，排查时只看这一个文件。创建失败须回显——面板会指引用户
 	// 查看 logs/import.log，静默回退等于指向一个不存在的文件（Debug-First）。
 	log, closeLog, logErr := logger.FileLogger(deps.Store.Dir(), "import.log")
-	log.Info("Môi trường chạy model nhập truyện imp",
+	log.Info("imp model runtime",
 		"segment_ctx", deps.Segment.Runtime.ContextTokens,
 		"analyze_ctx", deps.Analyze.Runtime.ContextTokens,
 		"synthesize_ctx", deps.Synthesize.Runtime.ContextTokens,
@@ -175,7 +175,7 @@ func Run(ctx context.Context, deps Deps, opts Options) (<-chan Event, error) {
 		defer closeLog()
 		r := &runner{deps: deps, opts: opts, events: events, ws: OpenWorkspace(deps.Store.Dir()), log: log}
 		if logErr != nil {
-			r.emit(StageIngesting, 0, 0, fmt.Sprintf("Tạo tệp nhật ký nhập truyện thất bại (%v), lần chuyển ngữ này dùng nhật ký mặc định", logErr), nil)
+			r.emit(StageIngesting, 0, 0, fmt.Sprintf("Không tạo được tệp nhật ký nhập truyện (%v), lần này dùng nhật ký mặc định", logErr), nil)
 		}
 		r.run(ctx)
 	}()
@@ -349,7 +349,7 @@ func (r *runner) run(ctx context.Context) {
 			return
 		}
 		if previous != nil && facts == *previous {
-			r.fail("Nhập truyện bị đình trệ", fmt.Errorf("Sự thật không đổi sau khi thực hiện hành động, hành động kế tiếp vẫn là %q", NextAction(facts)))
+			r.fail("Nhập truyện bị đình trệ", fmt.Errorf("Dữ kiện không đổi sau khi thực hiện hành động, hành động kế tiếp vẫn là %q", NextAction(facts)))
 			return
 		}
 		snapshot := facts
@@ -377,13 +377,13 @@ func (r *runner) run(ctx context.Context) {
 		case ActionPublish:
 			err = r.publish(ctx)
 		case ActionDone:
-			r.emit(StageDone, 0, 0, "Nhập truyện hoàn tất, chờ duyệt rồi viết tiếp", nil)
+			r.emit(StageDone, 0, 0, "Nhập truyện xong, chờ duyệt rồi viết tiếp", nil)
 			return
 		default:
 			err = fmt.Errorf("Hành động không xác định %q", act)
 		}
 		if err != nil {
-			r.fail("Nhập truyện thất bại", err)
+			r.fail("Không nhập được truyện", err)
 			return
 		}
 	}
@@ -438,7 +438,7 @@ func (r *runner) segment(ctx context.Context) error {
 	}
 	// 最终切分已落盘，块级缓存完成使命；清理失败无碍正确性（digest 仍一致），但要留痕。
 	if cerr := r.ws.clearDir(dirSegmentChunks); cerr != nil {
-		r.emit(StageSegmenting, 0, 0, fmt.Sprintf("Dọn bộ nhớ đệm theo khối thất bại (không ảnh hưởng kết quả chia): %v", cerr), nil)
+		r.emit(StageSegmenting, 0, 0, fmt.Sprintf("Không dọn được cache theo khối (không ảnh hưởng kết quả chia): %v", cerr), nil)
 	}
 	r.emit(StageSegmenting, len(seg.Chapters), len(seg.Chapters),
 		fmt.Sprintf("Chia tách xong: %d chương, %d vùng phụ", len(seg.Chapters), len(seg.Matter)), nil)
@@ -469,14 +469,14 @@ func (r *runner) confirm() bool {
 	if !auto && !accept {
 		msg := buildConfirmPreview(&seg.Payload)
 		if blockedByNotes {
-			msg += "  ! Có ghi chú dung sai khi chia tách, --yes không tự động thông qua, hãy kiểm tra thủ công\n"
+			msg += "  ! Có ghi chú dung sai khi chia tách, --yes không tự động chấp nhận, hãy kiểm tra thủ công\n"
 		}
 		r.emit(StageAwaitingConfirmation, len(seg.Payload.Chapters), len(seg.Payload.Chapters), msg, nil)
 		return false
 	}
 	raw, err := r.ws.readBytes(fileSegmentation)
 	if err != nil {
-		r.fail("Đọc sản phẩm chia tách", err)
+		r.fail("Đọc kết quả chia tách", err)
 		return false
 	}
 	method, doneMsg := confirmMethodAuto, "Đã tự động chấp nhận chia tách (--yes)"
@@ -485,7 +485,7 @@ func (r *runner) confirm() bool {
 	}
 	conf := Confirmation{Method: method, Chapters: len(seg.Payload.Chapters)}
 	if err := writeArtifact(r.ws, fileConfirmation, Digest(raw), conf); err != nil {
-		r.fail("Ghi sản phẩm xác nhận", err)
+		r.fail("Ghi kết quả xác nhận", err)
 		return false
 	}
 	r.emit(StageAwaitingConfirmation, len(seg.Payload.Chapters), len(seg.Payload.Chapters), doneMsg, nil)
@@ -560,7 +560,7 @@ func (r *runner) analyze(ctx context.Context) error {
 			break
 		}
 	}
-	r.emit(StageAnalyzing, total, total, "Trích xuất sự thật từng chương hoàn tất", nil)
+	r.emit(StageAnalyzing, total, total, "Trích xuất dữ kiện từng chương xong", nil)
 	return nil
 }
 
@@ -654,7 +654,7 @@ func (r *runner) storyChoice() (string, error) {
 			return "", fmt.Errorf("Đọc phán quyết trạng thái truyện: %w", aerr)
 		}
 	} else {
-		return "", fmt.Errorf("Đọc sản phẩm tổng hợp: %w", err)
+		return "", fmt.Errorf("Đọc kết quả tổng hợp: %w", err)
 	}
 	if r.opts.StoryResolution != "" {
 		return r.opts.StoryResolution, nil

@@ -493,13 +493,13 @@ func LogContextWindowChoice(role, model string, window int, source ContextWindow
 	attrs := []any{"module", "context", "role", role, "model", model, "window", window, "source", source}
 	switch source {
 	case CtxWindowModelConfig:
-		slog.Info("cửa sổ ngữ cảnh (từ cấu hình model của provider)", attrs...)
+		slog.Info("context window (from provider model config)", attrs...)
 	case CtxWindowDefault:
-		slog.Warn("model không nhận diện được, dùng cửa sổ dự phòng (có thể chỉ định rõ ở providers.<name>.models[].context_window)", attrs...)
+		slog.Warn("model not recognized, using fallback window (can be set explicitly at providers.<name>.models[].context_window)", attrs...)
 	case CtxWindowConfig:
-		slog.Info("cửa sổ ngữ cảnh (từ context_window trong tệp cấu hình)", attrs...)
+		slog.Info("context window (from context_window in config file)", attrs...)
 	default:
-		slog.Info("cửa sổ ngữ cảnh", attrs...)
+		slog.Info("context window", attrs...)
 	}
 }
 

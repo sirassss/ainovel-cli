@@ -390,7 +390,7 @@ func displayToolName(tool string, args json.RawMessage) string {
 		if json.Unmarshal(args, &p) == nil && p.Chapter > 0 {
 			suffix := ""
 			if p.Character != "" {
-				suffix = "·" + p.Character + "hội thoại"
+				suffix = " · " + p.Character + " hội thoại"
 			} else if p.Source == "draft" {
 				suffix = " · bản nháp"
 			}

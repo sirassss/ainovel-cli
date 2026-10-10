@@ -207,7 +207,7 @@ func (ms *ModelSet) Swap(role, provider, model string) error {
 	}
 	next, err := createModelFromConfig(provider, model, pc, make(map[string]agentcore.ChatModel))
 	if err != nil {
-		return fmt.Errorf("Chuyển model thất bại: %w", err)
+		return fmt.Errorf("Không chuyển được model: %w", err)
 	}
 
 	jsonSchema := ms.config.ModelJSONSchema(provider, model)
@@ -328,7 +328,7 @@ func NewModelSet(cfg Config) (*ModelSet, error) {
 			return nil, fmt.Errorf("role %s model: %w", role, err)
 		}
 		ms.models[role] = NewSwappableModel(rc.Provider, rc.Model, m, cfg.ModelJSONSchema(rc.Provider, rc.Model))
-		slog.Info("Phân bổ model theo vai trò", "module", "config", "role", role, "provider", rc.Provider, "model", rc.Model)
+		slog.Info("models assigned by role", "module", "config", "role", role, "provider", rc.Provider, "model", rc.Model)
 		if len(rc.Fallbacks) == 0 {
 			continue
 		}
@@ -365,7 +365,7 @@ func createModelFromConfig(providerKey, model string, pc ProviderConfig, cache m
 
 	providerType, err := pc.ProviderType(providerKey)
 	if err != nil {
-		return nil, fmt.Errorf("Phân tích loại provider thất bại: %w", err)
+		return nil, fmt.Errorf("Không phân tích được loại provider: %w", err)
 	}
 	providerExtra := cloneMap(pc.Extra)
 	if pc.API != "" {

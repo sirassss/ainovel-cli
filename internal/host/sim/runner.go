@@ -38,7 +38,7 @@ func Run(ctx context.Context, deps Deps, opts Options) (<-chan Event, error) {
 		emit(StageScan, 0, 0, "Đang quét ngữ liệu simulate...", nil)
 		sources, err := scanSources(opts.SourceDir)
 		if err != nil {
-			emit(StageError, 0, 0, "Quét thư mục simulate thất bại", err)
+			emit(StageError, 0, 0, "Không quét được thư mục simulate", err)
 			return
 		}
 		if len(sources) == 0 {
@@ -48,43 +48,43 @@ func Run(ctx context.Context, deps Deps, opts Options) (<-chan Event, error) {
 
 		existing, err := deps.Store.Simulation.Load()
 		if err != nil {
-			emit(StageError, 0, len(sources), "Đọc chân dung hiện có thất bại", err)
+			emit(StageError, 0, len(sources), "Không đọc được style profile hiện có", err)
 			return
 		}
 		pending := pendingSources(existing, sources)
 		if len(pending) == 0 {
-			emit(StageDone, 0, len(sources), "Chân dung đã là mới nhất, không phát hiện bài mới hoặc bài thay đổi", nil)
+			emit(StageDone, 0, len(sources), "Style profile đã mới nhất, không có bài mới hoặc bài thay đổi", nil)
 			return
 		}
 
 		reports := make([]domain.SimulationSourceReport, 0, len(pending))
 		for i, source := range pending {
 			if err := ctx.Err(); err != nil {
-				emit(StageError, i, len(pending), "Người dùng đã hủy phân tích chân dung", err)
+				emit(StageError, i, len(pending), "Người dùng đã hủy phân tích style profile", err)
 				return
 			}
 			emit(StageAnalyze, i+1, len(pending), fmt.Sprintf("Phân tích ngữ liệu mô phỏng %d/%d: %s", i+1, len(pending), source.RelativePath), nil)
 			report, err := AnalyzeSource(ctx, deps.LLM, deps.Prompts.Source, source)
 			if err != nil {
-				emit(StageError, i+1, len(pending), "Phân tích ngữ liệu thất bại", err)
+				emit(StageError, i+1, len(pending), "Không phân tích được ngữ liệu", err)
 				return
 			}
 			reports = append(reports, *report)
 		}
 
 		allReports := mergeSourceReports(existing, reports)
-		emit(StageMerge, len(pending), len(pending), "Đang gộp chân dung mô phỏng...", nil)
+		emit(StageMerge, len(pending), len(pending), "Đang gộp style profile...", nil)
 		synthesis, err := MergeSynthesis(ctx, deps.LLM, deps.Prompts.Merge, existing, allReports)
 		if err != nil {
-			emit(StageError, len(pending), len(pending), "Gộp chân dung thất bại", err)
+			emit(StageError, len(pending), len(pending), "Không gộp được style profile", err)
 			return
 		}
 		profile := buildProfile(existing, opts.SourceDir, pending, reports, *synthesis, time.Now())
 		if err := deps.Store.Simulation.Save(profile); err != nil {
-			emit(StageError, len(pending), len(pending), "Lưu chân dung mô phỏng thất bại", err)
+			emit(StageError, len(pending), len(pending), "Không lưu được style profile", err)
 			return
 		}
-		emit(StageDone, len(pending), len(pending), fmt.Sprintf("Đã cập nhật chân dung mô phỏng: thêm/thay đổi %d bài, tổng cộng %d bài", len(pending), len(profile.Corpus.Sources)), nil)
+		emit(StageDone, len(pending), len(pending), fmt.Sprintf("Đã cập nhật style profile: thêm/thay đổi %d bài, tổng cộng %d bài", len(pending), len(profile.Corpus.Sources)), nil)
 	}()
 	return events, nil
 }
@@ -130,13 +130,13 @@ func generateStructured[T any](ctx context.Context, model LLMChat, contract llmc
 		Agent:        "simulation",
 		Hooks: llmcontract.Hooks{
 			Resolved: func(res llmcontract.Resolution) {
-				slog.Debug("Chọn giao thức có cấu trúc cho chân dung mô phỏng", "contract", contract.Name,
+				slog.Debug("structured mode resolved for simulation persona", "contract", contract.Name,
 					"structured_mode", res.Mode, "capability_source", res.Source,
 					"provider", res.Provider, "model", res.Model,
 					"schema_fingerprint", contract.Fingerprint())
 			},
 			Correction: func(ev llmcontract.Correction) {
-				slog.Warn("Tự phục hồi đầu ra chân dung mô phỏng", "contract", contract.Name, "attempt", ev.Attempt,
+				slog.Warn("simulation persona output self-correction", "contract", contract.Name, "attempt", ev.Attempt,
 					"layer", ev.Layer, "structured_mode", ev.Mode, "err", ev.Err)
 			},
 		},

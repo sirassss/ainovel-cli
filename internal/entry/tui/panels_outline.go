@@ -160,7 +160,7 @@ func renderDetailContent(snap host.UISnapshot, contentW int) string {
 			b.WriteString(compassStyle.Render("  ··· Các chương sau sẽ tự động sinh theo tiến độ sáng tác"))
 			b.WriteString("\n")
 			if snap.CompassDirection != "" {
-				direction := fmt.Sprintf("  → Hướng kết cục: %s", snap.CompassDirection)
+				direction := fmt.Sprintf("  → Hướng kết thúc: %s", snap.CompassDirection)
 				if snap.CompassScale != "" {
 					direction += " (" + snap.CompassScale + ")"
 				}
@@ -173,7 +173,7 @@ func renderDetailContent(snap host.UISnapshot, contentW int) string {
 
 	// Nhân vật
 	if len(snap.Characters) > 0 {
-		b.WriteString(panelTitleStyle.Render(":: Nhân Vật"))
+		b.WriteString(panelTitleStyle.Render(":: Nhân vật"))
 		b.WriteString("\n")
 		for _, c := range snap.Characters {
 			writeBulletWrapped(&b, c, contentW, cardContentStyle)
@@ -183,7 +183,7 @@ func renderDetailContent(snap host.UISnapshot, contentW int) string {
 
 	// Nhân vật phụ
 	if snap.SupportingCount > 0 {
-		b.WriteString(panelTitleStyle.Render(":: Nhân Vật Phụ"))
+		b.WriteString(panelTitleStyle.Render(":: Nhân vật phụ"))
 		b.WriteString("\n")
 		b.WriteString(cardContentStyle.Render(truncate(fmt.Sprintf("Đã xuất hiện: %d nhân vật", snap.SupportingCount), contentW)))
 		b.WriteString("\n")
@@ -194,7 +194,7 @@ func renderDetailContent(snap host.UISnapshot, contentW int) string {
 	}
 
 	if snap.Synopsis != "" {
-		b.WriteString(panelTitleStyle.Render(":: Giới Thiệu Tóm Tắt"))
+		b.WriteString(panelTitleStyle.Render(":: Giới thiệu tóm tắt"))
 		b.WriteString("\n")
 		for _, line := range wrapStreamText(snap.Synopsis, contentW) {
 			b.WriteString(lipgloss.NewStyle().Foreground(colorDim).Render(line))
@@ -205,7 +205,7 @@ func renderDetailContent(snap host.UISnapshot, contentW int) string {
 
 	// Tiền đề
 	if snap.Premise != "" {
-		b.WriteString(panelTitleStyle.Render(":: Tiền Đề Cốt Truyện"))
+		b.WriteString(panelTitleStyle.Render(":: Tiền đề cốt truyện"))
 		b.WriteString("\n")
 		for _, line := range wrapStreamText(snap.Premise, contentW) {
 			b.WriteString(lipgloss.NewStyle().Foreground(colorDim).Render(line))
@@ -215,21 +215,21 @@ func renderDetailContent(snap host.UISnapshot, contentW int) string {
 	}
 
 	if snap.LastCommitSummary != "" {
-		b.WriteString(cardTitleStyle.Render("~ Bản Nộp Mới Nhất ~"))
+		b.WriteString(cardTitleStyle.Render("~ Bản lưu mới nhất ~"))
 		b.WriteString("\n")
 		writeWrapped(&b, snap.LastCommitSummary, contentW, cardContentStyle)
 		b.WriteString("\n")
 	}
 
 	if snap.LastReviewSummary != "" {
-		b.WriteString(cardTitleStyle.Render("~ Đánh giá Mới Nhất ~"))
+		b.WriteString(cardTitleStyle.Render("~ Đánh giá mới nhất ~"))
 		b.WriteString("\n")
 		writeWrapped(&b, snap.LastReviewSummary, contentW, cardContentStyle)
 		b.WriteString("\n")
 	}
 
 	if len(snap.RecentSummaries) > 0 {
-		b.WriteString(cardTitleStyle.Render("~ Tóm Tắt Gần Đây ~"))
+		b.WriteString(cardTitleStyle.Render("~ Tóm tắt gần đây ~"))
 		b.WriteString("\n")
 		for _, s := range snap.RecentSummaries {
 			writeWrapped(&b, s, contentW, cardContentStyle)

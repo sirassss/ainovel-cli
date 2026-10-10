@@ -139,7 +139,7 @@ func (l *appendLog[T]) appendUnlocked(io *IO, incoming []T) ([]T, error) {
 			return l.cloneValues(added), err
 		}
 		l.legacyPresent = false
-		slog.Info("Các sự kiện tăng trưởng đã được chuyển sang nhật ký nối thêm",
+		slog.Info("growth events migrated to append log",
 			"module", "store", "from", l.legacyPath, "to", l.path, "records", len(l.values))
 	}
 	return l.cloneValues(added), nil
@@ -236,7 +236,7 @@ func committedJSONLinesUnlocked(io *IO, path string) ([]byte, error) {
 	if err := os.Truncate(io.path(path), int64(keep)); err != nil {
 		return nil, err
 	}
-	slog.Warn("Đã sửa phần đuôi chưa commit của nhật ký nối thêm",
+	slog.Warn("repaired uncommitted tail of append log",
 		"module", "store", "file", path, "discarded_bytes", len(data)-keep)
 	return data[:keep], nil
 }

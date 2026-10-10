@@ -36,9 +36,9 @@ type modelRoleOption struct {
 
 var modelRoleOptions = []modelRoleOption{
 	{Key: "default", Label: "Mặc định"},
-	{Key: "architect", Label: "Architect (Kiến trúc sư)"},
-	{Key: "writer", Label: "Writer (Người viết)"},
-	{Key: "editor", Label: "Editor (Biên tập viên)"},
+	{Key: "architect", Label: "Architect (lập kế hoạch)"},
+	{Key: "writer", Label: "Writer (sáng tác)"},
+	{Key: "editor", Label: "Editor (đánh giá)"},
 }
 
 type thinkingOption struct{ Key, Label string }
@@ -102,7 +102,7 @@ func newModelSwitchState(rt modelRuntime, roleHint string) *modelSwitchState {
 		providers: rt.ConfiguredProviders(),
 	}
 	if len(state.providers) == 0 {
-		state.message = "Hiện không có Provider nào khả dụng"
+		state.message = "Hiện không có provider nào khả dụng"
 	}
 
 	roleHint = normalizeRoleKey(roleHint)
@@ -306,7 +306,7 @@ func renderModelSwitchBar(width int, state *modelSwitchState) string {
 	title := lipgloss.NewStyle().
 		Foreground(colorMuted).
 		Bold(true).
-		Render("/model Phân Vai & Model")
+		Render("/model Phân vai & model")
 
 	row1 := renderModelField("Vai trò", state.roleLabel(), state.focus == modelFocusRole)
 	row2 := renderModelField("Provider", state.provider(), state.focus == modelFocusProvider)
