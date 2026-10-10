@@ -1,67 +1,67 @@
-# Step 2 RFC:Engine 直接运行 Worker(七道必答题答案)
+# Step 2 RFC: Engine Runs Workers Directly (Answers to the Seven Required Questions)
 
-> 状态:定稿(2026-07-12)。基于对 host/observer/subagent/usage/cocreate 的代码侦察。
-> 结论:全部七题有低风险答案,进入实施。关联:docs/engine-arbiter.md。
+> Status: final (2026-07-12). Based on a code survey of host/observer/subagent/usage/cocreate.
+> Conclusion: all seven questions have low-risk answers; proceeding to implementation. Related: docs/engine-arbiter.md.
 
-## 1. Worker 执行面：程序化调用 subagent.Runner
+## 1. Worker execution surface: calling subagent.Runner programmatically
 
-> 后记(2026-07-22)：agentcore 已把类型化执行与模型工具协议拆开。`Runner.Run` 是宿主入口；
-> `Runner.AsTool()` 仅供需要让 LLM 自主派发 subagent 的宿主使用。AINovel 只依赖 Runner。
+> Postscript (2026-07-22): agentcore has split typed execution from the model tool protocol. `Runner.Run` is the host entry point;
+> `Runner.AsTool()` is only for hosts that need the LLM to dispatch subagents autonomously. AINovel depends only on Runner.
 
-`Runner.Run(agent, task)` 每次启动一个完整 `agentcore.AgentLoop`。Engine 直接调用它，build.go 的
-**全部装配原样生效**：角色模型+failover、prompt cache key(#seq 每次自增)、ThinkingLevel、
-UsageRecorder/SessionLogger(OnMessage)、Writer ContextManagerFactory、RestorePack、StopGuardFactory、
-StopAfterTools。类型化结果与错误链直接返回，不经过 JSON 编解码或工具结果嗅探。
+`Runner.Run(agent, task)` starts one complete `agentcore.AgentLoop` per call. The Engine calls it directly, and build.go's
+**entire assembly takes effect unchanged**: role models + failover, prompt cache key (#seq increments on every call), ThinkingLevel,
+UsageRecorder/SessionLogger (OnMessage), Writer ContextManagerFactory, RestorePack, StopGuardFactory,
+StopAfterTools. Typed results and error chains are returned directly, with no JSON encoding/decoding or tool-result sniffing.
 
-**事件投影**:子代理进度中继读的是 **ctx 里的 ToolProgress 回调**(`agentcore.ReportToolProgress(ctx,...)`)。
-Engine 以 `agentcore.WithToolProgress(ctx, relay)` 调 `Runner.Run`,中继照常工作;relay 把 ProgressPayload 合成
-`EventToolExecUpdate` 喂给现有 `observer.handleToolUpdate`——observer 的 worker 侧处理(TOOL 行/流式正文/
-thinking/retry/context)**复用率 ~95%**。DISPATCH 行改由 Engine 直接发起/收尾(新增 observer 两个入口)。
-Coordinator 左栏叙述流消失,由 Engine 叙述事件替代。
+**Event projection**: the subagent progress relay reads the **ToolProgress callback in ctx** (`agentcore.ReportToolProgress(ctx,...)`).
+The Engine calls `Runner.Run` with `agentcore.WithToolProgress(ctx, relay)`, so the relay works as usual; the relay synthesizes ProgressPayload into
+`EventToolExecUpdate` and feeds it to the existing `observer.handleToolUpdate`. The observer's worker-side handling (TOOL lines / streamed body /
+thinking / retry / context) is **~95% reusable**. DISPATCH lines are now started and finished directly by the Engine (two new observer entry points).
+The Coordinator's left-pane narration stream disappears, replaced by Engine narration events.
 
-**/model 与推理强度**:模型切换经 ModelSet swap(configs 持 failover wrapper,原机制);推理强度经
-`runner.SetThinkingLevel`(applyThinking 保留,删 coordinator 分支)。
+**/model and reasoning effort**: model switching goes through a ModelSet swap (configs hold the failover wrapper, as before); reasoning effort goes through
+`runner.SetThinkingLevel` (applyThinking is kept, the coordinator branch is deleted).
 
-## 2. Engine 生命周期
+## 2. Engine lifecycle
 
-单 goroutine 串行循环;`ctx` cancel = 暂停/中止(传播进 worker loop,checkpoint 保证无损);
-Resume/Continue = 起新循环。单 Worker 串行由循环结构天然保证。预算/停靠点哨兵在每轮边界由
-Engine 直接调用(替代事件订阅与 FlowBoundaryHook)。
+A single-goroutine serial loop; `ctx` cancel = pause/abort (propagates into the worker loop, checkpoints guarantee nothing is lost);
+Resume/Continue = start a new loop. A single serial Worker is guaranteed naturally by the loop structure. Budget/stop-point sentinels are called
+directly by the Engine at each round boundary (replacing event subscriptions and FlowBoundaryHook).
 
-## 3. 状态提交协议 → 串行使其近乎消失
+## 3. State commit protocol → serial execution makes it nearly disappear
 
-Engine 每轮 spawn 前才 `LoadState+Route`,指令永远基于最新事实——Route 指令无 TOCTOU,无需 Expect 对账。
-Expect 快照仅用于 **Arbiter 决策的 dispatch**(咨询与执行之间隔着 worker 运行):边界执行前比对
-{Phase, QueueHead},不符 → 丢弃 + 以新事实重询。前置校验(原 Gate 职责)成为 Engine 普通代码:
-phase=complete 不派发;writer 目标章未展开 → 改派 architect_long expand(确定性,无需教学文案)。
-干预的控制态动作(hold/reopen/dispatch)进 Engine 队列边界提交;answer/rules 即时。
+The Engine runs `LoadState+Route` only right before each spawn, so instructions are always based on the latest facts: Route instructions have no TOCTOU and need no Expect reconciliation.
+The Expect snapshot is used only for **dispatches from Arbiter decisions** (a worker run sits between consultation and execution): before executing at the boundary, compare
+{Phase, QueueHead}; on mismatch → discard + re-consult with the new facts. Precondition checks (the former Gate's duty) become ordinary Engine code:
+phase=complete dispatches nothing; writer target chapter not expanded → reroute to architect_long expand (deterministic, no teaching copy needed).
+Control-state actions from interventions (hold/reopen/dispatch) are committed at the Engine queue boundary; answer/rules take effect immediately.
 
-## 4. 错误分类学(确定性先行)
+## 4. Error taxonomy (deterministic first)
 
-- retryable(网络/限流/stream-idle):subagent 内部 MaxRetries=7 已就近消化,不出循环
-- worker 返回 error(escalate/hard_stop/工具硬错):同一指令 Engine 重试 1 次 → 仍败 → Arbiter
-  `worker_failure` 咨询(retry/reroute/abort)→ abort 或 Arbiter 自身失败 → 暂停 + notify
-- 参数错/未知 agent 等确定性错误:直接暂停 + notify(代码 bug,重试无意义)
+- retryable (network/rate limit/stream-idle): subagent's internal MaxRetries=7 absorbs these locally, never leaving the loop
+- worker returns error (escalate/hard_stop/hard tool error): the Engine retries the same instruction once → still failing → Arbiter
+  `worker_failure` consultation (retry/reroute/abort) → abort or Arbiter itself fails → pause + notify
+- deterministic errors such as bad arguments / unknown agent: pause + notify directly (a code bug; retrying is pointless)
 
-## 5. 僵局协议
+## 5. Deadlock protocol
 
-每轮记录指令键 `Agent+Task`。上一轮执行后 Route 仍产生同键，说明任务后置条件未满足，`repeat++`；指令改变则清零。Worker 内部 `plan/draft/edit` 等中间 checkpoint 不算 Engine 级推进。
-repeat==3 → Arbiter `deadlock` 咨询;Arbiter 建议 retry **不清零**;repeat==5 → 硬熔断:暂停 + notify。
-(Coordinator 时代"不设阈值"依赖其自主性;确定性 Engine 必须有限界。)
+Each round records the instruction key `Agent+Task`. If Route still produces the same key after the previous round executed, the task's postcondition was not met, and `repeat++`; if the instruction changes, the counter resets to zero. Intermediate checkpoints inside a Worker such as `plan/draft/edit` do not count as Engine-level progress.
+repeat==3 → Arbiter `deadlock` consultation; if the Arbiter suggests retry, the counter is **not reset**; repeat==5 → hard circuit breaker: pause + notify.
+(In the Coordinator era, "no threshold" relied on its autonomy; a deterministic Engine must be bounded.)
 
-## 6. 崩溃语义 → 免费
+## 6. Crash semantics → free
 
-不需要判断"上个 Worker 是否产生有效事实":工具层 checkpoint+digest 幂等,Route 从 store 重算,
-重复派发安全。agentcore 的模型流重试不会跨越工具执行边界。恢复 = 直接进循环。PendingSteer 在循环启动前作为
-干预走 Arbiter。
+There is no need to judge "whether the previous Worker produced valid facts": tool-layer checkpoint+digest is idempotent, Route is recomputed from the store,
+and repeated dispatch is safe. agentcore's model-stream retries never cross a tool execution boundary. Recovery = enter the loop directly. PendingSteer is handled before the loop starts, as an
+intervention going through the Arbiter.
 
-## 7. 原型验收
+## 7. Prototype acceptance
 
-端到端集成测试(fake ChatModel):规划→补齐→写章→弧末评审/摘要→展开→完本 全链路;干预分诊落 store;
-暂停/恢复;僵局熔断;usage 记录;observer 事件形状(DISPATCH/TOOL 行、流式 delta)。加上既有的
-60k Route 规格、agentcore 契约、editor 流测试作为回归网。
+End-to-end integration tests (fake ChatModel): the full path of planning → backfill → write chapters → arc-end review/summary → expansion → book completion; intervention triage persisted to the store;
+pause/resume; deadlock circuit breaker; usage recording; observer event shapes (DISPATCH/TOOL lines, streamed deltas). Plus the existing
+60k Route spec, agentcore contract, and editor stream tests as the regression net.
 
-## 完成期总结(设计决定)
+## Completion summary (design decision)
 
-完本总结改为**确定性生成**:store 已有全部事实(章节摘要/角色/伏笔台账/字数),Engine 直接渲染报告,
-不再花一次 LLM 调用产出仪式性文本。原 coordinator 的 LLM 总结取消(engine-arbiter.md §三:总结非裁定)。
+The completion summary is now **generated deterministically**: the store already holds all the facts (chapter summaries / characters / foreshadowing ledger / word counts), and the Engine renders the report directly,
+no longer spending an LLM call to produce ceremonial text. The original coordinator's LLM summary is dropped (engine-arbiter.md §3: a summary is not a ruling).

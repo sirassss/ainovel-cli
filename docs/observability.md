@@ -1,171 +1,171 @@
-# 观测手册
+# Observability Handbook
 
-跑长篇小说时，怎么知道各项机制是不是真的在工作？
+When running a long novel, how do you know whether each mechanism is actually working?
 
-本文档不是把 diag 规则照抄一遍，而是面向**实际运行**：你跑到第 N 章了，应该打开哪个文件、看哪个字段、判断健康还是异常。
-
----
-
-## 1. 通用排查流程
-
-```
-1. /diag                       # 自动诊断，看 Findings 区
-2. cd output/{novel}/meta/     # 直接 cat 关键工件
-3. tail decisions.jsonl                # 看最近 Arbiter 裁定
-4. ls -lt sessions/agents/             # 定位最近 Worker 会话后再 tail
-```
-
-`/diag` 覆盖不到的事实（包括本文档列出的"待补诊断"项），需要 step 2-4 手工查。
-
-### 报 issue：脱敏诊断导出
-
-每次 `/diag` 都会额外写出 `output/{novel}/meta/diag-export.md`——一份**已脱敏**的诊断（小说正文 / prompt / 思考已移除，仅保留行为骨架：工具名、错误串、重复次数、phase/flow、卡住的 step、日志错误分类）。遇到死循环 / 中断类问题，把这个文件贴到 GitHub issue 即可，维护者据此定位，无需用户的 `output/` 数据。
+This document is not a copy of the diag rules. It is oriented toward **actual runs**: you have reached chapter N, so which file should you open, which field should you look at, and how do you tell healthy from abnormal.
 
 ---
 
-## 2. 关键工件速查表
+## 1. General troubleshooting flow
 
-按"出问题时最常见排查路径"排序：
+```
+1. /diag                       # automatic diagnosis; check the Findings section
+2. cd output/{novel}/meta/     # cat the key artifacts directly
+3. tail decisions.jsonl                # look at the most recent Arbiter rulings
+4. ls -lt sessions/agents/             # find the most recent Worker session, then tail it
+```
 
-| 工件 | 路径 | 看什么 | 健康 | 不健康 |
+Facts that `/diag` does not cover (including the "pending diagnostics" items listed in this document) have to be checked by hand in steps 2-4.
+
+### Filing an issue: the redacted diagnostic export
+
+Every `/diag` run additionally writes `output/{novel}/meta/diag-export.md`, a **redacted** diagnostic (novel text / prompts / thinking removed, keeping only the behavioral skeleton: tool names, error strings, repeat counts, phase/flow, the stuck step, log error categories). For deadlock / interruption problems, paste this file into the GitHub issue; maintainers can locate the problem from it without needing the user's `output/` data.
+
+---
+
+## 2. Quick reference of key artifacts
+
+Ordered by "the most common troubleshooting path when something goes wrong":
+
+| Artifact | Path | What to look at | Healthy | Unhealthy |
 |---|---|---|---|---|
-| 进度 | `meta/progress.json` | `phase` / `flow` / `completed_chapters` | phase 单调前进，flow 在合法集合内 | phase 倒退 / flow 卡在某状态 |
-| 指南针 | `meta/compass.json` | `last_updated` 与最新章节差距 | gap < 15 章 | gap > 15 章（CompassDrift 命中） |
-| 配角名册 | `meta/cast_ledger.json` | 条目数 / brief_role 填写率 / 名字一致性 | 见 §4 | 见 §4 |
-| 伏笔台账 | `meta/foreshadow.json` | `status="planted"` 的最长停滞章数 | < 章数/3 | > 章数/3（StaleForeshadow 命中） |
-| 大纲 | `meta/layered_outline.json` | 当前卷剩余未写章数 | 提前 1-2 章已展开 | 写到当前章但下一章无 outline（OutlineExhausted） |
-| 角色档案 | `meta/characters.json` | 是否能在最近 N 章摘要里找到 core/important 角色 | 都能找到 | 缺席（GhostCharacter 命中） |
-| 检查点 | `meta/checkpoints.jsonl` | 最近一行的 `step` 是否对应 progress | 一致 | 不一致（崩溃恢复未自愈） |
-| 裁定审计 | `meta/decisions.jsonl` | 最近若干条裁定的 facts/decision | 分诊准确、动作合理 | 同类干预反复裁定失败 |
+| Progress | `meta/progress.json` | `phase` / `flow` / `completed_chapters` | phase advances monotonically, flow stays within the legal set | phase goes backward / flow is stuck in one state |
+| Compass | `meta/compass.json` | gap between `last_updated` and the latest chapter | gap < 15 chapters | gap > 15 chapters (CompassDrift fires) |
+| Supporting cast ledger | `meta/cast_ledger.json` | entry count / brief_role fill rate / name consistency | see §4 | see §4 |
+| Foreshadowing ledger | `meta/foreshadow.json` | the longest stall (in chapters) of any `status="planted"` entry | < chapter count/3 | > chapter count/3 (StaleForeshadow fires) |
+| Outline | `meta/layered_outline.json` | number of unwritten chapters remaining in the current volume | expanded 1-2 chapters ahead | writing the current chapter but the next chapter has no outline (OutlineExhausted) |
+| Character profiles | `meta/characters.json` | whether core/important characters can be found in the last N chapter summaries | all found | absent (GhostCharacter fires) |
+| Checkpoints | `meta/checkpoints.jsonl` | whether the `step` on the last line matches progress | consistent | inconsistent (crash recovery did not self-heal) |
+| Ruling audit | `meta/decisions.jsonl` | facts/decision of the most recent rulings | accurate triage, sensible actions | rulings for the same kind of intervention keep failing |
 
 ---
 
-## 3. 指南针（compass）观测
+## 3. Compass observability
 
-**修复时间**：2026-05-08（commit `fix: update_compass 工具自动填 last_updated`）
+**Fix date**: 2026-05-08 (commit `fix: update_compass tool auto-fills last_updated`)
 
-### 看什么
+### What to look at
 
 ```bash
 cat output/{novel}/meta/compass.json
 ```
 
-字段语义：
-- `ending_direction`：终局方向（应该和 `premise.md` "终局方向"段一致）
-- `open_threads`：活跃长线（每卷边界由 architect 增删）
-- `estimated_scale`：预估规模（如"4-6 卷"，每卷边界更新）
-- `last_updated`：**工具自动填**为更新时的最大已完成章号（不再依赖 LLM 自填）
+Field semantics:
+- `ending_direction`: the ending direction (should match the "ending direction" section of `premise.md`)
+- `open_threads`: active long-running threads (added or removed by the architect at each volume boundary)
+- `estimated_scale`: estimated scale (e.g. "4-6 volumes", updated at each volume boundary)
+- `last_updated`: **filled automatically by the tool** with the highest completed chapter number at update time (no longer relies on the LLM filling it in)
 
-### 健康度判断
+### Health assessment
 
-| 信号 | 判断 |
+| Signal | Assessment |
 |---|---|
-| `last_updated` 在 `[latest-15, latest]` 范围 | 健康 |
-| `last_updated` 滞后 latest 超过 15 章 | architect 没在弧/卷边界更新——查 architect-long.md prompt |
-| `last_updated == 0` | **本次修复前的脏数据**，下次 update_compass 会自愈 |
-| `ending_direction` 和 premise.md "终局方向"段对不上 | architect 偷偷改了用户意图——记录下来，决定要不要冻结字段（设计议题，见 todo.md） |
+| `last_updated` is within `[latest-15, latest]` | Healthy |
+| `last_updated` lags latest by more than 15 chapters | the architect did not update at arc/volume boundaries; check the architect-long.md prompt |
+| `last_updated == 0` | **dirty data from before this fix**; the next update_compass will self-heal it |
+| `ending_direction` does not match the "ending direction" section of premise.md | the architect quietly changed the user's intent; record it and decide whether to freeze the field (a design topic, see todo.md) |
 
-### 怎么验证修复有效
+### How to verify the fix works
 
-跑长篇前后对比：
-- **修复前**：跑 30+ 章后 `compass.last_updated` 大概率是 `0` 或某个早期章号
-- **修复后**：每次 architect 调 `update_compass`，`last_updated` 都被工具层覆盖为当前 latest
+Compare before and after running a long novel:
+- **Before the fix**: after 30+ chapters, `compass.last_updated` is very likely `0` or some early chapter number
+- **After the fix**: every time the architect calls `update_compass`, `last_updated` is overwritten by the tool layer with the current latest
 
 ---
 
-## 4. 配角名册（cast_ledger）观测
+## 4. Supporting cast ledger (cast_ledger) observability
 
-**功能落地**：2026-05-08（commit `feat: 新增配角名册自动追踪次要角色`）
+**Feature landed**: 2026-05-08 (commit `feat: add supporting cast ledger to automatically track minor characters`)
 
-### 看什么
+### What to look at
 
 ```bash
-cat output/{novel}/meta/cast_ledger.json | jq 'length'                     # 条目总数
-cat output/{novel}/meta/cast_ledger.json | jq '[.[] | select(.brief_role == "" or .brief_role == null)] | length'  # 缺 brief_role 数
-cat output/{novel}/meta/cast_ledger.json | jq '[.[] | select(.appearance_count >= 3)] | length'   # 频繁出场（≥3 次）数
-cat output/{novel}/meta/cast_ledger.json | jq 'sort_by(-.appearance_count) | .[:10]'  # 出场最多的 10 个
+cat output/{novel}/meta/cast_ledger.json | jq 'length'                     # total entry count
+cat output/{novel}/meta/cast_ledger.json | jq '[.[] | select(.brief_role == "" or .brief_role == null)] | length'  # count missing brief_role
+cat output/{novel}/meta/cast_ledger.json | jq '[.[] | select(.appearance_count >= 3)] | length'   # count of frequent appearances (>= 3)
+cat output/{novel}/meta/cast_ledger.json | jq 'sort_by(-.appearance_count) | .[:10]'  # the 10 most frequent appearances
 ```
 
-### 健康度判断
+### Health assessment
 
-| 维度 | 健康 | 异常 | 应对 |
+| Dimension | Healthy | Abnormal | Response |
 |---|---|---|---|
-| **条目数 vs 已完成章数** | ledger 条目数 ≈ 已完成章数 × 0.3-0.6 | > 章数 × 0.8（过场角色被错误入册） | 查 writer.md 的 `cast_intros` 段是否够明确 |
-| **brief_role 填写率** | 缺失 < 30% | 缺失 > 50% | Writer 漏填严重——prompt 引导不足 |
-| **同名相似度** | 没有疑似同人多名 | 同时出现 "李X" / "老李" / "X掌柜" | LLM 名字漂移——prompt 加约束"用一致名字"或加用户 steer 合并工具 |
-| **频繁出场角色** | `appearance_count >= 5` 的条目稀少 | 大量条目跨弧高频出场 | 该考虑升格到核心档案（阶段 3 升格通道） |
-| **召回是否被消费** | Writer 写到旧角色时，commit_chapter 的 characters 字段里包含 ledger 已有名字 | Writer 重复发明同一个名字（出现"老周A"和"老周B"） | recent_cast 召回未被消费——检查 writer.md "配角连续性"段 |
+| **Entry count vs completed chapters** | ledger entry count ≈ completed chapters × 0.3-0.6 | > chapters × 0.8 (walk-on characters wrongly entered into the ledger) | check whether the `cast_intros` section of writer.md is explicit enough |
+| **brief_role fill rate** | missing < 30% | missing > 50% | the Writer is badly under-filling it; the prompt guidance is insufficient |
+| **Name similarity** | no suspected same-person multiple names | "李X" / "老李" / "X掌柜" appear at the same time (Li X / Old Li / Shopkeeper X) | LLM name drift: add a "use a consistent name" constraint to the prompt, or add a user steer merge tool | <!-- han:keep -->
+| **Frequent appearances** | entries with `appearance_count >= 5` are rare | many entries appear frequently across arcs | consider promoting them to the core profiles (the stage-3 promotion path) |
+| **Whether recall is consumed** | when the Writer writes an old character, the characters field of commit_chapter includes a name already in the ledger | the Writer reinvents the same name ("老周A" and "老周B" appear, i.e. Old Zhou A and Old Zhou B) | recent_cast recall is not being consumed; check the "supporting cast continuity" section of writer.md | <!-- han:keep -->
 
-### 数据流验证（端到端）
+### Data flow verification (end to end)
 
-跑 5 章后：
-1. `cat meta/cast_ledger.json` 应该不为空（除非每章都只用核心角色）
-2. 如果 Writer 在第 1 章引入了"老周"：
-   - `cast_ledger` 中应有 `老周` 条目，`appearance_count=1`
-3. 如果第 5 章再写老周：
-   - `老周.appearance_count=2`，`last_seen_chapter=5`
-4. `meta/sessions/agents/writer-*.jsonl` 中第 5 章的 novel_context 返回值，应该在 `episodic_memory.recent_cast` 里看到老周
-5. 如果上一步看到了但 Writer 没消费（写出来的老周和第 1 章对不上）—— 这是 prompt 问题
+After running 5 chapters:
+1. `cat meta/cast_ledger.json` should be non-empty (unless every chapter uses only core characters)
+2. If the Writer introduced "老周" (Old Zhou) in chapter 1: <!-- han:keep -->
+   - `cast_ledger` should have a `老周` entry with `appearance_count=1` <!-- han:keep -->
+3. If chapter 5 writes Old Zhou again:
+   - `老周.appearance_count=2`, `last_seen_chapter=5` <!-- han:keep -->
+4. In `meta/sessions/agents/writer-*.jsonl`, the novel_context return value for chapter 5 should show Old Zhou in `episodic_memory.recent_cast`
+5. If the previous step shows it but the Writer did not consume it (the Old Zhou it wrote does not match chapter 1), this is a prompt problem
 
-### 当前没有自动诊断（但 snapshot 已加载）
+### No automatic diagnostics yet (but the snapshot is already loaded)
 
-`diag.Snapshot.CastLedger` 已经在 `Load()` 里被读取，可以被规则直接消费——但当前还没写任何规则。验证仍靠上面的 `jq` 命令手工查。
+`diag.Snapshot.CastLedger` is already read in `Load()` and can be consumed directly by rules, but no rules have been written yet. Verification still relies on the manual `jq` commands above.
 
-后续如果要补诊断规则（候选）：
-- `CastBriefRoleMissing`：缺失率 > 50% 告警
-- `CastBloat`：条目数 > 章数 × 0.8 告警
-- `CastPromotionCandidate`：appearance_count ≥ 5 且跨弧 → 建议升格
+Candidate diagnostic rules to add later:
+- `CastBriefRoleMissing`: alert when the missing rate is > 50%
+- `CastBloat`: alert when the entry count is > chapters × 0.8
+- `CastPromotionCandidate`: appearance_count ≥ 5 and spanning arcs → suggest promotion
 
-阈值不要现在拍——等长篇数据出来后，看真实分布再定。规则代码本身只需要 30-50 行。
+Do not fix the thresholds now; wait for long-novel data and decide from the real distribution. The rule code itself needs only 30-50 lines.
 
 ---
 
-## 5. Writer 是否在按预期工作
+## 5. Is the Writer working as expected
 
-跑长篇时最关心的是 **Writer 真的在按 prompt 行事吗**。最直接的观测是 session log：
+When running a long novel, the main concern is **whether the Writer really follows the prompt**. The most direct observation is the session log:
 
 ```bash
-ls output/{novel}/meta/sessions/agents/    # 每个子代理一份 jsonl
+ls output/{novel}/meta/sessions/agents/    # one jsonl per subagent
 tail -50 output/{novel}/meta/sessions/agents/writer-*.jsonl
 ```
 
-看几个特定行为：
+Look at a few specific behaviors:
 
-| 期望行为 | 在 jsonl 中体现 |
+| Expected behavior | How it shows up in the jsonl |
 |---|---|
-| Writer 看了 recent_cast | novel_context 工具返回值里 `episodic_memory.recent_cast` 字段非空 |
-| Writer 在 commit_chapter 填了 cast_intros | tool_call 参数 `cast_intros` 数组非空（仅在引入新角色的章节） |
-| Writer 用了相关章节推荐 | `read_chapter` 调用次数 > 1（默认 1 次，超过说明回查了） |
-| Writer 没违反工具顺序 | tool_call 序列严格 `novel_context → read_chapter → plan_chapter → draft_chapter → check_consistency → commit_chapter` |
+| The Writer looked at recent_cast | the `episodic_memory.recent_cast` field in the novel_context tool return value is non-empty |
+| The Writer filled cast_intros in commit_chapter | the tool_call argument `cast_intros` array is non-empty (only in chapters that introduce new characters) |
+| The Writer used the related-chapter recommendations | `read_chapter` call count > 1 (default is 1; more means it looked back) |
+| The Writer did not violate the tool order | the tool_call sequence is strictly `novel_context → read_chapter → plan_chapter → draft_chapter → check_consistency → commit_chapter` |
 
-如果 jsonl 里看到 Writer 多次空调 novel_context、或 commit_chapter 之后又调其他工具——是 prompt 没收住。
-
----
-
-## 6. 长跑场景红线
-
-跑 100+ 章长篇时，下面任何一条命中就该停下来排查：
-
-- [ ] CompassDrift 命中且持续 2 个弧未消除
-- [ ] cast_ledger 条目数 > 已完成章数 × 0.8
-- [ ] cast_ledger 中 brief_role 填写率 < 30%
-- [ ] 同一角色出现疑似多名（"老李" / "李掌柜" 共存）
-- [ ] Writer 写新章时不读 recent_cast 中已有的旧角色（重复发明）
-- [ ] Worker session 中出现连续 ≥ 5 次空调 novel_context
-- [ ] 任意章节 commit 后 `meta/checkpoints.jsonl` 没有对应 `commit_chapter` step
-
-前 4 条是本次新机制的健康度；后 3 条是已有机制的稳定性。
+If the jsonl shows the Writer calling novel_context empty multiple times, or calling other tools after commit_chapter, the prompt is not holding it in check.
 
 ---
 
-## 7. 文档维护规范
+## 6. Red lines for long-run scenarios
 
-**新增事实层工件时（新建一个 `meta/*.json` / `meta/*.jsonl`），同步：**
+When running a 100+ chapter novel, if any one of the following hits, stop and investigate:
 
-1. 在本文档 §2 加一行速查
-2. 如果工件需要专项观测（不是简单的"存在/不存在"判断），加 §X 专题段
-3. 如果想要自动诊断，在 `internal/diag/snapshot.go::Load` 中加载，并在 `internal/diag/rules_*.go` 加规则
+- [ ] CompassDrift fires and is not cleared for 2 consecutive arcs
+- [ ] cast_ledger entry count > completed chapters × 0.8
+- [ ] brief_role fill rate in cast_ledger < 30%
+- [ ] the same character appears under suspected multiple names ("老李" / "李掌柜" coexist, i.e. Old Li / Shopkeeper Li) <!-- han:keep -->
+- [ ] when writing a new chapter, the Writer does not read the existing old characters in recent_cast (reinventing them)
+- [ ] ≥ 5 consecutive empty novel_context calls appear in a Worker session
+- [ ] after any chapter commit, `meta/checkpoints.jsonl` has no corresponding `commit_chapter` step
 
-**不要：**
-- 不要把 `internal/diag/` 里所有规则照抄到本文档（那是规则参考，不是观测手册）
-- 不要为每个机制都写诊断规则——阈值靠拍脑袋会错，先观察再补
+The first 4 are health checks for the new mechanisms introduced this time; the last 3 are stability checks for existing mechanisms.
+
+---
+
+## 7. Document maintenance conventions
+
+**When adding a new fact-layer artifact (a new `meta/*.json` / `meta/*.jsonl`), also:**
+
+1. Add a quick-reference row to §2 of this document
+2. If the artifact needs dedicated observation (not just a simple "exists / does not exist" check), add a §X topic section
+3. If you want automatic diagnostics, load it in `internal/diag/snapshot.go::Load` and add rules in `internal/diag/rules_*.go`
+
+**Do not:**
+- Do not copy all the rules in `internal/diag/` into this document (that is a rule reference, not an observability handbook)
+- Do not write a diagnostic rule for every mechanism; thresholds set by guesswork will be wrong, so observe first and add rules later

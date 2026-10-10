@@ -1,77 +1,77 @@
-# 控制面演进:Engine + Arbiter(移除 Coordinator 长循环)
+# Control Plane Evolution: Engine + Arbiter (Removing the Coordinator Long Loop)
 
-> 状态(2026-07-14 v6):**代码实现完成**——Engine/Arbiter 已实施,Coordinator 及全部配套已删除(§十清单);端到端验证写完整书、失败裁定、僵局裁定、返工验收(hold+editor 时序)、boundary hold 即停、退出竞态干预保全与单许可单章节。三轮外部评审的阻断项全部处置(含 feedback 事实闭环、PendingSteer 崩溃保护、lifecycle 竞态)。
-> **文档迁移已完成(2026-07-12)**:architecture.md 正文已全量重写为 Engine+Arbiter 现行架构(含新验证策略/目录/纪律);README、context-management、evaluation-system、observability、user-rules-runtime 的旧架构叙事已清理(仅保留标注的历史对照)。Coordinator 配置与会话兼容路径均已删除；Arbiter 当前刻意统一使用 Default 模型，不开放独立角色配置。
-> **设计语义澄清(第四/五轮评审)**:① writer feedback 的消费点**就是**下一次结构操作(expand_arc/append_volume/update_compass 经 novel_context 参考后清空)——它是"对后续大纲的建议"(commit schema 原文),不是即时调度信号;弧中途的严重偏离走 editor 评审与用户干预通道。非分层书无结构操作,**commit 不落盘其 feedback**(避免永久无消费者的垃圾事实;返回值镜像保留供诊断)。② rule_violations 已闭环:commit 双路径落盘(**best-effort 质量元数据**,与章节提交非同级强一致——恰在 pending_commit 清除后崩溃会缺一条记录,可接受)→ novel_context(chapter=N) 注入 → editor 按 §机械检查映射消费。③ PendingSteer 崩溃保护是 **best-effort 单在途持久化**:首次持久化失败会显式停止裁定；裁定期、动作应用失败、正常退出/Abort 受保护;两个明确不保证的窗口——(a) 派单转入内存执行队列(e.next)后、worker 启动前的硬杀进程(毫秒级窗口,defer 不执行);(b) interMu 等待中的并发干预(尚未写入槽位)。用户在场可感知,重发成本秒级,不为此建持久化 intent/FIFO。④ 启动裁定失败不是死局(2026-07-12 真实故障补课:provider 账号失效致 plan_start 失败,恢复路径全部走不通):StartPrompt(输入事实)改为在裁定**之前**落盘;plan_start 从未完成时,引擎 planStartFallback 依据它现场补裁——首次裁定的重试不违反"恢复不重做已有裁定";补裁失败显式暂停回显,失败裁定的审计记录带 error 字段(DecisionRecord.Error)。
-> 本文档保留为设计决策记录;当前架构见 README 架构节与 docs/engine-rfc.md。关联:docs/voice-layer.md(已实施)。
+> Status (2026-07-14 v6): **code implementation complete**. Engine/Arbiter are implemented, and the Coordinator and everything around it are deleted (§10 list). End-to-end validation covers writing a complete book, failure rulings, deadlock rulings, rewrite acceptance (hold + editor sequencing), immediate stop on boundary hold, intervention preservation under exit races, and one permit per single chapter. All blocking items from the three external review rounds are resolved (including the feedback fact closed loop, PendingSteer crash protection, and lifecycle races).
+> **Documentation migration complete (2026-07-12)**: the body of architecture.md has been fully rewritten for the current Engine+Arbiter architecture (including the new validation strategy / directory layout / discipline); the old architecture narratives in README, context-management, evaluation-system, observability and user-rules-runtime have been cleaned up (only labeled historical comparisons remain). The Coordinator configuration and session-compatibility paths are both deleted; the Arbiter deliberately uses the Default model uniformly and does not expose an independent role configuration.
+> **Design-semantics clarifications (review rounds 4/5)**: ① The consumption point of writer feedback **is** the next structural operation (expand_arc/append_volume/update_compass clear it after consulting it via novel_context). It is "advice for the later outline" (the original wording of the commit schema), not an immediate dispatch signal; a severe mid-arc deviation goes through editor review and the user intervention channel. A non-layered book has no structural operations, so **commit does not persist its feedback** (to avoid permanently consumer-less junk facts; the return-value mirror is kept for diagnostics). ② rule_violations is now a closed loop: commit persists them on both paths (**best-effort quality metadata**, not at the same strong-consistency level as the chapter commit; a crash right after pending_commit is cleared would lose one record, which is acceptable) → injected into novel_context(chapter=N) → the editor consumes them per the mechanical-check mapping section of its prompt. ③ PendingSteer crash protection is **best-effort single-in-flight persistence**: if the first persistence fails, the ruling is explicitly stopped; it is protected during the ruling, when applying an action fails, and on normal exit/Abort; two windows are explicitly not guaranteed: (a) a hard kill of the process after a dispatch has moved into the in-memory execution queue (e.next) but before the worker starts (a millisecond-scale window; defer does not run); (b) a concurrent intervention waiting on interMu (not yet written into the slot). The user is present and can notice, and resending costs seconds, so no persistent intent/FIFO is built for this. ④ A failed startup ruling is not a dead end (a real-world failure patched on 2026-07-12: a provider account became invalid so plan_start failed, and every recovery path was blocked): StartPrompt (input fact) is now persisted **before** the ruling; when plan_start never completed, the engine's planStartFallback re-rules on the spot based on it. Retrying the first ruling does not violate "recovery does not redo an existing ruling"; a failed re-ruling pauses explicitly and echoes the failure, and the audit record of a failed ruling carries an error field (DecisionRecord.Error).
+> This document is kept as a design decision record; for the current architecture see the architecture section of the README and docs/engine-rfc.md. Related: docs/voice-layer.md (implemented).
 
-## 一、动机:被打补丁包围的过时假设
+## 1. Motivation: outdated assumptions surrounded by patches
 
-项目的 founding assumption——"一次 Prompt、一个常驻 LLM 长循环驱动整本书"——已过时。4 月 Hybrid 重构后,决策权实际在 `flow.Route` 手里,Coordinator 在主循环 90% 的调用只做**原样转发**。为"维持一个不该停的 LLM 会话"付出的补丁生态:
+The project's founding assumption, "one Prompt and one resident LLM long loop drives the whole book", is outdated. After the April Hybrid refactor, decision power actually lies in `flow.Route`, and in 90% of its calls in the main loop the Coordinator only did **verbatim forwarding**. The patch ecosystem paid for "keeping an LLM session alive that should not stop":
 
-1. StopGuard + blockMessage 动态文案工程
-2. Dispatcher 重复指令协议("第 N 次下达")
-3. coordinator.md 行为规训(恢复特例 / 查询类必须同轮派单 / 不得用停机表达立场)
+1. StopGuard + blockMessage dynamic-copy engineering
+2. The Dispatcher repeated-instruction protocol ("issued for the Nth time", i.e. 第 N 次下达) <!-- han:keep -->
+3. Behavioral discipline in coordinator.md (recovery special cases / query-type requests must dispatch in the same turn / must not express a stance by stopping)
 4. completePhaseGate / writerExpandedChapterGate
 5. MaxTurns=100_000
 6. FlowBoundaryHook
-7. 完结分歧特例
+7. Completion-dispute special cases
 
-**项目内部新子系统(import/simulation/cocreate/userrules)全部没走 Coordinator,已在用"Host 直接编排 + LLM 作函数"范式**——本方案把主流程统一到自己已验证的模式上。
+**The project's new internal subsystems (import/simulation/cocreate/userrules) all bypassed the Coordinator and already use the "Host orchestrates directly + LLM as a function" paradigm.** This plan unifies the main flow onto a pattern the project has already validated.
 
-## 二、目标形态
+## 2. Target shape
 
 ```
 Entry
   ↓
-Host(保留包名;内部新增 EngineLoop,不做纯机械改名)
-  ├─ 读 Store → flow.Route → 直接运行 Worker
-  ├─ 明确语义场景 → 调 Arbiter 函数
-  └─ 事件投影 / 预算 / 停靠点 / 通知(现职responsibility保留)
+Host (package name kept; an EngineLoop is added internally, not a purely mechanical rename)
+  ├─ read Store → flow.Route → run Worker directly
+  ├─ clear semantic scenario → call Arbiter function
+  └─ event projection / budget / stop points / notifications (existing responsibilities kept)
   ↓
-Workers(architect / writer / editor,内部自主,checkpoint-delta 守卫保留)
+Workers (architect / writer / editor, autonomous internally, checkpoint-delta guards kept)
   ↓
-Tools → Store(唯一事实源)
+Tools → Store (the sole source of facts)
 ```
 
-职责:**Route 管一切可查表的下一步;Arbiter 管边界清晰的语义判断;Worker 管开放式创作;Engine 执行决定、不参与文学判断;Observer/Diag 只观察。**
+Responsibilities: **Route owns every next step that can be looked up in a table; the Arbiter owns semantic judgments with clear boundaries; Workers own open-ended creation; the Engine executes decisions and takes no part in literary judgment; Observer/Diag only observe.**
 
-一句话概括终态:**一个串行确定性 Engine、三个自主 Worker、少数几个按需 Arbiter 函数、一个文件系统事实层。**
+One-sentence summary of the end state: **one serial deterministic Engine, three autonomous Workers, a few on-demand Arbiter functions, and one filesystem fact layer.**
 
-### 两平面对称(拟写入 architecture.md 作为新铁律)
+### Two symmetric planes (to be written into architecture.md as a new iron rule)
 
 ```
-确定性平面:  flow.LoadState   → flow.Route     → Instruction   (穷举规格测试)
-语义平面:    arbiter.Collect* → arbiter.Decide* → XxxDecision   (决策落盘 + eval 回归)
-              └── 事实采集(IO) ──┘└── 决策核心(可离线重放) ──┘└── Engine 执行 ──┘
+Deterministic plane:  flow.LoadState   → flow.Route     → Instruction   (exhaustive spec tests)
+Semantic plane:       arbiter.Collect* → arbiter.Decide* → XxxDecision   (decisions persisted + eval regression)
+                      └── fact collection (IO) ──┘└── decision core (offline replayable) ──┘└── Engine execution ──┘
 ```
 
-## 三、Arbiter 场景(最终集,保持最小)
+## 3. Arbiter scenarios (final set, kept minimal)
 
-| 场景 | 触发 | 备注 |
+| Scenario | Trigger | Notes |
 |------|------|------|
-| `plan_start` | 新书启动 | 选 short/long 规划师 + 扩充过短需求 |
-| `intervention` | 用户干预 | 查询 / 长效规则 / 剧情结构调整 / 已写返工 / 完本后返工或拒绝 |
-| `worker_failure` | Worker 报错**且确定性分类无出路** | 网络/参数/前置工件缺失等由确定性代码先分类,不送 Arbiter |
-| `deadlock` | 上一轮后仍产生同一路由指令 | 计数与终止语义见 §八 必答题 5 |
-| `completion_dispute` | **候补,有证据再加** | 卷末完结判定已由 Route 派 architect(分支 10)承担;仅"结构未到边界但故事该收"的中途分歧才需要,真实发生率未知,不预建 |
+| `plan_start` | New book startup | Choose the short/long planner + expand overly short requirements |
+| `intervention` | User intervention | Query / long-lived rules / plot-structure adjustment / rewrite of written chapters / rewrite or refusal after the book is complete |
+| `worker_failure` | Worker error **and deterministic classification has no way out** | Network / arguments / missing prerequisite artifacts etc. are classified first by deterministic code and are not sent to the Arbiter |
+| `deadlock` | The same routing instruction is still produced after the previous round | For counting and termination semantics see §8 mandatory question 5 |
+| `completion_dispute` | **Reserve; add when there is evidence** | End-of-volume completion judgment is already handled by Route dispatching the architect (branch 10); only a mid-book dispute where "the structure has not reached a boundary but the story should wrap up" would need it, its real incidence is unknown, so it is not pre-built |
 
-完本总结不是裁定,是生成任务——由 Engine 直接派 editor 或一次普通 LLM 调用完成,不占 Arbiter 场景。
+The completed-book summary is not a ruling but a generation task: the Engine dispatches the editor directly or makes one ordinary LLM call, and it takes no Arbiter scenario.
 
-## 四、Arbiter 设计
+## 4. Arbiter design
 
-### 4.1 逐场景 Decision 类型(v3 修订:放弃万能结构)
+### 4.1 Per-scenario Decision types (v3 revision: abandon the universal structure)
 
 ```go
-// 共享子类型,防各场景漂移
+// Shared subtype, to prevent drift between scenarios
 type DispatchDecision struct {
     Instruction flow.Instruction
-    Expect      DispatchExpect // 见 §五
+    Expect      DispatchExpect // see §5
 }
 
 type PlanStartDecision struct {
     Planner string // architect_long | architect_short
-    Task    string // 含扩充后的需求
+    Task    string // includes the expanded requirements
     Reason  string
 }
 
@@ -91,42 +91,42 @@ type FailureDecision struct {
 }
 ```
 
-演进记录:动作列表(顺序校验多余、多态数组易错)→ 万能扁平结构(顺序非法不可表达,但组合非法要靠场景×动作矩阵校验)→ **逐场景类型(场景不匹配的动作不可表达,矩阵校验消失,单场景 schema 更小、LLM 输出更稳、eval 可按场景分评)**。Validate 收缩为逐类型的事实校验(phase 约束等)。
+Evolution record: action list (order validation is redundant, polymorphic arrays are error-prone) → universal flat structure (illegal orderings cannot be expressed, but illegal combinations still need a scenario × action matrix validation) → **per-scenario types (actions that do not match the scenario cannot be expressed, the matrix validation disappears, each per-scenario schema is smaller, the LLM output is more stable, and eval can be scored per scenario)**. Validate shrinks to per-type fact validation (phase constraints etc.).
 
-### 4.2 API:每场景一对显式函数
+### 4.2 API: one explicit pair of functions per scenario
 
 ```go
-func CollectInterventionFacts(st *store.Store) InterventionFacts        // IO 边界,同 flow.LoadState 纪律
-func DecideIntervention(ctx, model, facts, text) (InterventionDecision, error) // 除统一执行器管理的模型请求外无 IO,可离线重放
-// 其余场景同形一对;Collect/Decide 形状统一,不建通用 Question/Decision 框架
+func CollectInterventionFacts(st *store.Store) InterventionFacts        // IO boundary, same discipline as flow.LoadState
+func DecideIntervention(ctx, model, facts, text) (InterventionDecision, error) // no IO beyond the model request managed by the unified executor; replayable offline
+// The other scenarios have the same pair; the Collect/Decide shape is uniform, and no generic Question/Decision framework is built
 ```
 
-- **失败路径**:统一结构化执行器按模型能力选择原生 JSON Schema 或提示词契约；提示词模式的格式/Schema 错误与两种模式的业务校验错误会携带精确原因交给模型修正，生命周期仅由 `context` 控制。原生契约违约、拒答、截断、错误终止及不可重试请求错误立即显式返回；干预不产生写入，启动显式报错，failure/deadlock 保守暂停
-- **干预记忆**:decisions.jsonl 兼任干预历史,`CollectInterventionFacts` 纳入最近 N 条裁定摘要
-- **模型**:Arbiter 统一使用 Default，不暴露独立 role；只在出现明确的能力或成本需求时再扩展配置契约
+- **Failure path**: the unified structured executor chooses native JSON Schema or a prompt contract based on model capability; in prompt mode, format/schema errors, and in both modes business-validation errors, are handed back to the model with the exact reason for correction, and the lifecycle is controlled only by `context`. Native-contract violations, refusals, truncation, erroneous termination and non-retryable request errors are returned explicitly and immediately; an intervention produces no writes, startup reports an explicit error, and failure/deadlock pause conservatively
+- **Intervention memory**: decisions.jsonl doubles as the intervention history, and `CollectInterventionFacts` includes summaries of the most recent N rulings
+- **Model**: the Arbiter uniformly uses Default and exposes no independent role; the configuration contract is extended only when a clear capability or cost need appears
 
-### 4.3 审计(小而稳定;审计≠恢复源)
+### 4.3 Audit (small and stable; audit is not a recovery source)
 
 ```json
 {"schema_version":1,"id":"...","kind":"intervention","checkpoint_seq":123,
  "input":"...","facts":{...},"decision":{...},"reason":"...","duration_ms":1200}
 ```
 
-(token/成本不在记录内——裁定模型经 usageTrackedModel 包装,用量统一进 UsageTracker/预算,与各 Worker 同一套账。)
+(Tokens/cost are not in the record: the ruling model is wrapped by usageTrackedModel, and usage goes uniformly into the UsageTracker/budget, on the same ledger as each Worker.)
 
-- facts 只存结构化事实 + 摘要 + artifact/checkpoint 引用,**不复制正文、不存完整上下文包**;单条大小上限,超限截断并标记
-- **input 保留在记录内**(离线重放 `Decide*(facts, input)` 必需——没有 input 的审计无法回归);脱敏发生在 **diag export 边界**,不发生在落盘时
-- 审计日志不是事件溯源,也不是恢复数据源
+- facts stores only structured facts + summaries + artifact/checkpoint references, **without copying body text or storing the complete context pack**; each record has a size cap, and anything over it is truncated and marked
+- **input is kept in the record** (required for offline replay of `Decide*(facts, input)`: an audit without input cannot be regression-tested); redaction happens at the **diag export boundary**, not when writing to disk
+- The audit log is neither event sourcing nor a recovery data source
 
-## 五、状态提交协议(串行 Engine 循环)
+## 5. State commit protocol (serial Engine loop)
 
 ```
-读事实 → Route / Arbiter 产出决定 → 核对前置条件 → 执行动作
-       → Worker 运行 → 重算 Route 后置条件 → 下一轮
+read facts → Route / Arbiter produces a decision → check preconditions → execute action
+           → Worker runs → recompute Route postconditions → next round
 ```
 
-- **不变量:控制状态只在 Engine 边界串行变更。**干预可在 Worker 运行期间并行咨询(只读安全、用户秒级看到 Answer/Reason 回显),但**改控制态的动作(hold/reopen/dispatch)进 Engine 队列,边界核对后提交**;answer(无状态)与 rules(内容平面,本章旧规则下章生效即语义)即时执行
-- 每个 Dispatch 携带 Collect 时刻快照,边界对账,不符 → 丢弃、记 `decision_stale`、以新事实重询:
+- **Invariant: control state changes serially, only at Engine boundaries.** Interventions may be consulted in parallel while a Worker runs (read-only safe, and the user sees the Answer/Reason echo within seconds), but **actions that change control state (hold/reopen/dispatch) go into the Engine queue and are committed after the boundary check**; answer (stateless) and rules (content plane; the semantics are that the old rules apply to this chapter and the new ones take effect next chapter) execute immediately
+- Each Dispatch carries a snapshot from the Collect moment, reconciled at the boundary; on mismatch → discard, record `decision_stale`, and re-consult with the new facts:
 
 ```go
 type DispatchExpect struct {
@@ -137,76 +137,76 @@ type DispatchExpect struct {
 }
 ```
 
-- 明确前置条件优于全局 Store 哈希(可读、可诊断);不做全局 digest
+- Explicit preconditions are preferable to a global Store hash (readable, diagnosable); no global digest is built
 
-## 六、恢复模型(只恢复事实,不恢复会话)
+## 6. Recovery model (recover facts only, not the session)
 
 ```
-启动 → 读 Progress → 读最新 Checkpoint → 查 PendingSteer/AdvanceHold/章节许可 → Gate 对账 → Route → 继续运行 Worker
+startup → read Progress → read the latest Checkpoint → check PendingSteer/AdvanceHold/chapter permit → Gate reconciliation → Route → continue running Worker
 ```
 
-plan_start 的恢复依赖单一持久化事实(RunMeta 内),**裁定先落事实、再起执行**:
+The recovery of plan_start depends on a single persisted fact (inside RunMeta); **the ruling is persisted as a fact first, and execution starts afterward**:
 
 ```go
 type PlanStartRecord struct {
     RawPrompt   string
     Planner     string
     PlannerTask string
-    DecisionID  string // 关联审计记录
-    Status      string // decided | dispatched | done —— 启动事务中间态显式化
+    DecisionID  string // links to the audit record
+    Status      string // decided | dispatched | done — makes the intermediate states of the startup transaction explicit
 }
 ```
 
-崩溃于任意点:Record 存在则按 Status 续走,不重复咨询;Record 缺失视同新书重询(重询可接受,审计留双记录)。
+A crash at any point: if the Record exists, continue according to Status without re-consulting; if the Record is missing, treat it as a new book and consult again (re-consulting is acceptable, and the audit keeps two records).
 
-## 七、迁移路线(v3 重排:Engine 先行,Arbiter 后接线)
+## 7. Migration path (v3 reordered: Engine first, Arbiter wired afterward)
 
-顺序调整的依据:原"Arbiter 先行"需要一套过渡管线(裁定经 steering 伪装成 Host 指令喂给 Coordinator);**Engine 先落地则该管线整个不用建**,Arbiter 直接对 Engine 执行器接线。每一步都在删东西,不建临时桥;"双脑期权"顾虑被顺序结构性消解。
+Rationale for the reordering: the original "Arbiter first" needed a transitional pipeline (rulings disguised as Host instructions via steering and fed to the Coordinator); **if the Engine lands first, that pipeline never needs to be built at all**, and the Arbiter is wired directly to the Engine executor. Every step deletes something, and no temporary bridge is built; the "dual-brain option value" concern is structurally dissolved by the ordering.
 
-| # | 步骤 | 状态 |
+| # | Step | Status |
 |---|------|------|
-| 0 | 无条件项:规划补齐入 Router(穷举规格先行);decisions.jsonl 审计。实现改进:规划师身份从既有 `RunMeta.PlanningTier` 推导,无需新增记录机制 | ✅ 2026-07-12 |
-| 1 | 文风层交付(docs/voice-layer.md) | ✅ 2026-07-12 |
-| 2 | Step 2 RFC 定稿(docs/engine-rfc.md,七道必答题) | ✅ 2026-07-12 |
-| 3 | WorkerRunner:以 subagent.Runner 程序化直调,事件经 ctx ToolProgress 中继 | ✅ 2026-07-22 |
-| 4-5 | Engine 接管全部派发 + Arbiter 四场景接线(plan_start/intervention/failure/deadlock),直连 Engine 执行器(实施中发现 Engine 先行使 steering 过渡管线整个不用建,4/5 合并落地) | ✅ 2026-07-12 |
-| 6 | 删除 Coordinator 及全部配套(§十清单全部执行);端到端集成测试(真实工具写完整书/失败裁定/僵局裁定) | ✅ 2026-07-12 |
+| 0 | Unconditional items: planning completion enters the Router (exhaustive spec first); decisions.jsonl audit. Implementation improvement: the planner identity is derived from the existing `RunMeta.PlanningTier`, so no new recording mechanism is needed | ✅ 2026-07-12 |
+| 1 | Voice layer delivered (docs/voice-layer.md) | ✅ 2026-07-12 |
+| 2 | Step 2 RFC finalized (docs/engine-rfc.md, seven mandatory questions) | ✅ 2026-07-12 |
+| 3 | WorkerRunner: call subagent.Runner directly and programmatically, with events relayed through ctx ToolProgress | ✅ 2026-07-22 |
+| 4-5 | The Engine takes over all dispatch + the four Arbiter scenarios are wired (plan_start/intervention/failure/deadlock), connected directly to the Engine executor (during implementation it turned out that landing the Engine first meant the steering transitional pipeline never needed to be built, so 4/5 landed together) | ✅ 2026-07-12 |
+| 6 | Delete the Coordinator and everything around it (the whole §10 list executed); end-to-end integration tests (real tools writing a complete book / failure ruling / deadlock ruling) | ✅ 2026-07-12 |
 
-## 八、Step 2 RFC 必答题(未定稿不进入步骤 3)
+## 8. Step 2 RFC mandatory questions (do not enter Step 3 until finalized)
 
-1. **Worker 提取面**:WorkerRunner API;build.go 装配件全量的所有权与生命周期——角色模型/failover、prompt cache key、ThinkingLevel、UsageRecorder、SessionLogger、Writer ContextManagerFactory、RestorePack、StopGuardFactory、StopAfterTools、Observer 嵌套事件投影
-2. **Engine 生命周期**:启动/暂停/中止/恢复;单 Worker 串行保证;/model 与 thinking 运行时切换
-3. **状态提交协议完整化**:§五 的 Expect 对账全场景化;Gate 拆除后 Engine 前置条件清单
-4. **错误分类学**:确定性分类(retry/reroute/terminal)先行,仅无出路者送 `worker_failure`;与 agentcore 层重试的分层
-5. **僵局协议**:同一 `Agent+Task` 连续重现即说明路由后置条件未满足；Worker 内部中间 checkpoint 不清零；Arbiter 决定 retry 不清零；3 次咨询、5 次硬熔断。
-6. **崩溃语义**:如何判定上一个 Worker 是否已产生有效事实
-7. **原型验收**:Observer/Usage/Context/模型切换/恢复五项与现状逐位对照
+1. **Worker extraction surface**: the WorkerRunner API; ownership and lifecycle of the full set of build.go assembly parts: role models/failover, prompt cache key, ThinkingLevel, UsageRecorder, SessionLogger, Writer ContextManagerFactory, RestorePack, StopGuardFactory, StopAfterTools, nested Observer event projection
+2. **Engine lifecycle**: start/pause/abort/resume; the single-Worker serial guarantee; runtime switching of /model and thinking
+3. **Completing the state commit protocol**: make the Expect reconciliation of §5 cover every scenario; the Engine precondition list after the Gate is dismantled
+4. **Error taxonomy**: deterministic classification (retry/reroute/terminal) first, with only the ones that have no way out sent to `worker_failure`; layering against agentcore-level retries
+5. **Deadlock protocol**: the same `Agent+Task` recurring consecutively means the routing postcondition is not met; intermediate checkpoints inside a Worker do not reset the counter; an Arbiter decision to retry does not reset the counter; consult at 3 repeats, hard circuit breaker at 5.
+6. **Crash semantics**: how to determine whether the previous Worker already produced valid facts
+7. **Prototype acceptance**: Observer/Usage/Context/model switching/recovery, five items compared point by point with the current state
 
-## 九、价值账目
+## 9. Value ledger
 
-| 维度 | 现状 | 终态 |
+| Dimension | Current | End state |
 |------|------|------|
-| 每章 LLM 开销 | 每边界一次转发调用 | 省去;转发失败问题类消失 |
-| 裁定可测性 | ~零(混在长会话) | 逐场景离线重放 + eval 回归 |
-| 干预响应 | 等章节边界(分钟级) | 咨询即时,控制态边界提交 |
-| 复杂度 | 七项补丁生态 | 净减 1500+ 行,三个问题类退役 |
-| 崩溃恢复 | 会话重放 + 恢复协议 | 读 store 续跑 |
-| 过渡期风险 | — | 集中在步骤 3/4(Worker 提取),由 RFC + 原型关卡控制;步骤 0/1 无条件成立 |
+| LLM cost per chapter | One forwarding call per boundary | Eliminated; the class of forwarding-failure problems disappears |
+| Ruling testability | ~zero (mixed into a long session) | Per-scenario offline replay + eval regression |
+| Intervention response | Waits for the chapter boundary (minutes) | Consultation is immediate, control state committed at the boundary |
+| Complexity | Seven-item patch ecosystem | Net reduction of 1500+ lines, three problem classes retired |
+| Crash recovery | Session replay + recovery protocol | Read the store and continue |
+| Transition risk | — | Concentrated in steps 3/4 (Worker extraction), controlled by the RFC + prototype gate; steps 0/1 hold unconditionally |
 
-## 十、终态删除清单
+## 10. End-state deletion list
 
-Coordinator 及其会话恢复逻辑、Coordinator StopGuard、Dispatcher steering 协议与 `[Host 下达指令]` 文本协议、FlowBoundaryHook、completePhaseGate / writerExpandedChapterGate(校验平移为 Engine 前置条件)、MaxTurns=100_000、coordinator.md 全部行为规训。
+The Coordinator and its session-recovery logic, the Coordinator StopGuard, the Dispatcher steering protocol and the `[Host 下达指令]` ("Host issues instruction") text protocol, FlowBoundaryHook, completePhaseGate / writerExpandedChapterGate (their validations are moved over as Engine preconditions), MaxTurns=100_000, and all behavioral discipline in coordinator.md. <!-- han:keep -->
 
-## 十一、异议与评审记录
+## 11. Objections and review record
 
-1. *"裁定正确性不会提升"*——成立;真实差异是聚焦/策展/前置校验 vs 会话记忆,净值略优且首次可测量
-2. *"现状跑通,动控制面冒险"*——承认;地基为此而建,分步可停可退
-3. *"架构不是瓶颈,内容质量才是"*——部分成立,文风层先行
-4. **评审一(2026-07-12)**:状态提交协议缺失→§五;Step 2 单薄→§八必答题+原型关卡;启动时序→§六;"非法状态不可表达"过度声明→4.1 演进记录;arbiter 角色白名单事实错误→4.2;审计卫生→4.3
-5. **评审二(2026-07-12)**:逐场景 Decision 类型(采纳,4.1);迁移顺序重排 Engine 先行(采纳,§七);统一边界提交(采纳,§五);PlanStartRecord(采纳,§六);不重命名 host(采纳);字数建议留协议文件(采纳,见 voice-layer)。**保留意见**:审计必须保留 input 否则无法重放(4.3);completion_dispute 降为候补场景(§三)
+1. *"Ruling correctness will not improve"*: true; the real difference is focus/curation/precondition validation vs session memory, a slightly better net value that is measurable for the first time
+2. *"The current state works; touching the control plane is risky"*: acknowledged; the foundation was built for this, and the steps can be stopped or rolled back one at a time
+3. *"Architecture is not the bottleneck, content quality is"*: partly true, hence the voice layer goes first
+4. **Review 1 (2026-07-12)**: missing state commit protocol → §5; thin Step 2 → §8 mandatory questions + prototype gate; startup sequencing → §6; overclaim of "illegal states are unrepresentable" → the 4.1 evolution record; factual error in the arbiter role whitelist → 4.2; audit hygiene → 4.3
+5. **Review 2 (2026-07-12)**: per-scenario Decision types (adopted, 4.1); migration order rearranged to Engine first (adopted, §7); unified boundary commit (adopted, §5); PlanStartRecord (adopted, §6); do not rename host (adopted); keep the word-count advice in the protocol file (adopted, see voice-layer). **Reservations**: the audit must keep input or replay is impossible (4.3); completion_dispute downgraded to a reserve scenario (§3)
 
-## 十二、纪律与不做
+## 12. Discipline and non-goals
 
-**纪律**:①新决策点先过 §二 三分法,禁止默认"给 prompt 加规则";②每个 LLM 决策点必备事实清单/结构化输出/降级路径/落盘审计;③只写事实护栏不写行为护栏;④声明式不变量优于程序性脚本;⑤控制面改动先改穷举规格再改实现。
+**Discipline**: ① a new decision point first goes through the §2 three-way split, and defaulting to "add a rule to the prompt" is forbidden; ② every LLM decision point must have a fact list / structured output / degradation path / persisted audit; ③ write only fact guardrails, not behavioral guardrails; ④ declarative invariants are preferable to procedural scripts; ⑤ for control-plane changes, change the exhaustive spec first and the implementation second.
 
-**不做**:事件溯源重写;为假想多租户抽象 Store;通用工作流 DSL;全局 State Digest;host 包重命名;completion_dispute 预建。
+**Non-goals**: an event-sourcing rewrite; abstracting the Store for a hypothetical multi-tenancy; a generic workflow DSL; a global State Digest; renaming the host package; pre-building completion_dispute.

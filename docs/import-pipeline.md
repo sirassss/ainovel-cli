@@ -1,144 +1,144 @@
-# 外部小说语义导入管线
+# Semantic Import Pipeline for External Novels
 
-> 状态：已实现（v1，`internal/host/imp`；截断前缀打捞含阶段三·补）
-> 日期：2026-07-15
-> 目标：让外部小说导入既能持续获得模型能力升级的收益，又具备全文不丢失、失败可诊断、崩溃可恢复和发布可验证的工程保证。
-> 修订：SourceUnit 顺序按 `(Line, Part)` 数值序（§7.3/§8.3）；截断前缀打捞降级为可后置的效率优化并要求可观测（§9.5/§13.3/§19）；语义函数模型档位开放为旋钮（§13.1/§17）。
-> 修订 2026-07-16：模型档位旋钮落地为 roles 配置 `import_segment/import_analyze/import_synthesize`（§13.1）；自然语言重切分落地为 `--guide` 与工作区 `guidance.txt` 语义输入（§18.3）；语义失败统一保存原始响应到 failures/（§14.2）；切分确认支持面板内 `y` 一次性放行（§8.4）；未完成导入在启动时主动提示（§18.2）。JSON Schema 模式（§13.2 第 1 级）暂未实现，标记 TODO 待与全仓其它模型调用点统一改造。
+> Status: implemented (v1, `internal/host/imp`; truncated-prefix salvage included as Phase 3 supplement)
+> Date: 2026-07-15
+> Goal: let importing an external novel keep benefiting from model capability upgrades, while providing engineering guarantees that nothing in the full text is lost, failures are diagnosable, crashes are recoverable, and publishing is verifiable.
+> Revision: SourceUnit order is the numeric `(Line, Part)` order (§7.3/§8.3); truncated-prefix salvage is downgraded to an efficiency optimization that may be deferred and must be observable (§9.5/§13.3/§19); the model tier of semantic functions is opened up as a knob (§13.1/§17).
+> Revision 2026-07-16: the model-tier knob landed as the roles config `import_segment/import_analyze/import_synthesize` (§13.1); natural-language re-segmentation landed as `--guide` and the workspace `guidance.txt` semantic input (§18.3); semantic failures uniformly save the raw response to failures/ (§14.2); segmentation confirmation supports a one-shot `y` in the panel (§8.4); unfinished imports are announced proactively at startup (§18.2). JSON Schema mode (§13.2, level 1) is not implemented yet; marked TODO, to be reworked together with the other model call sites across the repo.
 
-## 1. 一句话
+## 1. In one sentence
 
-导入不是“用正则切文本，再让模型一次吐出整本书 JSON”，也不是一个自由运行的 Import Agent；它是一条**分阶段语义编译管线**：
+Import is not "split the text with regexes, then have the model emit the whole book as one JSON", nor is it a freely running Import Agent; it is a **staged semantic compilation pipeline**:
 
-> 模型负责理解开放语义，代码负责坐标、覆盖、类型、哈希、顺序和幂等；全部语义产物在独立工作区验证完成后，才发布到正式书籍状态。
-
-```text
-外部文本
-  → 确定性读取与归一化
-  → LLM 识别章节/卷/附属文本边界
-  → 代码验证全文覆盖
-  → 用户确认切分（可显式授权自动接受）
-  → LLM 按连续章节批次提取逐章事实
-  → LLM 分层聚合全书语义
-  → 代码组装并验证 Foundation
-  → 幂等发布 Foundation 与章节
-  → 默认一次性暂停；显式 --continue 才按正常门禁接力
-```
-
-## 2. 为什么必须重构
-
-当前实现是：
+> The model handles open semantics; the code handles coordinates, coverage, types, hashes, ordering and idempotency; all semantic artifacts are validated in an isolated workspace before being published to the formal book state.
 
 ```text
-正则切章
-  → 全部章节正文一次性送入 ReverseFoundation
-  → 模型一次输出 premise / characters / world_rules / 全量章节大纲 / compass
-  → 立即写入正式 Foundation
-  → 再逐章读取同一正文、分析并 commit
+External text
+  → deterministic reading and normalization
+  → LLM identifies chapter / volume / ancillary-text boundaries
+  → code verifies full-text coverage
+  → user confirms the segmentation (auto-accept can be explicitly authorized)
+  → LLM extracts per-chapter facts over consecutive chapter batches
+  → LLM aggregates book-wide semantics hierarchically
+  → code assembles and validates the Foundation
+  → idempotent publish of Foundation and chapters
+  → pause once by default; only an explicit --continue hands off through the normal gate
 ```
 
-它有四个结构性问题。
+## 2. Why a refactor is required
 
-### 2.1 切章在枚举开放语义
+The current implementation is:
 
-章节标题没有封闭语法。继续添加“第 N 章”“卷 N”“Chapter N”等正则，只能覆盖已经见过的格式，无法覆盖作者自定义标题、混合排版、卷章层级和未来格式。
+```text
+Regex chapter splitting
+  → all chapter bodies fed into ReverseFoundation in one call
+  → the model outputs premise / characters / world_rules / the full chapter outline / compass in one go
+  → written immediately into the formal Foundation
+  → then the same bodies are re-read chapter by chapter, analyzed and committed
+```
 
-更严重的是，当前切分会让未命中的边界直接消失在结果里，并可能静默丢弃首个标题前文本、空章和被判断为尾部噪声的内容。代码无法证明这些内容应该被丢弃。
+It has four structural problems.
 
-### 2.2 Foundation 调用输入和输出都随章数线性增长
+### 2.1 Chapter splitting enumerates open semantics
 
-`ReverseFoundation` 同时承担整书理解和全量章节大纲生成：输入包含全部正文，输出包含每一章的详细结构。54 章已经可能截断 JSON；提高 `max_tokens` 只会把失败点推迟到更长的书。
+Chapter titles have no closed grammar. Adding more regexes for "第 N 章" (Chapter N), "卷 N" (Volume N), "Chapter N" and so on only covers formats already seen; it cannot cover author-defined titles, mixed layouts, volume/chapter hierarchies and future formats. <!-- han:keep -->
 
-### 2.3 失败前已经修改正式状态
+Worse, the current splitting makes unmatched boundaries vanish from the result, and may silently discard the text before the first title, empty chapters, and content judged to be trailing noise. The code cannot prove that these contents should be discarded.
 
-Foundation 和章节边分析边发布。后续步骤失败时，用户得到的是一半导入完成、一半尚未分析的正式书籍状态。当前 `from=N` 只是假设用户知道从哪里恢复，无法证明源文件、切分结果和既有章节仍然一致。
+### 2.2 Foundation call input and output both grow linearly with the chapter count
 
-### 2.4 多处语义结论被硬编码
+`ReverseFoundation` handles both whole-book understanding and generating the full chapter outline: the input contains all bodies and the output contains the detailed structure of every chapter. At 54 chapters the JSON may already be truncated; raising `max_tokens` only pushes the failure point to longer books.
 
-当前方案还固定了：
+### 2.3 Formal state is already modified before failure
 
-- 导入正文只能是一卷；
-- 只能划分为 1～3 个弧；
-- 按已导入章数的 25/80 阈值选择 short/mid/long；
-- 为了允许续写而倾向强行制造 `open_threads`；
-- 每章必须有角色、固定数量事件和固定类型钩子。
+The Foundation and chapters are published while being analyzed. When a later step fails, the user is left with a formal book state that is half imported and half not yet analyzed. The current `from=N` merely assumes the user knows where to resume from, and cannot prove that the source file, the segmentation result and the existing chapters are still consistent.
 
-这些都不是可以从文件格式机械证明的事实，应由模型依据正文判断，或由用户明确表达意图。
+### 2.4 Many semantic conclusions are hard-coded
 
-## 3. 目标与非目标
+The current design also fixes:
 
-### 3.1 目标
+- the imported text can only be one volume;
+- it can only be divided into 1 to 3 arcs;
+- short/mid/long is chosen by 25/80 thresholds on the number of imported chapters;
+- `open_threads` are forcibly manufactured so that continuation is allowed;
+- every chapter must have characters, a fixed number of events, and a fixed type of hook.
 
-1. **开放格式可理解**：不要求用户把小说改成内置标题格式，也不要求用户编写正则。
-2. **全文可交代**：每段非空源文本都必须属于明确的章节或附属区域，禁止静默丢失。
-3. **规模可控**：不再有一次调用读取全书正文并输出全部章节对象；分段、双预算章节批次和区间综合都有局部输入输出边界，全局输出只随人物、卷弧等真实语义复杂度增长。
-4. **失败不污染**：语义分析和 Foundation 校验完成前，不写正式创作状态。
-5. **精确恢复**：恢复依据源快照和工件 `InputDigest`，不依赖 `from=N` 或用户记忆。
-6. **模型红利直达**：更强的模型直接改善边界识别、事实提取、卷弧划分和续写判断，无需增加 Go 规则。
-7. **复用正式提交语义**：发布章节继续使用 `commit_chapter` 的 PendingCommit、checkpoint 和 digest 幂等能力。
-8. **完整可观测**：进度、模型身份、用量、原始失败响应和最终错误都有明确落点。
-9. **交互与自动化并存**：默认让用户确认高风险语义边界，同时提供显式无人值守授权；自动路径不依赖静默猜测。
+None of these are facts that can be mechanically proved from the file format; they should be judged by the model from the text, or expressed explicitly by the user.
 
-### 3.2 非目标
+## 3. Goals and non-goals
 
-- 不构建 Coordinator 或通用 Agent 长循环。
-- 不构建通用 Workflow/PolicyEngine/任务图框架。
-- 不自动修复或改写用户原文。
-- 不为导入实现数据库、向量检索或分布式并行。
-- 不支持把另一部小说模糊合并进已有书籍。
-- 不实现旧 `from=N` 状态迁移或双轨兼容。
-- 不在本 RFC 中扩展 EPUB/PDF；第一版仍只接收 txt/md，读取层保持局部，未来可替换而不改变后续契约。
+### 3.1 Goals
 
-## 4. 职责边界
+1. **Open formats are understood**: the user is not required to rewrite the novel into a built-in title format, nor to write regexes.
+2. **The full text is accounted for**: every non-empty piece of source text must belong to an explicit chapter or ancillary region; silent loss is forbidden.
+3. **Scale is controlled**: no more single call that reads the whole book and outputs all chapter objects; segmentation, dual-budget chapter batches and range synthesis all have local input/output bounds, and the global output grows only with real semantic complexity such as characters and volumes/arcs.
+4. **Failure does not pollute**: no formal creative state is written until semantic analysis and Foundation validation are complete.
+5. **Precise resume**: resume is based on the source snapshot and the artifacts' `InputDigest`, not on `from=N` or the user's memory.
+6. **Model upgrades pass straight through**: a stronger model directly improves boundary recognition, fact extraction, volume/arc division and continuation judgment, with no new Go rules.
+7. **Reuse the formal commit semantics**: publishing chapters keeps using the PendingCommit, checkpoint and digest idempotency of `commit_chapter`.
+8. **Fully observable**: progress, model identity, usage, raw failure responses and final errors all have a defined place to land.
+9. **Interactive and automated modes coexist**: by default the user confirms high-risk semantic boundaries, while an explicit unattended authorization is also provided; the automatic path does not rely on silent guessing.
 
-| 问题 | 归属 | 原因 |
+### 3.2 Non-goals
+
+- Do not build a Coordinator or a general long-running Agent loop.
+- Do not build a general Workflow/PolicyEngine/task-graph framework.
+- Do not automatically repair or rewrite the user's original text.
+- Do not implement a database, vector retrieval or distributed parallelism for import.
+- Do not support fuzzily merging another novel into an existing book.
+- Do not implement migration of the old `from=N` state or dual-track compatibility.
+- Do not extend to EPUB/PDF in this RFC; the first version still accepts only txt/md, the reading layer stays local, and it can be replaced in future without changing the downstream contracts.
+
+## 4. Responsibility boundaries
+
+| Question | Owner | Reason |
 |---|---|---|
-| 字节解码、换行归一化 | Go | 文件格式和确定性转换 |
-| 哪个源位置是章标题、卷标题或附属文本 | LLM | 开放语义，不可穷举 |
-| 标题对应哪个稳定源位置 | Go | SourceUnit、原文锚点和字节范围可机械验证 |
-| 某章发生了什么 | LLM | 文学语义理解 |
-| 人物、世界规则、伏笔和关系如何归纳 | LLM | 跨章语义归纳 |
-| 卷弧边界、故事是否收束、规划级别 | LLM | 取决于叙事形状，不取决于固定阈值 |
-| 章节范围是否递增、不重叠、全覆盖 | Go | 可证明不变量 |
-| JSON 类型、闭集枚举、引用章号是否合法 | Go | 类型化契约 |
-| 是否可以复用已有分析 | Host/Workspace | 真实语义输入能重建相同 `InputDigest` 才可复用 |
-| 何时写正式书籍状态 | Host/Store | 发布协议和崩溃恢复 |
-| 是否授权按当前切分继续 | 用户/Intent | 交互确认或显式 `--yes`，不由代码偷偷代答 |
+| Byte decoding, newline normalization | Go | File format and deterministic conversion |
+| Which source position is a chapter title, volume title or ancillary text | LLM | Open semantics, cannot be enumerated |
+| Which stable source position a title corresponds to | Go | SourceUnit, source anchors and byte ranges can be verified mechanically |
+| What happens in a chapter | LLM | Literary semantic understanding |
+| How characters, world rules, foreshadowing and relationships are summarized | LLM | Cross-chapter semantic induction |
+| Volume/arc boundaries, whether the story is concluded, planning level | LLM | Depends on the shape of the narrative, not on fixed thresholds |
+| Whether chapter ranges are increasing, non-overlapping and fully covering | Go | Provable invariants |
+| Whether JSON types, closed-set enums and referenced chapter numbers are legal | Go | Typed contract |
+| Whether an existing analysis can be reused | Host/Workspace | Reuse is allowed only if the real semantic input can rebuild the same `InputDigest` |
+| When to write the formal book state | Host/Store | Publish protocol and crash recovery |
+| Whether continuing with the current segmentation is authorized | User/Intent | Interactive confirmation or explicit `--yes`; the code does not answer on the user's behalf |
 
-这里的 LLM 调用不是 Arbiter 控制面，也不是 Worker 创作循环。它们是边界明确的**语义函数**：类型化事实进，类型化语义结果出，Host 校验后执行。
+The LLM calls here are neither the Arbiter control plane nor the Worker creative loop. They are **semantic functions** with clear boundaries: typed facts in, typed semantic results out, executed by the Host after validation.
 
-## 5. 总体架构
+## 5. Overall architecture
 
 ```text
 [TUI / Headless]
-       │ /import <path> / 自动授权 / 确认 / 取消
+       │ /import <path> / auto-authorization / confirm / cancel
 [Host]
-       │ 独占导入生命周期、事件、模型运行时
+       │ exclusive import lifecycle, events, model runtime
 [imp.Runner]
-       ├── LoadState → NextAction（只从工作区事实推导）
-       ├── Source     读取、解码、归一化、快照
-       ├── Segment    结构投影 → LLM 边界识别 → 覆盖校验
-       ├── Analyze    双预算连续批次 → 逐章事实暂存
-       ├── Synthesize 分层归纳 → BookSynthesis
-       ├── Validate   组装并验证完整 Foundation
-       └── Publish    正式 Foundation → commit_chapter
+       ├── LoadState → NextAction (derived only from workspace facts)
+       ├── Source     read, decode, normalize, snapshot
+       ├── Segment    structural projection → LLM boundary recognition → coverage validation
+       ├── Analyze    dual-budget consecutive batches → per-chapter facts staged
+       ├── Synthesize hierarchical induction → BookSynthesis
+       ├── Validate   assemble and validate the complete Foundation
+       └── Publish    formal Foundation → commit_chapter
                │
-[meta/import 工作区]          [正式 Store]
-源快照/切分/分析/综合结果      Progress/Checkpoint/Artifact/PendingCommit
+[meta/import workspace]          [formal Store]
+source snapshot/segmentation/analysis/synthesis results      Progress/Checkpoint/Artifact/PendingCommit
 ```
 
-Runner 是普通的确定性阶段编排，不拥有自由决策能力。它每次只执行 `NextAction` 推导出的一个动作，动作完成后重新读取事实。
+The Runner is ordinary deterministic stage orchestration and has no free decision-making ability. Each time it executes only the one action derived by `NextAction`, and re-reads the facts after the action completes.
 
-## 6. 工作区与状态推导
+## 6. Workspace and state derivation
 
-导入中的事实存放在书目录下：
+Facts during import are stored under the book directory:
 
 ```text
 meta/import/
 ├── manifest.json
 ├── intent.json
 ├── source.txt
-├── guidance.txt          # 存在时：用户自然语言切分指导（--guide），是 segmentation 的语义输入
+├── guidance.txt          # when present: the user's natural-language segmentation guidance (--guide), a semantic input of segmentation
 ├── segmentation.json
 ├── confirmation.json
 ├── analyses/
@@ -155,9 +155,9 @@ meta/import/
     └── last-response.txt
 ```
 
-第一版保留工作区。它既是恢复依据，也是导入审计记录；不增加自动清理和历史归档机制。
+The first version keeps the workspace. It is both the basis for resuming and the audit record of the import; no automatic cleanup or history archiving mechanism is added.
 
-`intent.json` 保存用户启动导入时的显式授权（自动确认、uncertain 故事状态预选、是否跳过完成 Hold）。这些是恢复后仍必须遵守的用户意图，不是可由工件猜出的阶段状态；创建后不被 Runner 静默改写。
+`intent.json` stores the explicit authorizations the user gave when starting the import (auto-confirm, preselection for the uncertain story status, whether to skip the completion Hold). These are user intents that must still be honored after resuming, not stage state that can be guessed from artifacts; after creation they are not silently rewritten by the Runner.
 
 ### 6.1 Manifest
 
@@ -180,33 +180,33 @@ type ImportIntent struct {
 }
 ```
 
-- `source.txt` 是归一化后的本地快照，恢复不再依赖原路径仍然存在；
-- Manifest 不保存绝对源路径，避免泄露机器目录并消除移动文件带来的恢复问题；
-- Intent 只接受闭集值，精确保存启动命令中的用户授权；恢复时不从当前 advance mode 反推旧意图；
-- schema 版本不匹配时显式要求使用匹配版本继续或重新导入，不猜测迁移。
+- `source.txt` is the normalized local snapshot, so resuming no longer depends on the original path still existing;
+- the Manifest does not store the absolute source path, which avoids leaking machine directories and removes resume problems caused by moved files;
+- Intent accepts only closed-set values and precisely stores the authorizations the user gave in the start command; on resume the old intent is not inferred back from the current advance mode;
+- on a schema version mismatch, it explicitly requires continuing with the matching version or re-importing, and does not guess a migration.
 
-首次创建时先在同级临时目录写齐并校验 manifest、intent、source，再以目录 rename 发布为 `meta/import/`；`meta/import/` 不存在就不算活动工作区。这样初始三件套不会以半初始化形态进入 `NextAction`，也不需要为创建过程增加 `stage=initializing`。启动时发现残留初始化目录要显式提示并保留诊断信息，不自动当作成功工作区，也不静默删除。
+On first creation, the manifest, intent and source are first written out in full and validated in a sibling temporary directory, then published by a directory rename to `meta/import/`; if `meta/import/` does not exist, there is no active workspace. This way the initial trio never enters `NextAction` in a half-initialized form, and no `stage=initializing` is needed for the creation process. When a leftover initialization directory is found at startup, it must be reported explicitly and its diagnostic information preserved; it is neither treated as a successful workspace automatically nor silently deleted.
 
-### 6.2 不保存可漂移的阶段枚举
+### 6.2 Do not store drifting stage enums
 
-持久状态不写 `stage=analyzing`、`current=37` 之类控制字段。下一动作由工件推导：
+Persistent state does not write control fields such as `stage=analyzing` or `current=37`. The next action is derived from the artifacts:
 
 ```text
-无 manifest/intent/source   → ingest
-无 segmentation            → segment
-无匹配 segmentation 输入摘要的 confirmation → await_confirmation / auto_confirm
-存在缺失或输入摘要不符的章节分析             → analyze_first_missing
-缺少输入匹配的 RangeDigest 或 synthesis      → synthesize_first_missing
-story_status=uncertain 且无匹配的用户选择     → await_story_resolution
-正式工件与 synthesis 不一致                 → publish
-全部正式工件一致                            → done
+no manifest/intent/source                                       → ingest
+no segmentation                                                 → segment
+no confirmation matching the segmentation input digest          → await_confirmation / auto_confirm
+missing chapter analysis or analysis with a mismatched digest   → analyze_first_missing
+no RangeDigest or synthesis with a matching input             → synthesize_first_missing
+story_status=uncertain and no matching user choice              → await_story_resolution
+formal artifacts inconsistent with synthesis                    → publish
+all formal artifacts consistent                                 → done
 ```
 
-事件中的 `Stage` 只用于 UI 展示，不是恢复事实源。
+The `Stage` in events is used only for UI display and is not the source of truth for resuming.
 
-### 6.3 统一工件身份
+### 6.3 Unified artifact identity
 
-不实现依赖图。工作区中的每份语义工件统一采用同一个身份规则：
+No dependency graph is implemented. Every semantic artifact in the workspace uses the same identity rule:
 
 ```go
 type Artifact[T any] struct {
@@ -216,50 +216,50 @@ type Artifact[T any] struct {
 }
 ```
 
-`InputDigest` 覆盖该动作实际消费的全部**语义输入**，按固定顺序编码后计算：
+`InputDigest` covers all the **semantic inputs** the action actually consumed, encoded in a fixed order and then hashed:
 
-- segmentation：归一化源内容、SourceUnit 投影、用户指导和分段 prompt/schema 版本；
-- confirmation：segmentation 内容和确认方式；
-- 章节分析：批次章节范围及正文、进入批次前的连续性 ledger、prompt/schema 版本和用户指导；
-- RangeDigest/BookSynthesis：各自消费的有序分析或下层 digest 内容、综合 prompt/schema 版本；
-- story resolution：synthesis 内容和用户选择；
-- 发布：待发布领域对象的规范化内容。
+- segmentation: the normalized source content, the SourceUnit projection, the user guidance, and the segmentation prompt/schema version;
+- confirmation: the segmentation content and the confirmation method;
+- chapter analysis: the batch's chapter range and bodies, the continuity ledger before entering the batch, the prompt/schema version, and the user guidance;
+- RangeDigest/BookSynthesis: the content of the ordered analyses or lower-level digests each consumes, and the synthesis prompt/schema version;
+- story resolution: the synthesis content and the user's choice;
+- publish: the canonicalized content of the domain objects to be published.
 
-provider/model、usage、thinking 等执行事实写入 provenance/session，不因模型配置变化自动使已成功分析失效；用户要求重新分析时显式删除对应工件。缓存复用判断只看当前动作能否重建出相同 `InputDigest`。
+Execution facts such as provider/model, usage and thinking are written to provenance/session; a change in model configuration does not automatically invalidate an analysis that already succeeded; when the user wants re-analysis they explicitly delete the corresponding artifact. The cache-reuse decision looks only at whether the current action can rebuild the same `InputDigest`.
 
-`NextAction` 沿固定线性管线寻找第一份缺失、解析失败或 `InputDigest` 不匹配的工件。重新切分、修改用户指导或改变上游事实时，下游自然失配；不编写“切分变化时手工删除哪些文件”的失效规则。
+`NextAction` walks the fixed linear pipeline looking for the first artifact that is missing, fails to parse, or has a mismatched `InputDigest`. When the text is re-segmented, the user guidance is changed, or upstream facts change, downstream artifacts naturally mismatch; no invalidation rules of the form "which files to delete manually when the segmentation changes" are written.
 
-发布时正式工件与综合结果逐项比对；相同则幂等跳过，不同则报告冲突，不覆盖猜测。因此删除 `ResumeFrom`。恢复只需要再次执行 `/import`；Runner 会从第一份缺失事实继续。
+At publish time the formal artifacts are compared item by item against the synthesis result; if identical, it is skipped idempotently, and if different, a conflict is reported rather than overwriting on a guess. Therefore `ResumeFrom` is deleted. To resume, running `/import` again is enough; the Runner continues from the first missing fact.
 
-## 7. 源文件读取
+## 7. Reading the source file
 
-### 7.1 解码
+### 7.1 Decoding
 
-第一版支持：
+The first version supports:
 
-- UTF-8 / UTF-8 BOM；
-- GB18030（覆盖常见 GBK 小说文本）。
+- UTF-8 / UTF-8 BOM;
+- GB18030 (covers common GBK novel text).
 
-解码结果必须返回所选 encoding，并写入 Manifest 和进度事件。不能把“尝试 GB18030”藏成无声兜底。无法可靠解码或出现不可接受替换字符时直接失败，错误包含检测结果。
+The decode result must return the chosen encoding, and it is written to the Manifest and the progress events. "Trying GB18030" must not be hidden as a silent fallback. If the text cannot be decoded reliably or unacceptable replacement characters appear, it fails directly, and the error includes the detection result.
 
-### 7.2 归一化
+### 7.2 Normalization
 
-只做不会改变文学内容的转换：
+Only conversions that do not change the literary content are performed:
 
-- 移除 BOM；
-- CRLF/CR 统一为 LF；
-- 保留空行、缩进、标题行和正文字符；
-- 不删除首部文本、空章、广告、版权信息或所谓尾部噪声。
+- remove the BOM;
+- unify CRLF/CR to LF;
+- keep blank lines, indentation, title lines and body characters;
+- do not delete leading text, empty chapters, ads, copyright notices or so-called trailing noise.
 
-所有排除决定留给分段语义结果并在预览中显示。
+All exclusion decisions are left to the segmentation's semantic result and shown in the preview.
 
-### 7.3 稳定坐标
+### 7.3 Stable coordinates
 
-归一化文本建立统一的 `SourceUnit` 表：
+A unified `SourceUnit` table is built over the normalized text:
 
 ```go
 type SourceUnit struct {
-	ID        string // L1257；超预算行拆为 L1257.1、L1257.2
+	ID        string // L1257; an over-budget line is split into L1257.1, L1257.2
 	Line      int
 	Part      int
 	StartByte int
@@ -268,40 +268,40 @@ type SourceUnit struct {
 }
 ```
 
-- `ID` 仅用于展示与模型引用；所有顺序、包含与递增判断一律按 `(Line, Part)` 数值元组比较，禁止对 ID 字符串做字典序比较（`"L900"` 字典序会大于 `"L1000"`）；投影 JSON 保留字符串 id，Go 侧解析成 `(Line, Part)` 后再比；
-- 正常行对应一个 unit，常见路径仍然是直观的行号坐标；
-- 单行超过结构投影预算时，Go 只在 UTF-8 字符边界生成多个**虚拟 unit**；
-- 虚拟分片不写回 `source.txt`，不插入软换行，不改变任何源字符；
-- 同一 unit 内存在边界时，模型返回 unit ID 和一段逐字复制的原文锚点；Go 要求锚点在该 unit 内唯一，再映射为精确字节位置；
-- 锚点不存在或不唯一时，把具体错误反馈给模型，禁止猜 offset、截断文本或要求用户先修改原稿。
+- `ID` is used only for display and model references; all ordering, containment and increase checks are made by comparing the numeric `(Line, Part)` tuple, and lexicographic comparison of ID strings is forbidden (`"L900"` sorts lexicographically after `"L1000"`); the projection JSON keeps the string id, and the Go side parses it into `(Line, Part)` before comparing;
+- a normal line maps to one unit, so the common path is still the intuitive line-number coordinate;
+- when a single line exceeds the structural projection budget, Go generates multiple **virtual units**, only at UTF-8 character boundaries;
+- virtual slices are not written back to `source.txt`, no soft line breaks are inserted, and no source character is changed;
+- when a boundary lies inside a unit, the model returns the unit ID plus a verbatim-copied source anchor; Go requires the anchor to be unique within that unit and then maps it to an exact byte position;
+- when the anchor does not exist or is not unique, the specific error is fed back to the model; guessing offsets, truncating text or asking the user to edit the manuscript first is forbidden.
 
-因此普通分章文本保持行号模型，整段无换行、同一行包含多个章节或异常长行也使用同一套坐标类型处理。
+Therefore ordinary chaptered text keeps the line-number model, and a whole text with no line breaks, a single line containing several chapters, or an abnormally long line is handled with the same coordinate types.
 
-## 8. 语义切分
+## 8. Semantic segmentation
 
-### 8.1 结构投影
+### 8.1 Structural projection
 
-模型看到按上下文预算分块的结构投影：
+The model sees a structural projection chunked by context budget:
 
 ```json
 {
   "owned_units": {"start": "L1200", "end": "L1800"},
   "context_units": {"start": "L1180", "end": "L1820"},
   "units": [
-    {"id": "L1200", "line": 1200, "text": "风从城门外吹来。", "blank_before": true},
-    {"id": "L1257", "line": 1257, "text": "卷二·北境", "blank_before": true, "blank_after": true}
+    {"id": "L1200", "line": 1200, "text": "The wind blew in from outside the city gate.", "blank_before": true},
+    {"id": "L1257", "line": 1257, "text": "Volume Two · The Northern Frontier", "blank_before": true, "blank_after": true}
   ],
   "user_guidance": ""
 }
 ```
 
-上下文区可以重叠，但每次调用只能为 `owned_units` 返回结果，因此不存在重叠块投票或冲突合并。坐标纪律由 Go 执行（2026-07-16 修订）：模型在上下文区返回的边界不触发语义重问——该边界归相邻块管辖（它会在自己的 owned 区间再报告一次），代码直接裁掉并回显说明；语义重试只留给真正的语义失败（投影外的幻觉 ID、非法 kind 等）。旧行为对越界反馈重问，弱模型常把 3 次尝试全部耗尽拖垮整块。
+The context regions may overlap, but each call may return results only for `owned_units`, so there is no overlapping-chunk voting or conflict merging. Coordinate discipline is enforced by Go (revised 2026-07-16): a boundary the model returns in the context region does not trigger a semantic re-ask. That boundary belongs to the adjacent chunk (which will report it again in its own owned range), so the code simply trims it and echoes a note; semantic retries are reserved for genuine semantic failures (hallucinated IDs outside the projection, illegal kind, etc.). The old behavior re-asked with feedback on out-of-range boundaries, and weak models often burned all 3 attempts and dragged down the whole chunk.
 
-分块大小由当前 architect 模型的 context window 和保留预算计算，不按固定行数或固定章节数切块。模型上下文扩大后，调用次数自然下降。规划预算并非满额使用（2026-07-16 修订）：owned 正文只是请求的一部分，规划时扣除系统提示与指导的实际长度、再按 3/4 折算投影 JSON 包装的暴涨；上下文区另有字节上限（chunkBytes/8，下限 4096），拦截超长行虚拟分片吞掉输入预算。输出侧对称兜底：单块边界 JSON 被长度截断（大量短章节）时对半缩块递归重试——半块有独立缓存路径，重试成果不重付；单元级仍截断才是真容量不足。
+The chunk size is computed from the current architect model's context window and a reserved budget, not from a fixed line count or a fixed chapter count. When the model context grows, the number of calls drops naturally. The planning budget is not used to the full (revised 2026-07-16): the owned body is only part of the request; planning deducts the actual length of the system prompt and the guidance, then applies a 3/4 factor for the blow-up from the projection JSON wrapping; the context region also has a byte cap (chunkBytes/8, with a floor of 4096) to stop virtual slices of an over-long line from swallowing the input budget. The output side has a symmetric safeguard: when a single chunk's boundary JSON is cut off by length (many short chapters), the chunk is halved and retried recursively. Each half has its own cache path, so work already done is not paid for again on retry; only a unit-level truncation that still persists means a true capacity shortfall.
 
-每块的边界决策以工件形式落盘（`segment-chunks/chunk-*.json`，身份 = 切分身份 + MaxUnitBytes + 块 owned 范围——unit 表由「归一化源 + MaxUnitBytes」唯一确定，换档位重塑超长行分片时缓存自然失配，不会复用错位的旧边界），任何一块失败或中断，重跑时已完成块零调用复用——与 analyze 逐章、synthesize 逐区间同一哲学；最终 segmentation 落盘后块级缓存删除。终局整合（resolve）失败时同样清除块缓存并把决策快照落 `failures/`：此时缓存 digest 恒匹配，保留它会让重跑零调用复读同一批边界、确定性复现同一失败。空正文的章节边界（真实网络小说源常见"已锁定/付费章节"占位标题）不整体失败：并入前段（文本一字不丢），记入 `Segmentation.Notes` 由确认预览呈现，人工不认可可用 `--guide` 裁定。
+Each chunk's boundary decisions are persisted as an artifact (`segment-chunks/chunk-*.json`; identity = segmentation identity + MaxUnitBytes + the chunk's owned range. The unit table is uniquely determined by "normalized source + MaxUnitBytes", so when a change of tier reshapes the slices of over-long lines, the cache naturally mismatches and misaligned old boundaries are never reused). If any chunk fails or is interrupted, completed chunks are reused on rerun with zero calls, the same philosophy as analyze per chapter and synthesize per range; once the final segmentation is persisted, the chunk-level cache is deleted. When the final integration (resolve) fails, the chunk cache is likewise cleared and a snapshot of the decisions is written to `failures/`: at that point the cache digest always matches, and keeping it would make a rerun re-read the same boundaries with zero calls and deterministically reproduce the same failure. A chapter boundary with an empty body (placeholder titles such as "locked / paid chapter", common in real web-novel sources) does not fail the whole run: it is merged into the preceding segment (not one character of text is lost) and recorded in `Segmentation.Notes` for the confirmation preview to show; if a human disagrees, `--guide` can rule on it.
 
-### 8.2 模型输出
+### 8.2 Model output
 
 ```go
 type BoundaryDecision struct {
@@ -314,59 +314,59 @@ type BoundaryDecision struct {
 }
 ```
 
-- `chapter` 是可提交正文单元，包括序章、楔子、番外等是否算章的语义判断；
-- `group` 是卷、部、篇等上层结构证据，不直接当作章节；
-- `front_matter` / `back_matter` 标记明确不进入章节正文的附属区域；
-- `anchor` 必须逐字来自对应 unit；边界位于 unit 起点时可以省略；
-- `uncertain` 只用于预览提示，不由代码设置置信度阈值。
+- `chapter` is a committable body unit, including the semantic judgment of whether a prologue, a preface chapter, a side story and the like count as chapters;
+- `group` is evidence of upper-level structure such as a volume, part or section, and is not treated directly as a chapter;
+- `front_matter` / `back_matter` mark ancillary regions that explicitly do not enter the chapter body;
+- `anchor` must come verbatim from the corresponding unit; it may be omitted when the boundary lies at the start of a unit;
+- `uncertain` is used only as a preview hint; the code sets no confidence threshold for it.
 
-不让模型生成正则。正则仍然会把开放语义压回有限语法，并引入转义、局部匹配和统一格式假设。
+The model is not asked to generate regexes. Regexes would again squeeze open semantics back into a finite grammar and bring in escaping, local matching and a uniform-format assumption.
 
-### 8.3 代码校验
+### 8.3 Code validation
 
-Go 只校验：
+Go validates only:
 
-1. 所有 unit ID 存在且落在调用的投影内（owned + 上下文区；投影外是幻觉，带反馈重问）；
-2. owned 区边界的 kind 属闭集、非空 anchor 在对应 unit 内唯一并映射到 UTF-8 字节边界、同位不语义冲突（kind/标题不同时保留哪个不由 Go 裁定，重问交模型；完全相同的重复是机械冗余，放行后静默去重）、首块须有边界兜住文本起点（开头是不是前言由模型判断，不由 Go 代答）——都在调用期校验（2026-07-16 修订）：坏值放进块缓存后终局才发现，digest 恒匹配会让失败确定性复现；上下文区边界注定被裁掉，不为其重问；
-2a. **标题回显**（2026-07-16 修订，seg-v2）：chapter/group 边界的 title 归一化（去空白）后必须真实存在于边界单元原文，否则调用期重问——实测某分页抓取源 157 章里 67 章是模型在章中续文上编造的边界与标题（覆盖纪律歧义迫使每块块首设边界），全部能被此项事实核对拦下。语义裁量仍归模型：真无标题规约的源置 `uncertain=true` 可保留归纳标题（预览呈现存疑标记）；front/back matter 的描述性标题低风险，不核对。prompt 同步收紧：边界只落真实结构分隔处，块首为上一章延续正文时返回空 boundaries 是正确输出（首块头部覆盖除外）；
-3. 边界次序与重复由 Go 确定性修复而非否决（2026-07-16 修订）：按解析后的字节稳定排序恢复真实顺序——块间顺序由 owned 区间不重叠保证，乱序只可能发生在块内，排序零信息损失；同字节重复保留先出现者并记入 `Notes`。旧行为要求严格递增否则整体失败，实测 319 个边界败于 1 处块内倒序，且块缓存会让该失败确定性复现。顺序判断一律按 `(Line, Part)` 数值序，不对 ID 做字典序比较；
-4. 每个产出章节正文范围非空（空正文占位标题并入前段，见 §8.1）；
-5. 所有非空源文本恰好属于一个章节、一个 group 标题或明确的 front/back matter（起始未归属的非空文本——书首简介/广告被漏报边界——由 Go 确定性收为 front_matter 并记 `Notes` 交确认预览，不终局否决）；
-5a. 同名章节（标题去空白后相同）记入 `Notes` 交人工核对（2026-07-16 修订）——有标题规约的源里章名不该重复，重复是"同章被误切"的确定性信号；是否合并不由 Go 裁定，Notes 非空即阻断 `--yes`；
-6. 没有重叠、越界或未归属范围；
-7. group 不被错误计入章节总数。
+1. All unit IDs exist and fall inside the projection of the call (owned + context region; outside the projection is a hallucination, re-asked with feedback);
+2. For boundaries in the owned region: kind belongs to the closed set; a non-empty anchor is unique within the corresponding unit and maps to a UTF-8 byte boundary; no semantic conflict at the same position (when kind/title differ, which one to keep is not ruled on by Go and the re-ask goes to the model; fully identical duplicates are mechanical redundancy, are let through and silently deduplicated); the first chunk must have a boundary covering the start of the text (whether the opening is a preface is judged by the model, not answered on its behalf by Go). All of these are validated at call time (revised 2026-07-16): a bad value that goes into the chunk cache and is only discovered at the final stage would, with the digest always matching, make the failure deterministically reproducible; boundaries in the context region are bound to be trimmed, so no re-ask is made for them;
+2a. **Title echo** (revised 2026-07-16, seg-v2): after normalization (whitespace removed), the title of a chapter/group boundary must really exist in the original text of the boundary unit, otherwise it is re-asked at call time. In a measured paged-scrape source, 67 of 157 chapters were boundaries and titles fabricated by the model on mid-chapter continuation text (an ambiguity in the coverage discipline forced a boundary at the head of every chunk), and this fact check catches all of them. Semantic discretion still belongs to the model: for a source that genuinely has no title convention, set `uncertain=true` to keep an induced title (the preview shows the doubt marker); descriptive titles of front/back matter are low-risk and are not checked. The prompt is tightened in step: boundaries fall only at real structural separators, and when a chunk head is a continuation of the previous chapter, returning empty boundaries is the correct output (except for the head coverage of the first chunk);
+3. Boundary order and duplicates are repaired deterministically by Go rather than rejected (revised 2026-07-16): the real order is restored by a stable sort on the resolved bytes. Order between chunks is guaranteed by the non-overlap of owned ranges, so disorder can only occur within a chunk, and sorting loses no information; for duplicates at the same byte, the first occurrence is kept and recorded in `Notes`. The old behavior required strictly increasing order or failed as a whole; in measurement 319 boundaries failed on a single in-chunk inversion, and the chunk cache made that failure deterministically reproducible. Order is always judged by the `(Line, Part)` numeric order, never by lexicographic comparison of IDs;
+4. The body range of every produced chapter is non-empty (a placeholder title with an empty body is merged into the preceding segment, see §8.1);
+5. Every non-empty piece of source text belongs to exactly one chapter, one group title, or an explicit front/back matter (non-empty text at the start that is not attributed to anything, such as a book-opening synopsis/ad whose boundary was missed, is deterministically collected by Go into front_matter and recorded in `Notes` for the confirmation preview, not vetoed at the final stage);
+5a. Chapters with the same name (identical after whitespace removal) are recorded in `Notes` for human review (revised 2026-07-16): in a source with a title convention chapter names should not repeat, and a repeat is a deterministic signal that "the same chapter was cut wrongly"; whether to merge is not ruled on by Go, and a non-empty Notes blocks `--yes`;
+6. There is no overlapping, out-of-range or unattributed range;
+7. A group is not wrongly counted in the total number of chapters.
 
-“L1257 语义上是不是章标题”不由 Go 复判。
+"Is L1257 semantically a chapter title" is not re-judged by Go.
 
-### 8.4 用户确认
+### 8.4 User confirmation
 
-交互模式下，确认前不调用章节分析，也不写正式 Store。预览至少显示：
+In interactive mode, chapter analysis is not called before confirmation, and the formal Store is not written. The preview shows at least:
 
-- 卷/group 数和章节数；
-- 全部章节标题，可滚动查看；
-- 首尾附属文本的范围与摘要；
-- 空章、异常长章和模型标记 uncertain 的边界；
-- 每章起止行，方便用户对照原稿。
+- the number of volumes/groups and chapters;
+- all chapter titles, scrollable;
+- the range and summary of leading and trailing ancillary text;
+- empty chapters, abnormally long chapters, and boundaries the model marked uncertain;
+- the start and end lines of each chapter, so the user can compare against the manuscript.
 
-用户可以：
+The user can:
 
-- 确认（TUI 预览面板按 `y`，内部以 AcceptSegmentation 重跑；一次性放行当前切分，不写入 intent，confirmation 记 `method=user_confirmed`）；
-- 输入自然语言说明后重新识别，例如 `/import --guide=幕间·X 也是独立章节`；
-- 取消并保留工作区（Esc）。
+- confirm (press `y` in the TUI preview panel, which internally reruns with AcceptSegmentation; this lets the current segmentation through once, is not written to intent, and the confirmation records `method=user_confirmed`);
+- enter a natural-language note and re-recognize, for example `/import --guide=幕间·X 也是独立章节` ("Interlude · X is also a standalone chapter"); <!-- han:keep -->
+- cancel and keep the workspace (Esc).
 
-`/import <path> --yes` 是显式无人值守授权：Runner 在覆盖校验通过后写入同样的 confirmation 工件，记录 `method=auto_authorized`，随后继续分析。`--yes` 即使存在 uncertain 边界也表示用户选择信任本次切分，但 uncertain 仍保留在工件和日志中。**例外（2026-07-16 修订）**：切分带容错说明（`Notes` 非空——空章吸收、起始兜底、重合去重发生过）时 `--yes` 不自动放行，仍停在确认预览——结构被确定性改写过，未看预览的盲授权不该吞掉它；看过预览的 `y`（AcceptSegmentation）不受此限。
+`/import <path> --yes` is an explicit unattended authorization: after coverage validation passes, the Runner writes the same confirmation artifact, recording `method=auto_authorized`, and then continues with analysis. Even when uncertain boundaries exist, `--yes` means the user chooses to trust this segmentation, but uncertain remains in the artifacts and logs. **Exception (revised 2026-07-16)**: when the segmentation carries tolerance notes (`Notes` is non-empty, meaning empty-chapter absorption, start-of-text fallback or coincident-boundary deduplication occurred), `--yes` does not auto-accept and stops at the confirmation preview; the structure was deterministically rewritten, and a blind authorization that has not seen the preview should not swallow that. A `y` (AcceptSegmentation) given after viewing the preview is not subject to this limit.
 
-`--yes` 只跳过切分确认，不替用户决定 `story_status=uncertain`，也不跳过导入完成 Hold。用户不需要编写正则或手工填写 `from=N`。
+`--yes` only skips segmentation confirmation; it does not decide `story_status=uncertain` for the user, and does not skip the import-completion Hold. The user does not need to write regexes or fill in `from=N` by hand.
 
-## 9. 连续批次的逐章事实提取
+## 9. Per-chapter fact extraction over consecutive batches
 
-确认后从第一份缺失分析开始，把连续章节按当前模型的**输入和输出双预算**组成批次。第一版批次间串行，不做窗口间并发：伏笔 ID、人物别名和状态变化具有时间顺序，前一批次产生的紧凑 ledger 是后一批次的输入。
+After confirmation, starting from the first missing analysis, consecutive chapters are grouped into batches according to the current model's **dual input and output budgets**. In the first version batches run serially, with no concurrency between windows: foreshadowing IDs, character aliases and state changes have a temporal order, and the compact ledger produced by the previous batch is the input of the next.
 
-串行只约束第一版执行策略，不是永久架构限制；分析工件仍按章独立落盘，未来有证据证明并行归并能保持语义质量时，可以只替换批次调度。
+Serial execution constrains only the execution strategy of the first version and is not a permanent architectural limit; analysis artifacts are still persisted independently per chapter, and if future evidence shows that parallel merging can preserve semantic quality, only the batch scheduling needs to be replaced.
 
-### 9.1 批次输出、逐章工件
+### 9.1 Batch output, per-chapter artifacts
 
-废除 `=== TAG ===` 混合 envelope。每次调用返回一个结构化批次对象，每个数组元素仍是一章事实：
+The `=== TAG ===` mixed envelope is abolished. Each call returns one structured batch object, and each array element is still the facts of one chapter:
 
 ```go
 type ImportedChapterFacts struct {
@@ -399,103 +399,103 @@ type ChapterAnalysisPayload struct {
 }
 ```
 
-每个 `analyses/NNNNNN.json` 都是 `Artifact[ChapterAnalysisPayload]`。同一批次落盘的章节记录相同 `BatchStart/BatchEnd`；其 `InputDigest` 采用**逐章绑定**：切分身份（segmentation 工件的 `InputDigest`）+ prompt/schema 版本 + 章号 + 单章正文。之所以逐章而非按批次划分绑定，是因为批次边界随模型输入/输出能力变化（换更强模型批次自然变大）；若把批次划分写进身份，换模型后已成功的分析会整体失配、被迫重算重复收费。绑定切分身份则保证「重新切分、改 prompt/schema 版本、改源」时下游分析自然失配，而单纯换模型不误伤——这才是恢复真正需要的失效语义。
+Each `analyses/NNNNNN.json` is an `Artifact[ChapterAnalysisPayload]`. Chapters persisted from the same batch record the same `BatchStart/BatchEnd`; their `InputDigest` uses **per-chapter binding**: segmentation identity (the `InputDigest` of the segmentation artifact) + prompt/schema version + chapter number + the single chapter's body. The binding is per chapter rather than per batch partition because batch boundaries change with the model's input/output capacity (a stronger model naturally makes batches larger); if the batch partition were written into the identity, switching models would make already successful analyses mismatch as a whole and force a recompute that charges again for the same work. Binding to the segmentation identity guarantees that "re-segmenting, changing the prompt/schema version, or changing the source" makes downstream analyses mismatch naturally, while merely switching models does no collateral damage; this is the invalidation semantics that resuming really needs.
 
-`ImportedCharacterFact` 和 `ImportedWorldFact` 是用于全书综合的紧凑观察，不直接写正式角色或世界规则。它们至少携带章节号，使综合结果有稳定来源。
+`ImportedCharacterFact` and `ImportedWorldFact` are compact observations used for book-wide synthesis and do not directly write formal characters or world rules. They carry at least the chapter number, so that synthesis results have a stable provenance.
 
-### 9.2 双预算组批
+### 9.2 Dual-budget batching
 
-批次规划同时满足：
+Batch planning satisfies both of the following:
 
 ```text
-预计输入 + system/prompt/ledger + 推理预留 + 预计可见输出 ≤ context window
-预计可见输出 ≤ provider/model 可用 completion 上限
+estimated input + system/prompt/ledger + reasoning reserve + estimated visible output ≤ context window
+estimated visible output ≤ completion limit available to the provider/model
 ```
 
-- 输入估算覆盖每章标题、正文和批次前 ledger；
-- 输出估算由 analyzer schema 的固定结构开销和每章保守事实预留组成，只决定本次装入多少章，不截断任何字段；
-- reasoning token 与可见 JSON 共享 completion 预算的模型，必须先扣除推理预留；
-- provider/model 输出能力越强，批次自然变大；不能写固定“每批 10/20 章”规则；
-- 单章输入本身无法进入 context，或单章最小结构输出也无法进入 completion 时，显式报告该章和模型容量，不截断正文或伪造精简成功。
+- the input estimate covers each chapter's title, body and the ledger before the batch;
+- the output estimate is composed of the analyzer schema's fixed structural overhead and a conservative per-chapter fact reserve; it only decides how many chapters to pack this time and truncates no field;
+- for models whose reasoning tokens share the completion budget with the visible JSON, the reasoning reserve must be deducted first;
+- the stronger the provider/model output capacity, the larger the batch naturally becomes; a fixed rule such as "10/20 chapters per batch" must not be written;
+- when a single chapter's input cannot fit into the context by itself, or even a single chapter's minimal structured output cannot fit into the completion budget, that chapter and the model's capacity are reported explicitly, and the body is neither truncated nor a trimmed-down success faked.
 
-因此总章数增长只增加批次数，不再让任意一次响应随全书规模无限增长；同时不会把 #83 从整书粒度搬到一个不受输出约束的批次粒度。
+Therefore growth in the total chapter count only increases the number of batches, and no single response grows without bound with the size of the book; at the same time #83 is not moved from the whole-book granularity to a batch granularity unconstrained by output.
 
-### 9.3 批次上下文
+### 9.3 Batch context
 
-单个批次调用只包含：
+A single batch call contains only:
 
-- 当前连续章节范围的原文和标题；
-- 之前章节派生的紧凑人物别名表；
-- 活跃伏笔 ID 与一句话状态；
-- 必要的最近状态摘要。
+- the original text and titles of the current consecutive chapter range;
+- the compact character alias table derived from earlier chapters;
+- active foreshadowing IDs with a one-line status each;
+- a recent state summary where necessary.
 
-模型按数组顺序处理批次内章节，可以在批次内部延续别名、伏笔和状态；批次结束后，Go 按已验证事实顺序更新紧凑 ledger。它不依赖尚未生成的全书 Premise，也不重复读取全部前文。章节事实是 Foundation 的输入，而不是反过来形成循环依赖。
+The model processes the chapters in the batch in array order and can carry aliases, foreshadowing and state forward within the batch; after the batch ends, Go updates the compact ledger in the order of the validated facts. It does not depend on the book-wide Premise that has not yet been generated, nor re-read all earlier text. Chapter facts are the input of the Foundation, not the other way around, so no circular dependency forms.
 
-### 9.4 完整响应校验
+### 9.4 Full-response validation
 
-代码分两层校验结构、值域和引用，不硬编码文学质量：
+The code validates structure, value domains and references in two layers, and hard-codes no literary quality:
 
-- 批次级：chapters 数组按预期章节号连续、无重复、无缺口，批次范围、`InputDigest` 和 schema version 匹配；
-- 逐章级：chapter/title 与源分段一致，summary/core_event 非空，hook type、strand 等正式 domain 闭集字段合法，时间线、伏笔和状态变化字段类型合法。
+- batch level: the chapters array is consecutive in the expected chapter numbers, with no duplicates and no gaps, and the batch range, `InputDigest` and schema version match;
+- per-chapter level: chapter/title are consistent with the source segmentation, summary/core_event are non-empty, the formal domain closed-set fields such as hook type and strand are legal, and the timeline, foreshadowing and state-change fields have legal types.
 
-代码不要求“必须 3～6 个事件”“必须有出场角色”“必须有三个场景”。安静章节、书信、环境章或无名人物章节都是合法文学形状。
+The code does not require "must have 3 to 6 events", "must have appearing characters" or "must have three scenes". A quiet chapter, a letter, an environment chapter or a chapter with only unnamed characters are all legal literary shapes.
 
-完整响应出现 JSON 或语义校验错误时，不提交其中任何新章节；把具体错误反馈给同一模型，走 §13.3 的输出层重试。模型可能在修正后改写前面的对象，因此普通校验失败不能擅自保存部分数组。
+When a JSON or semantic validation error occurs in a full response, none of its new chapters is committed; the specific error is fed back to the same model and the output-layer retry of §13.3 is used. After correcting, the model may rewrite earlier objects, so an ordinary validation failure must not save a partial array on its own.
 
-### 9.5 长度截断时的连续前缀
+### 9.5 Consecutive prefix on length truncation
 
-> 实施定位：本节是**错误路径上的 token 优化**，不是恢复正确性依赖。v1（阶段三）截断即「失败 + 缩小重组批」，本身正确且可恢复；连续前缀打捞在独立子阶段（阶段三·补）实现，可单独开关、单独验收。
+> Implementation positioning: this section is a **token optimization on the error path**, not something resume correctness depends on. In v1 (Phase 3), truncation means "failure + shrink and regroup the batch", which is correct and recoverable on its own; consecutive-prefix salvage is implemented in a separate sub-phase (Phase 3 supplement) that can be switched on and accepted separately.
 
-只有响应明确标记 `StopReasonLength` 且返回了可解析的部分文本时，允许从失败响应中保存**最大连续合法前缀**：
+Only when the response is explicitly marked `StopReasonLength` and returned parseable partial text is it allowed to save the **maximal consecutive valid prefix** from the failed response:
 
-1. 使用流式 JSON decoder 进入顶层 `chapters` 数组；
-2. 从批次首章开始逐个读取已经完整闭合的 JSON 对象；
-3. 每个对象独立通过 §9.4 的逐章校验，并与此前对象组成从批次首章开始的连续序列后，立即原子写入对应章节分析工件；
-4. 遇到第一个不完整、非法、跳号或重复对象立即停止，之后的字节一律不解释；
-5. 禁止补括号、续写半个 JSON、猜测缺失字段或从后续位置捞取非连续对象；
-6. 原始响应、StopReason、已保存前缀范围和首个失败章节全部写入 failure artifact、事件和日志；
-7. `NextAction` 从第一份缺失分析重新组批，不重做已经提交的合法前缀。
+1. use a streaming JSON decoder to enter the top-level `chapters` array;
+2. starting from the first chapter of the batch, read the already fully closed JSON objects one by one;
+3. each object independently passes the per-chapter validation of §9.4, and once it forms, together with the earlier objects, a consecutive sequence starting from the first chapter of the batch, it is immediately and atomically written to the corresponding chapter analysis artifact;
+4. stop immediately at the first incomplete, illegal, skipped-number or duplicate object, and never interpret any bytes after it;
+5. it is forbidden to add closing brackets, continue half a JSON, guess missing fields, or fish non-consecutive objects from later positions;
+6. the raw response, the StopReason, the saved prefix range and the first failing chapter are all written to the failure artifact, the events and the logs;
+7. `NextAction` regroups batches from the first missing analysis and does not redo the valid prefix that was already committed.
 
-typed-call 必须记录本次是否拿到可用部分文本：JSON Schema 等非流式结构化模式可能在长度停止时给不出可解析前缀。若 provider 没有返回部分文本、不能明确证明是长度截断，或一个合法对象都没有完成，则不保存任何结果，发出 `prefix_salvage=unavailable` 事件/日志并回退到「失败 + 缩小重组批」，而不是静默空转。单章批次仍然截断时直接报告模型输出能力不足，不循环缩减或制造空事实。
+The typed call must record whether usable partial text was obtained this time: non-streaming structured modes such as JSON Schema may fail to give a parseable prefix when stopping on length. If the provider returns no partial text, cannot clearly prove that it was a length truncation, or not even one valid object was completed, then nothing is saved, a `prefix_salvage=unavailable` event/log is emitted, and it falls back to "failure + shrink and regroup the batch" rather than spinning silently. When a single-chapter batch is still truncated, it directly reports insufficient model output capacity, and does not loop on shrinking or manufacture empty facts.
 
-长度截断是容量错误，不进入“把校验错误反馈给同一模型”的语义自修复循环，也不原样重试同一批次。
+Length truncation is a capacity error: it does not enter the semantic self-repair loop of "feed the validation error back to the same model", and the same batch is not retried unchanged.
 
-### 9.6 恢复
+### 9.6 Resume
 
-每章分析成功即原子写入 `analyses/NNNNNN.json`。崩溃后：
+Each chapter analysis is atomically written to `analyses/NNNNNN.json` as soon as it succeeds. After a crash:
 
-- `InputDigest` 匹配的分析直接复用，不重复收费；
-- 第一份缺失或失配分析成为下一批次起点；
-- 上游语义输入变化后，无法重建相同 `InputDigest` 的分析自然失效；
-- 长度截断已经提交的连续合法前缀和正常完成的工件使用完全相同的恢复规则；
-- 不允许用户越过一个失败章节继续生成不连续的后续语义事实。
+- analyses whose `InputDigest` matches are reused directly, with no repeated charge;
+- the first missing or mismatched analysis becomes the start of the next batch;
+- after an upstream semantic input changes, analyses that cannot rebuild the same `InputDigest` naturally become invalid;
+- the consecutive valid prefix committed after a length truncation follows exactly the same resume rules as artifacts from a normal completion;
+- the user is not allowed to skip a failed chapter and keep generating non-consecutive later semantic facts.
 
-## 10. 分层综合
+## 10. Hierarchical synthesis
 
-### 10.1 为什么不能再做整书单次输出
+### 10.1 Why whole-book single-shot output can no longer be used
 
-全书综合需要跨章理解，但不需要再次读取全部正文，也不应输出每章详细对象。逐章事实已经包含章节级语义；综合只处理这些紧凑事实。
+Book-wide synthesis needs cross-chapter understanding, but it does not need to read all bodies again, and should not output a detailed object for every chapter. The per-chapter facts already contain the chapter-level semantics; synthesis processes only these compact facts.
 
-### 10.2 Map/Reduce 形状
+### 10.2 Map/Reduce shape
 
 ```text
 ImportedChapterFacts × N
-        ↓ 按当前 context window 分连续区间
+        ↓ split into consecutive ranges by the current context window
 RangeDigest × M
-        ↓ 必要时继续归并
+        ↓ keep merging if necessary
 BookSynthesis
 ```
 
-短书若一次能容纳全部章节事实，直接生成 `BookSynthesis`；长书才产生 `RangeDigest`。是否分层由 token 预算机械决定，不由章数阈值决定。
+For a short book, if all chapter facts fit at once, `BookSynthesis` is generated directly; only a long book produces `RangeDigest`. Whether to use layers is decided mechanically by the token budget, not by a chapter-count threshold.
 
-`RangeDigest` 包含该连续范围的情节推进、角色变化、世界事实、已开/已收伏笔和候选结构边界。它的输出大小受单个区间约束；最终综合不再重复输出 N 份章节详细对象，只输出全局事实和卷弧范围。
+A `RangeDigest` contains the plot progression, character changes, world facts, opened/closed foreshadowing and candidate structural boundaries of that consecutive range. Its output size is bounded by a single range; the final synthesis no longer re-outputs N detailed chapter objects and outputs only global facts and the volume/arc ranges.
 
-### 10.3 最终综合结果
+### 10.3 Final synthesis result
 
 ```go
 type BookSynthesis struct {
-	Title         *string                `json:"title"`    // 正文无法确认时为 null，由文件名推断
-	Synopsis      string                 `json:"synopsis"` // 面向读者的无剧透简介
+	Title         *string                `json:"title"`    // null when the body cannot confirm it; inferred from the file name
+	Synopsis      string                 `json:"synopsis"` // reader-facing spoiler-free synopsis
 	Premise       string                 `json:"premise"`
 	Characters    []domain.Character     `json:"characters"`
 	WorldRules    []domain.WorldRule     `json:"world_rules"`
@@ -507,7 +507,7 @@ type BookSynthesis struct {
 }
 ```
 
-结构只返回范围，不重复输出所有章节：
+The structure returns only ranges and does not re-output all chapters:
 
 ```go
 type ImportedVolumeRange struct {
@@ -524,50 +524,50 @@ type ImportedArcRange struct {
 }
 ```
 
-模型自行决定卷数和弧数，可以参考源文件中的 group 标题，但不受“一卷”“1～3 弧”限制。Go 使用 `ImportedChapterFacts` 的 title/core_event/hook/scenes 组装正式 `OutlineEntry`。
+The model decides the number of volumes and arcs itself; it may consult the group titles in the source file, but is not bound by "one volume" or "1 to 3 arcs". Go assembles the formal `OutlineEntry` from the title/core_event/hook/scenes of `ImportedChapterFacts`.
 
-### 10.4 故事状态
+### 10.4 Story status
 
-导入只重建正文事实，不为了让 Engine 继续而伪造未收束长线：
+Import only rebuilds the facts of the body; it does not fabricate unresolved long-running threads just to keep the Engine going:
 
-- `open`：正文存在真实未收束目标或张力，正常生成 Compass；
-- `closed`：按已完结作品发布，最后一卷标记 Final；需要写续作时由用户明确 reopen 并给出新方向；
-- `uncertain`：发布前要求用户选择按未完或完结处理；若 Intent 已通过 `--story=open|closed` 保存选择则直接使用，否则进入交互等待。选择作为以当前 synthesis 为输入的 `story-resolution.json` 工件保存。
+- `open`: the body has a real unresolved goal or tension, and the Compass is generated normally;
+- `closed`: publish as a completed work, with the last volume marked Final; when a sequel is to be written, the user explicitly reopens and gives a new direction;
+- `uncertain`: before publishing, the user is required to choose whether to treat it as unfinished or completed; if Intent already stores a choice via `--story=open|closed`, it is used directly, otherwise it enters an interactive wait. The choice is saved as a `story-resolution.json` artifact whose input is the current synthesis.
 
-代码不通过 `open_threads` 是否为空偷偷猜测用户意图。
+The code does not secretly guess the user's intent from whether `open_threads` is empty.
 
-## 11. Foundation 组装与验证
+## 11. Foundation assembly and validation
 
-模型输出综合语义，Go 负责组装正式领域对象。发布前必须满足：
+The model outputs the synthesized semantics, and Go assembles the formal domain objects. Before publishing, the following must hold:
 
-1. Premise 有合法书名标题；正文无法确认书名时使用源文件 basename，并把来源标为 filename，不让模型宣称它是“真实书名”；
-2. 所有卷和弧范围按顺序连续；
-3. 第一个范围从第 1 章开始，最后一个范围在第 N 章结束；
-4. 每章恰好属于一个弧；
-5. `FlattenOutline` 后章节数为 N，标题和逐章事实一致；
-6. 角色名、世界规则和 Compass 满足现有 domain 类型约束；
-7. PlanningTier 是合法闭集值，但选择理由来自模型而非章数阈值；
-8. closed/open 状态与 Final、Compass 的发布形状一致；
-9. Synthesis 工件的 `InputDigest` 能由当前有序分析集合重建。
+1. The Premise has a legal book title; when the body cannot confirm the title, the source file basename is used and the origin is labeled filename, so the model is not allowed to claim it is the "real title";
+2. All volume and arc ranges are consecutive in order;
+3. The first range starts at chapter 1, and the last range ends at chapter N;
+4. Every chapter belongs to exactly one arc;
+5. After `FlattenOutline` the chapter count is N, and the titles are consistent with the per-chapter facts;
+6. Character names, world rules and the Compass satisfy the existing domain type constraints;
+7. PlanningTier is a legal closed-set value, but the reason for choosing it comes from the model rather than a chapter-count threshold;
+8. The closed/open status is consistent with the publish shape of Final and Compass;
+9. The `InputDigest` of the Synthesis artifact can be rebuilt from the current ordered set of analyses.
 
-违反结构约束时把具体错误反馈给模型重新生成，持续到成功或 context 取消；不落盘半成品。
+When a structural constraint is violated, the specific error is fed back to the model to regenerate, continuing until success or context cancellation; no half-finished product is persisted.
 
-## 12. 正式发布
+## 12. Formal publishing
 
-### 12.1 发布前置条件
+### 12.1 Publish preconditions
 
-新导入只允许进入：
+A new import may only enter when:
 
-- 没有已完成章节；
-- 没有在途章节或 PendingCommit；
-- 没有另一份非同源导入工作区；
-- 正式 Foundation 为空，或与当前工作区已经发布的 digest 完全一致。
+- there are no completed chapters;
+- there is no in-flight chapter or PendingCommit;
+- there is no other import workspace from a different source;
+- the formal Foundation is empty, or exactly consistent with the digest already published by the current workspace.
 
-已有小说与新外部文本的合并语义不清楚，第一版明确拒绝，不猜测覆盖或追加。
+The merge semantics of an existing novel and new external text are unclear, so the first version rejects it explicitly and does not guess at overwriting or appending.
 
-### 12.2 Foundation 发布
+### 12.2 Foundation publishing
 
-按正式依赖顺序发布：
+Publish in the formal dependency order:
 
 ```text
 planning tier
@@ -576,108 +576,108 @@ planning tier
 → world rules
 → layered outline + flat outline
 → compass
-→ progress 对账
+→ progress reconciliation
 ```
 
-每一步：
+For each step:
 
-1. 计算待发布内容 digest；
-2. 正式工件不存在则原子写入并追加 checkpoint；
-3. 已存在且 digest 相同则幂等跳过；
-4. 已存在但不同则返回冲突错误，不覆盖。
+1. compute the digest of the content to be published;
+2. if the formal artifact does not exist, write it atomically and append a checkpoint;
+3. if it exists and the digest is identical, skip idempotently;
+4. if it exists but differs, return a conflict error and do not overwrite.
 
-中途崩溃后重新从第一项对账即可，不需要跨文件事务或 Foundation Pending 状态机。
+After a mid-way crash it is enough to reconcile again from the first item, with no cross-file transaction and no Foundation Pending state machine.
 
-### 12.3 章节发布
+### 12.3 Chapter publishing
 
-按章节顺序复用现有流程：
+Publish in chapter order, reusing the existing flow:
 
 ```text
-保存 draft
+save draft
 → Progress.StartChapter
-→ commit_chapter(逐章事实)
+→ commit_chapter (per-chapter facts)
 ```
 
-`commit_chapter` 已有 PendingCommit saga、checkpoint 和完成章节幂等检查。导入不复制第二套提交逻辑。
+`commit_chapter` already has the PendingCommit saga, checkpoint and the idempotency check for completed chapters. Import does not duplicate a second set of commit logic.
 
-崩溃窗口：
+Crash windows:
 
-| 窗口 | 恢复行为 |
+| Window | Recovery behavior |
 |---|---|
-| draft 前 | 重新保存同一正文 |
-| draft 后、StartChapter 前 | 对账 digest 后继续 |
-| StartChapter 后、PendingCommit 前 | 重新执行同章 commit |
-| PendingCommit 中 | 由现有提交 saga 恢复 |
-| chapter complete 后 | digest/checkpoint 一致则跳过 |
-| 正式内容与源 digest 冲突 | 显式停止，报告冲突章节 |
+| Before draft | Save the same body again |
+| After draft, before StartChapter | Reconcile the digest and continue |
+| After StartChapter, before PendingCommit | Re-execute the commit of the same chapter |
+| During PendingCommit | Recovered by the existing commit saga |
+| After chapter complete | Skip if digest/checkpoint are consistent |
+| Formal content conflicts with the source digest | Stop explicitly and report the conflicting chapter |
 
-### 12.4 导入完成边界
+### 12.4 Import completion boundary
 
-全部章节稳定提交后设置一次 `AdvanceHoldAtBoundary`，原因明确为“外部小说导入完成，等待验收后续写”。它只保护这次跨系统导入，不改变用户长期 `auto/review` 模式。
+After all chapters are stably committed, an `AdvanceHoldAtBoundary` is set once, with the explicit reason "external novel import complete, awaiting acceptance before continuing". It protects only this cross-system import and does not change the user's long-term `auto/review` mode.
 
-`--yes` 只授权自动接受切分，不能隐式跳过这次 Hold。只有用户同时传入独立的 `--continue`，Runner 才不创建导入专用 Hold；随后仍遵守正常 advance mode：`auto` 可以继续续写，`review` 仍等待 `/next`。
+`--yes` only authorizes auto-accepting the segmentation and cannot implicitly skip this Hold. Only when the user also passes the independent `--continue` does the Runner not create the import-specific Hold; after that the normal advance mode still applies: `auto` may continue writing, while `review` still waits for `/next`.
 
-默认 TUI 不再自动无提示接力。用户检查 Foundation 和章节状态后，使用现有继续入口恢复创作。
+The default TUI no longer hands off automatically without a prompt. After the user checks the Foundation and the chapter state, the existing continue entry is used to resume creation.
 
-**关面板落点**：从欢迎页发起的导入成功收尾后，Esc 关闭面板会补跑一次 `Resume()`（bootstrap 的恢复门禁只在启动时跑一次），用户直接落到工作台、被导入完成 Hold 拦在下一章边界等验收——而不是留在误按 Enter 即"开新书"的欢迎页。出错终态与工作台场景只关面板。
+**Where the panel closes to**: after an import started from the welcome page ends successfully, Esc closing the panel runs `Resume()` once more (bootstrap's resume gate runs only once at startup), so the user lands directly on the workbench, held by the import-completion Hold at the next chapter boundary awaiting acceptance, rather than staying on the welcome page where an accidental Enter would "start a new book". In the error terminal state and in the workbench scenario, the panel is simply closed.
 
-**新建防线**：`PrepareUserRules` / `StartPrepared` 在书目录已有成章（`CompletedChapters` 非空）时拒绝新建——StartPrepared 开头即重置 checkpoints 与 progress，误触会静默清掉整本书（含刚导入的全部章节）。无成章的规划残留放行，保留共创 Ctrl+S 同会话重试与恢复补裁的自愈路径。
+**Guard against new creation**: `PrepareUserRules` / `StartPrepared` refuse to create when the book directory already has completed chapters (`CompletedChapters` non-empty): StartPrepared resets checkpoints and progress right at the start, and a mis-trigger would silently wipe the whole book (including all just-imported chapters). Planning leftovers with no completed chapters are let through, preserving the self-healing paths of same-session retry with co-creation Ctrl+S and the make-up ruling at recovery.
 
-### 12.5 跨重启发布门禁
+### 12.5 Cross-restart publish gate
 
-工作区存在且 `NextAction != done` 时，`Host.New/Resume` 必须把书识别为未完成导入：
+When the workspace exists and `NextAction != done`, `Host.New/Resume` must recognize the book as an unfinished import:
 
-- 允许查看、诊断和执行 `/import` 恢复；
-- 禁止普通 Engine 启动、Continue 或派发 Writer；
-- 明确显示当前恢复动作，不把已经部分发布的 Foundation/章节当作一本文义完整的可续写书籍。
+- viewing, diagnosing and executing `/import` to resume are allowed;
+- starting the normal Engine, Continue, or dispatching the Writer is forbidden;
+- the current resume action is shown explicitly, and a partially published Foundation/chapters is not treated as a semantically complete, continuable book.
 
-门禁直接读取工作区和正式 Store 推导，不新增 `published bool`。这样发布任意窗口崩溃后，都不会在 Runner 尚未恢复时由普通创作流程消费半发布状态。
+The gate derives directly from the workspace and the formal Store, with no new `published bool`. This way, after a crash in any window of publishing, the normal creative flow will not consume the half-published state before the Runner has resumed.
 
-## 13. 模型调用内核
+## 13. Model call kernel
 
-`imp` 内部保留一个小而专用的 typed-call helper，不建设通用 LLM 工作流框架。
+`imp` keeps a small, dedicated typed-call helper internally, and does not build a general LLM workflow framework.
 
-### 13.1 模型选择
+### 13.1 Model selection
 
-- 默认使用 architect 角色模型；
-- 语义函数的模型档位是开放旋钮：segment/analyze/synthesize 可各自声明档位，默认落到 architect，配置层可把机械性更强的 segment 指到更便宜档位。这是调用配置，不改任何语义契约，也不把「单角色」写成架构前提——目的是让「廉价档位模型变强」的成本红利也进得来；
-  - 实现落点：roles 配置支持 `import_segment` / `import_analyze` / `import_synthesize` 三个角色 key；未配置时落 architect。各函数的双预算与 thinking/结构化选项按各自档位的真实能力独立派生（小档位的小窗口只约束它自己的函数），用量按实际档位角色记账；
-- 接入所选角色已配置的 failover；
-- 使用所选角色 reasoning effort，并通过能力探测决定是否发送 thinking 参数；
-- 按真实 provider/model 写 session 元数据和 usage；
-- 纳入现有预算哨兵（2026-07-16 落地）：启动前过 `Refuse()` 与 Start/Resume/Continue 同一纪律；运行中预算硬停经 `abortWithEvent` 取消导入自己的 context（Host 登记独占作业的 cancel，不再只暂停并未运行的 Engine）。
+- the architect role model is used by default;
+- the model tier of a semantic function is an open knob: segment/analyze/synthesize may each declare a tier, defaulting to architect, and the config layer may point the more mechanical segment at a cheaper tier. This is call configuration; it changes no semantic contract and does not write "single role" in as an architectural premise, so that the cost benefit of "cheap-tier models getting stronger" can also flow in;
+  - where it landed: the roles config supports three role keys `import_segment` / `import_analyze` / `import_synthesize`; when not configured they fall back to architect. The dual budget and the thinking/structured options of each function are derived independently from the real capability of its own tier (the small window of a small tier constrains only its own function), and usage is accounted to the role of the tier actually used;
+- hook into the failover configured for the selected role;
+- use the reasoning effort of the selected role, and decide whether to send the thinking parameter via capability probing;
+- write session metadata and usage under the real provider/model;
+- join the existing budget sentinel (landed 2026-07-16): before start it goes through `Refuse()` with the same discipline as Start/Resume/Continue; at runtime a hard budget stop cancels the import's own context via `abortWithEvent` (the Host registers the cancel of the exclusive job, instead of merely pausing an Engine that is not running).
 
-### 13.2 结构化输出能力
+### 13.2 Structured output capability
 
-四类导入产物共用 `llmcontract.Execute`：模型或用户配置明确支持时发送原生 JSON Schema；能力未知或明确不支持时，从同一份 Schema 自动生成 Prompt Contract。原生模式校验完整响应，兼容模式才提取平衡 JSON 对象；两条路径均先执行同一份 Schema 校验，再解码 DTO 并执行业务校验。请求报错后不得静默删除 schema 重试，能力判断错误或 Provider 拒绝必须暴露。
+The four kinds of import artifacts share `llmcontract.Execute`: when the model or the user config explicitly supports it, a native JSON Schema is sent; when the capability is unknown or explicitly unsupported, a Prompt Contract is generated automatically from the same Schema. Native mode validates the complete response, and compatibility mode extracts a balanced JSON object; both paths first run the same Schema validation, then decode the DTO and run business validation. After a request error, the schema must not be silently dropped for a retry; a capability misjudgment or a Provider rejection must be surfaced.
 
-### 13.3 请求、语义与容量失败分离
+### 13.3 Separating request, semantic and capacity failures
 
-- 请求层错误：只重试适配器明确标记 retryable 的超时、限流、网络错误，沿用现有退避语义并持续到成功或 context 取消；
-- 输出层错误：把 JSON 解析或 Validate 的具体错误反馈给同一模型，持续自修复直到成功或上下文被用户/预算系统取消；原生 Schema 契约违约、拒答和截断不会盲目重问。
-- 重试不允许静默：请求层每次退避（"进行第 N 次重试 · Xs 后重试"）与输出层每次重问都以进度事件回显到导入面板——无回显用户会误判卡死。退避事件只携带截止时刻（`RetryAt`），剩余秒数由渲染层逐 tick 计算形成实时倒计时（与创作台事件面板共用同一机制）；面板运行期常驻顶部 spinner + 已用时，日志尾部另有流式同款星标光标。
-- 错误回显不许空泛：网关 message 常常只有一句 "Provider returned error"；回显与失败文案统一附带适配器的结构化事实（错误分类/HTTP 状态/provider/模型，`modelErrDetail` 经 errors.As 从 litellm 错误链提取），事实前置，截断时优先保住。
-- 长时阶段不许静默：切分逐块、综合逐区间在函数内部调用模型（单块可达数分钟），经 `callProfile.step` 逐块/逐区间回显推进（"切分第 N/M 块，已识别 K 个边界"）。事件 Key 只给请求退避（同一调用内的瞬态，原地跳动）；校验重问是跨调用语义事件，各自成行保留历史——共用 Key 会让后块覆盖前块，排查线索全丢。
-- 全量日志转录：每条进度事件（含被面板原地覆盖的重试行）写入**导入专属日志** `<书根>/logs/import.log`（不与 tui.log 混流，一次导入一个文件看完整转录）；请求退避与语义重问另以完整错误链落同一日志。
-- 回显模型语义而非只有机械计数：切分逐块回显模型识别出的标题（"模型识别出：第十二章 风雪夜 / …（共 N 处）"），分析逐章回显核心事件（"第 12 章〈风雪夜〉：……"），综合完成回显全书概括（premise 摘要）——用户应看见模型读懂了什么。
-- 容量错误：`StopReasonLength` 不原样重试，也不进入语义自修复循环；analysis batch 在部分文本可解析时按 §9.5 保存连续合法前缀，否则记录 `prefix_salvage=unavailable` 并缩小重组批；其余语义函数直接显式失败并保留原始响应。
+- Request-layer errors: only the timeouts, rate limits and network errors that the adapter explicitly marks retryable are retried, using the existing backoff semantics, continuing until success or context cancellation;
+- Output-layer errors: the specific JSON parse or Validate error is fed back to the same model, which keeps self-repairing until success or until the context is canceled by the user/budget system; native Schema contract violations, refusals and truncation are not blindly re-asked.
+- Retries must not be silent: every request-layer backoff (currently echoed as `Gọi model lỗi (<error>), thử lại lần N`, i.e. "model call failed (<error>), retry attempt N", plus a "Thử lại sau Ns" ("retry in Ns") countdown) and every output-layer re-ask (`Kiểm tra đầu ra không đạt (<error>), hỏi lại lần N kèm phản hồi lỗi`, i.e. "output validation failed (<error>), re-asking attempt N with error feedback") are echoed to the import panel as progress events; without an echo the user would misjudge it as hung. A backoff event carries only the deadline (`RetryAt`), and the remaining seconds are computed by the rendering layer on every tick to form a live countdown (sharing the same mechanism with the event panel of the creation workbench); while running, the panel keeps a spinner + elapsed time at the top, and the log tail has the same streaming star cursor.
+- Error echo must not be vague: a gateway message is often just one sentence "Provider returned error"; the echo and the failure text uniformly append the adapter's structured facts (error category / HTTP status / provider / model, extracted by `modelErrDetail` from the litellm error chain via errors.As), with the facts placed first so they are preserved first when truncating.
+- Long-running stages must not be silent: segmentation per chunk and synthesis per range call the model inside the function (a single chunk can take several minutes), and progress is echoed per chunk / per range through `callProfile.step` (currently `Chia khối N/M (a..b), đã nhận diện K ranh giới...`, i.e. "segmenting chunk N/M, K boundaries identified so far"). The event Key is given only to request backoff (a transient inside one call, updated in place); validation re-asks are cross-call semantic events, each kept on its own line to preserve history; sharing a Key would let later chunks overwrite earlier ones, losing all troubleshooting clues.
+- Full-log transcript: every progress event (including retry lines overwritten in place by the panel) is written to the **import-specific log** `<book root>/logs/import.log` (not mixed with the tui.log stream, so one import gets one file with the complete transcript); request backoffs and semantic re-asks are also written to the same log with the full error chain.
+- Echo model semantics rather than only mechanical counts: segmentation echoes, per chunk, the titles the model recognized (`Model nhận diện: <title> / <title> / … (tổng N chỗ)`, i.e. "model recognized: … (N in total)", for example with titles like 第十二章 风雪夜, "Chapter 12 Snowy Night"), analysis echoes the core event per chapter (`Chương 12 "<title>": <core event>`), and when synthesis completes it echoes the book-wide summary (`Model tóm lược toàn sách: <premise summary>`, i.e. "model's whole-book summary") — the user should see what the model understood. <!-- han:keep -->
+- Capacity errors: `StopReasonLength` is neither retried unchanged nor sent into the semantic self-repair loop; for an analysis batch, when the partial text is parseable, the consecutive valid prefix is saved per §9.5, otherwise `prefix_salvage=unavailable` is recorded and the batch is shrunk and regrouped; the other semantic functions fail explicitly and directly and keep the raw response.
 
-鉴权、权限、模型不支持和状态冲突立即失败。没有模拟成功、空对象兜底或跳过失败章节。
+Authentication, permission, model-unsupported and state-conflict errors fail immediately. There is no simulated success, no empty-object fallback, and no skipping of failed chapters.
 
-### 13.4 输入与输出预算
+### 13.4 Input and output budgets
 
-每种语义函数有独立 schema、输入预算、推理预留和可见输出预算：
+Each semantic function has its own schema, input budget, reasoning reserve and visible output budget:
 
-- 分段输出只包含当前 owned range 的边界；
-- analysis batch 同时受 context window 和 completion 上限约束，输出是有限连续范围的逐章事实；
-- RangeDigest 只包含一个连续区间；
-- BookSynthesis 只包含全局事实和卷弧范围，不重复章节对象。
+- segmentation output contains only the boundaries of the current owned range;
+- an analysis batch is constrained by both the context window and the completion limit, and its output is the per-chapter facts of a bounded consecutive range;
+- a RangeDigest contains only one consecutive range;
+- BookSynthesis contains only global facts and volume/arc ranges, and does not repeat chapter objects.
 
-每次请求在发送前都记录估算输入、推理预留、申请的 max tokens 和预计可见输出。估算只决定分块/组批，不删除正文或事实字段。因此不存在“总章数越多，某一次响应必然越长”的结构，也不能仅因输入放得下就忽略输出截断风险。
+Before every request is sent, the estimated input, the reasoning reserve, the requested max tokens and the estimated visible output are recorded. The estimate decides only chunking/batching and deletes no body or fact field. Therefore there is no structure in which "the more total chapters, the longer some single response must be", and the risk of output truncation cannot be ignored merely because the input fits.
 
-## 14. 事件、日志和诊断
+## 14. Events, logs and diagnostics
 
-### 14.1 事件阶段
+### 14.1 Event stages
 
 ```go
 const (
@@ -694,69 +694,69 @@ const (
 )
 ```
 
-每个事件包含 action、当前章节/区间、总数、耗时和可选错误。analysis batch 事件额外包含批次范围、预算估算、StopReason 和已提交前缀范围。Event 是投影，不参与恢复。
+Each event contains the action, the current chapter/range, the total, the elapsed time and an optional error. Analysis batch events additionally contain the batch range, the budget estimates, the StopReason and the committed prefix range. Events are a projection and take no part in resuming.
 
-### 14.2 错误必须同时到达三处
+### 14.2 Errors must reach three places at once
 
-1. TUI 导入面板：自动换行，保留完整错误链；
-2. `tui.log`：结构化记录 stage、chapter/range、model、attempt 和 error；
-3. `meta/import/failures/`：保存最后一次失败元数据和未经裁剪的模型响应。
+1. The TUI import panel: auto-wrapped, keeping the full error chain;
+2. `tui.log`: structured record of stage, chapter/range, model, attempt and error;
+3. `meta/import/failures/`: saves the last failure metadata and the untrimmed model response.
 
-原始小说正文不写普通日志，也不进入默认脱敏诊断导出。失败响应位于用户自己的书目录，错误信息明确给出路径。
+The original novel body is not written to ordinary logs and does not enter the default redacted diagnostic export. The failure response lives in the user's own book directory, and the error message gives the path explicitly.
 
-### 14.3 Session 与 Usage
+### 14.3 Session and Usage
 
-每次语义调用记录：
+Every semantic call records:
 
-- 稳定 task 名，如 `import/segment/0003`、`import/analyze/0054-0061`；
-- assistant 原始响应；
-- provider/model 与 usage；
-- structured mode、thinking level 和输出校验结果。
+- a stable task name, such as `import/segment/0003`, `import/analyze/0054-0061`;
+- the raw assistant response;
+- provider/model and usage;
+- structured mode, thinking level and the output validation result.
 
-用量统一归入 architect 角色，预算对导入成本可见。
+Usage is accounted uniformly to the architect role, so the budget sees the import cost.
 
-## 15. 生命周期与并发
+## 15. Lifecycle and concurrency
 
-- 导入与 Engine、阶段共创、simulation 的写操作互斥；
-- 导入期间同一本书只允许一个 Runner；
-- 用户取消会取消在途模型调用，已原子落盘的工作区事实保留；
-- 确认前取消不会修改正式 Store；
-- 发布开始后取消不做猜测性回滚，下一次只能精确恢复发布；
-- 第一版 analysis batch 之间串行，批次内由一次模型调用按章顺序返回事实；正式发布仍按章节串行；
-- `Host.New/Resume` 在未完成导入时执行 §12.5 门禁，互斥语义跨进程重启仍成立；
-- 导出是否允许并发保持现有只读语义，但它只能看到已经正式发布的章节。
+- Import is mutually exclusive with write operations of the Engine, stage co-creation and simulation;
+- only one Runner is allowed for the same book during import;
+- user cancellation cancels in-flight model calls, and workspace facts already atomically persisted are kept;
+- canceling before confirmation does not modify the formal Store;
+- canceling after publishing has started does no speculative rollback; the next run can only resume publishing precisely;
+- in the first version analysis batches are serial; within a batch, one model call returns the facts in chapter order, and formal publishing remains serial per chapter;
+- `Host.New/Resume` applies the §12.5 gate while an import is unfinished, so the mutual-exclusion semantics hold across process restarts;
+- whether export may run concurrently keeps the existing read-only semantics, but it can only see chapters that have already been formally published.
 
-## 16. 核心不变量
+## 16. Core invariants
 
-1. 每份工作区工件都由 `SchemaVersion + InputDigest + Payload` 标识；只有能从当前真实语义输入重建相同 `InputDigest` 才可复用。
-2. Manifest 对应唯一归一化源快照；每段非空源文本必须有且只有一个归属。
-3. 模型只能引用 Host 提供的 SourceUnit、原文锚点和章节号；Go 只接受能唯一映射回源字节的坐标。
-4. analysis batch 只能提交完整响应，或 `StopReasonLength` 下从首章开始的最大连续合法前缀；任一缺章都会阻止后续分析和综合。
-5. 卷弧范围必须连续、无重叠并完整覆盖 `1..N`；正式 Foundation 只能从通过完整验证的 Synthesis 发布。
-6. 正式章节只能按顺序通过 `commit_chapter` 发布；已存在正式工件只能在内容 digest 相同时幂等复用，不同则冲突失败。
-7. 任一模型失败都不得被解释为“无内容”或“继续下一章”，不得修复半个 JSON 或跳过失败章节。
-8. `done` 必须由工作区工件、正式工件、Progress、PendingCommit 和 checkpoint 共同证明；`done` 前普通 Engine 不得启动。
+1. Every workspace artifact is identified by `SchemaVersion + InputDigest + Payload`; it can be reused only if the same `InputDigest` can be rebuilt from the current real semantic inputs.
+2. The Manifest corresponds to exactly one normalized source snapshot; every non-empty piece of source text must have one and only one attribution.
+3. The model may only reference the SourceUnit, source anchors and chapter numbers provided by the Host; Go accepts only coordinates that map uniquely back to source bytes.
+4. An analysis batch may only commit a complete response, or, under `StopReasonLength`, the maximal consecutive valid prefix starting from the first chapter; any missing chapter blocks subsequent analysis and synthesis.
+5. Volume/arc ranges must be consecutive, non-overlapping and fully cover `1..N`; the formal Foundation may only be published from a Synthesis that passed full validation.
+6. Formal chapters may only be published in order through `commit_chapter`; an existing formal artifact may be reused idempotently only when the content digest is identical, and a difference fails as a conflict.
+7. No model failure may be interpreted as "no content" or "go on to the next chapter", and half a JSON must not be repaired nor a failed chapter skipped.
+8. `done` must be jointly proved by the workspace artifacts, the formal artifacts, Progress, PendingCommit and checkpoints; the normal Engine must not start before `done`.
 
-## 17. 包结构与窄接口
+## 17. Package structure and narrow interfaces
 
-保留 `internal/host/imp`，按职责拆分：
+Keep `internal/host/imp`, split by responsibility:
 
 ```text
 imp/
-├── types.go       公开 Options/Event 与语义 DTO
-├── source.go      读取、解码、归一化、SourceUnit/anchor
-├── workspace.go   meta/import 原子工件与 InputDigest
-├── call.go        import 专用 typed LLM 调用
-├── segment.go     结构投影、边界语义函数、覆盖验证
-├── analyze.go     双预算连续批次、逐章事实与截断前缀
-├── synthesize.go  RangeDigest 与 BookSynthesis
-├── publish.go     Foundation 对账与 commit_chapter 发布
-└── runner.go      LoadState → NextAction → 执行
+├── types.go       public Options/Event and semantic DTOs
+├── source.go      reading, decoding, normalization, SourceUnit/anchor
+├── workspace.go   meta/import atomic artifacts and InputDigest
+├── call.go        import-specific typed LLM call
+├── segment.go     structural projection, boundary semantic function, coverage validation
+├── analyze.go     dual-budget consecutive batches, per-chapter facts and truncated prefix
+├── synthesize.go  RangeDigest and BookSynthesis
+├── publish.go     Foundation reconciliation and commit_chapter publishing
+└── runner.go      LoadState → NextAction → execute
 ```
 
-不新增 `ImportEngine`、`Task`、`WorkflowInstance`、通用 Repository 或插件注册表。
+No `ImportEngine`, `Task`, `WorkflowInstance`, generic Repository or plugin registry is added.
 
-Host 注入的依赖保持窄：
+The dependencies injected by the Host stay narrow:
 
 ```go
 type Deps struct {
@@ -769,205 +769,205 @@ type Deps struct {
 }
 ```
 
-`ModelRuntime` 只携带 context window、completion 上限、thinking、session/usage 回调等调用事实，并为每个语义函数预留模型档位选择位（默认 architect）；不让 `imp` 反向依赖整个 Host，也不把单一角色焊死为架构前提。
+`ModelRuntime` carries only call facts such as the context window, the completion limit, thinking, and session/usage callbacks, and reserves a model-tier selection slot for each semantic function (default architect); it neither makes `imp` depend back on the whole Host nor welds a single role in as an architectural premise.
 
-## 18. 用户接口
+## 18. User interface
 
-### 18.1 新导入
+### 18.1 New import
 
 ```text
-/import <path> [--yes] [--story=open|closed] [--continue] [--guide=<切分指导>]
+/import <path> [--yes] [--story=open|closed] [--continue] [--guide=<segmentation guidance>]
 ```
 
-默认行为：创建源快照、语义切分并打开确认预览，完成发布后设置一次导入专用 Hold。删除 `from=N`。
+Default behavior: create the source snapshot, segment semantically and open the confirmation preview; after publishing completes, set the import-specific Hold once. `from=N` is deleted.
 
-前三个选项是彼此独立的显式授权，并写入 `intent.json`：
+The first three options are mutually independent explicit authorizations and are written to `intent.json`:
 
-- `--yes`：覆盖校验通过后自动接受切分；不决定 uncertain 故事状态，不跳过完成 Hold；
-- `--story=open|closed`：仅在 synthesis 返回 uncertain 时预先提供用户选择；模型已明确判断 open/closed 时不覆盖模型事实；
-- `--continue`：不创建导入专用 Hold；不绕过正常 advance mode，`review` 下仍需 `/next`。
+- `--yes`: auto-accept the segmentation once coverage validation passes; it does not decide the uncertain story status and does not skip the completion Hold;
+- `--story=open|closed`: provides the user's choice in advance only when synthesis returns uncertain; when the model has clearly judged open/closed, the model's fact is not overridden;
+- `--continue`: do not create the import-specific Hold; it does not bypass the normal advance mode, and under `review` `/next` is still needed.
 
-`--guide` 与前三者不同：它不是启动授权而是切分的语义输入，落盘为工作区 `guidance.txt`（可含空格，须置于命令最后）。见 §18.3。
+`--guide` differs from the first three: it is not a start authorization but a semantic input of segmentation, persisted as the workspace `guidance.txt` (it may contain spaces and must be placed at the end of the command). See §18.3.
 
-因此 `/import book.txt --yes` 仍会在导入完成后停下；只有额外传入 `--continue` 才授权创作流程在正常门禁允许时接力。
+Therefore `/import book.txt --yes` still stops after the import completes; only by additionally passing `--continue` is the creation flow authorized to hand off when the normal gates allow.
 
-### 18.2 恢复
+### 18.2 Resume
 
-同一本书存在活动工作区时执行无参数 `/import`，直接从事实和已保存 intent 推导下一步；源文件路径和启动参数都不是恢复必需项。带新路径的 `/import <path>` 不得覆盖活动工作区。
+When an active workspace exists for the same book, running `/import` with no arguments derives the next step directly from the facts and the saved intent; neither the source file path nor the start arguments are required for resuming. `/import <path>` with a new path must not overwrite an active workspace.
 
-未完成导入必须主动可见，不能等用户创作被门禁拒绝才暴露。实现为三道递进提示：
+An unfinished import must be proactively visible and must not wait until creation is rejected by the gate to surface. It is implemented as three progressive hints:
 
-1. 启动时 TUI 检测一次（`imp.ResumeSummary`，按 `NextAction` 生成阶段化描述），欢迎界面醒目显示"发现未完成的导入（已分析 N/M 章），输入 /import 从断点恢复"；
-2. 用户无视提示尝试创作时，跨重启门禁（§12.5）拒绝引擎启动并发事件警示；
-3. 恢复运行中，导入面板实时显示当前阶段与进度。
+1. At startup the TUI checks once (`imp.ResumeSummary`, which generates a staged description from `NextAction`), and the welcome screen prominently shows an unfinished-import notice (for example `Phát hiện lượt nhập chưa hoàn tất (Đã phân tích N/M chương), nhập /import để tiếp tục từ điểm dừng`, i.e. "unfinished import detected (N/M chapters analyzed so far), enter /import to continue from where it stopped");
+2. When the user ignores the hint and tries to create, the cross-restart gate (§12.5) refuses the engine start and emits a warning event;
+3. During a resumed run, the import panel shows the current stage and progress in real time.
 
-### 18.3 重新切分
+### 18.3 Re-segmentation
 
-用户核对预览后用 `/import --guide=<自然语言说明>` 重新识别，例如 `--guide=幕间·X 也是独立章节`。指导写入工作区 `guidance.txt` 并纳入 segmentation 的 `InputDigest`：指导变化使旧切分及旧 confirmation、分析和 synthesis 无法重建相同 `InputDigest`，自然全部重做；不提供正则编辑器。
+After checking the preview, the user re-recognizes with `/import --guide=<natural-language note>`, for example `--guide=幕间·X 也是独立章节` ("Interlude · X is also a standalone chapter"). The guidance is written to the workspace `guidance.txt` and included in the `InputDigest` of segmentation: a change of guidance makes the old segmentation and the old confirmation, analyses and synthesis unable to rebuild the same `InputDigest`, so everything is naturally redone; no regex editor is provided. <!-- han:keep -->
 
-### 18.4 取消
+### 18.4 Cancel
 
-确认前取消只保留工作区；发布前可以显式丢弃整个工作区。发布开始后不提供“假装什么都没发生”的丢弃操作，只允许恢复完成或由用户另行处理正式书籍。
+Canceling before confirmation only keeps the workspace; before publishing, the whole workspace can be discarded explicitly. After publishing has started, no discard operation that "pretends nothing happened" is provided; the only options are to finish resuming or for the user to handle the formal book separately.
 
-## 19. 实施顺序
+## 19. Implementation order
 
-### 阶段一：工作区和纯状态推导
+### Phase 1: Workspace and pure state derivation
 
-- Manifest、Intent、源快照、`Artifact/InputDigest`、原子读写；
-- `LoadState/NextAction`；
-- 空书和同源恢复前置校验；
-- 删除 `ResumeFrom` 设计依赖。
+- Manifest, Intent, source snapshot, `Artifact/InputDigest`, atomic reads and writes;
+- `LoadState/NextAction`;
+- precondition validation for an empty book and same-source resume;
+- delete the design dependence on `ResumeFrom`.
 
-这一阶段不调用模型，先证明恢复事实没有歧义。
+This phase calls no model; it first proves that the resume facts are unambiguous.
 
-### 阶段二：语义切分与确认
+### Phase 2: Semantic segmentation and confirmation
 
-- SourceUnit、超长行虚拟分片、原文锚点和上下文预算分块；
-- BoundaryDecision typed call；
-- 全文覆盖验证；
-- TUI 预览、自然语言重识别、`--yes` 和 confirmation 工件。
+- SourceUnit, virtual slices of over-long lines, source anchors and context-budget chunking;
+- the BoundaryDecision typed call;
+- full-text coverage validation;
+- TUI preview, natural-language re-recognition, `--yes` and the confirmation artifact.
 
-先用非标准标题、卷标题、前言和尾注验证“不漏一字”。
+First verify "not one character missed" with non-standard titles, volume titles, prefaces and trailing notes.
 
-### 阶段三：连续批次的逐章事实
+### Phase 3: Per-chapter facts over consecutive batches
 
-- `ImportedChapterFacts`；
-- context/completion 双预算批次规划；
-- 批次间顺序分析和紧凑连续性 ledger；
-- 每章 `InputDigest` 工件恢复；
-- 截断即「失败 + 缩小重组批」，并记录部分文本是否可用；
-- session、usage、failover、thinking、容量错误和结构反馈重试接线。
+- `ImportedChapterFacts`;
+- context/completion dual-budget batch planning;
+- sequential analysis between batches and the compact continuity ledger;
+- per-chapter `InputDigest` artifact resume;
+- truncation means "failure + shrink and regroup the batch", and records whether partial text was usable;
+- wiring of session, usage, failover, thinking, capacity errors and structural-feedback retries.
 
-### 阶段三·补：截断前缀打捞（效率优化，可后置）
+### Phase 3 supplement: Truncated-prefix salvage (efficiency optimization, can be deferred)
 
-- `StopReasonLength` 连续合法前缀解析（§9.5）；
-- 仅在部分文本可解析时启用，不改恢复正确性；单独开关、单独验收。
+- parsing the `StopReasonLength` consecutive valid prefix (§9.5);
+- enabled only when the partial text is parseable, and does not change resume correctness; separate switch, separate acceptance.
 
-### 阶段四：分层综合与 Foundation
+### Phase 4: Hierarchical synthesis and Foundation
 
-- context-aware RangeDigest；
-- BookSynthesis；
-- 范围式卷弧结构；
-- StoryStatus；
-- Foundation 完整组装和校验。
+- context-aware RangeDigest;
+- BookSynthesis;
+- range-style volume/arc structure;
+- StoryStatus;
+- complete Foundation assembly and validation.
 
-### 阶段五：发布与交接
+### Phase 5: Publishing and handoff
 
-- Foundation 逐工件 digest 对账；
-- 复用 `commit_chapter` 发布；
-- 取消/崩溃恢复；
-- 跨重启 Engine 门禁；
-- 默认导入完成 AdvanceHold 与显式 `--continue`；
-- 完整 TUI/log/failure artifact。
+- Foundation per-artifact digest reconciliation;
+- publish by reusing `commit_chapter`;
+- cancel/crash recovery;
+- cross-restart Engine gate;
+- default import-completion AdvanceHold and explicit `--continue`;
+- complete TUI/log/failure artifact.
 
-### 阶段六：删除旧实现
+### Phase 6: Delete the old implementation
 
-- 删除 `splitter.go` 的章节格式裁决；
-- 删除 tagged envelope；
-- 删除 `ReverseFoundation` 整书调用；
-- 删除 `pickScale` 章数阈值；
-- 删除 `ResumeFrom/from=N`；
-- 删除“固定一卷、1～3 弧、强制 open threads”的 prompt 约束；
-- 实现完成后再更新 README 和 architecture 的旧流程描述。
+- delete the chapter-format adjudication in `splitter.go`;
+- delete the tagged envelope;
+- delete the whole-book `ReverseFoundation` call;
+- delete the `pickScale` chapter-count thresholds;
+- delete `ResumeFrom/from=N`;
+- delete the prompt constraints of "fixed one volume, 1 to 3 arcs, forced open threads";
+- after the implementation is complete, update the old-flow descriptions in README and architecture.
 
-## 20. 测试与验收
+## 20. Testing and acceptance
 
-### 20.1 纯函数和属性测试
+### 20.1 Pure-function and property tests
 
-- 任意合法 segmentation 都满足全文范围无重叠、无缺口；
-- 非法 SourceUnit、非唯一原文锚点、倒序和重复边界必定拒绝；
-- 边界顺序按 `(Line, Part)` 数值序判断；构造「字典序与数值序结论相反」的 unit 集，断言以数值序通过；
-- 正常行与虚拟分片都能无损映射回同一份归一化源字节；
-- 任意合法卷弧 ranges 恰好覆盖 `1..N`；
-- 相同语义输入稳定生成相同 `InputDigest`，任一真实输入变化都会使对应工件失配；
-- 双预算组批不会超过给定 context/completion 约束；
-- NextAction 对同一事实快照恒定。
+- any legal segmentation satisfies full-text ranges with no overlap and no gap;
+- an illegal SourceUnit, a non-unique source anchor, reversed order and duplicate boundaries are always rejected;
+- boundary order is judged by the `(Line, Part)` numeric order; construct a unit set where "lexicographic order and numeric order give opposite conclusions" and assert it passes under the numeric order;
+- both normal lines and virtual slices can be mapped losslessly back to the same normalized source bytes;
+- any legal volume/arc ranges cover exactly `1..N`;
+- the same semantic input stably produces the same `InputDigest`, and a change of any real input makes the corresponding artifact mismatch;
+- dual-budget batching never exceeds the given context/completion constraints;
+- NextAction is constant for the same fact snapshot.
 
-对坐标映射、范围组装、批次预算和 `InputDigest` 做 fuzz/property test，不断言模型会输出某个固定标题。
+Fuzz/property tests are done on coordinate mapping, range assembly, batch budgeting and `InputDigest`, without asserting that the model outputs any fixed title.
 
-### 20.2 模型契约测试
+### 20.2 Model contract tests
 
-- 非标准章名和混合卷章结构；
-- 序章/楔子/番外被模型语义判断为章节；
-- front/back matter 明确展示而非丢弃；
-- 整本单行、单行多章节和超预算行通过 SourceUnit + anchor 精确切分；
-- 安静章节允许空 characters；
-- 非法 JSON、缺字段、越界范围进入反馈重试；
-- analysis batch 返回连续逐章对象，不能跳号或重复；
-- `StopReasonLength` 只保存最大连续合法前缀，半个对象和后续非连续对象不保存；
-- 结构化模式不产出可解析部分文本时，断言走「失败 + 缩小重组批」且日志标注 `prefix_salvage=unavailable`；
-- 普通 `StopReasonStop` 下的损坏 JSON 不进入截断前缀路径；
-- 单章仍截断时显式失败，不生成空事实；
-- Prompt Contract 的解析/业务错误持续反馈自修复，直到成功或上下文取消；原生 Schema 契约违约、拒答与截断立即保留原始响应并终止；
-- 不支持 thinking/JSON Schema 的模型不收到非法参数。
+- non-standard chapter names and mixed volume/chapter structures;
+- a prologue / preface chapter / side story judged by the model semantically to be a chapter;
+- front/back matter is shown explicitly rather than discarded;
+- a whole single-line book, several chapters on one line, and over-budget lines are cut precisely through SourceUnit + anchor;
+- a quiet chapter is allowed to have empty characters;
+- illegal JSON, missing fields and out-of-range ranges enter the feedback retry;
+- an analysis batch returns consecutive per-chapter objects, with no skipped or duplicate numbers;
+- `StopReasonLength` saves only the maximal consecutive valid prefix; half an object and later non-consecutive objects are not saved;
+- when a structured mode produces no parseable partial text, assert that it takes "failure + shrink and regroup the batch" and that the log is annotated `prefix_salvage=unavailable`;
+- corrupted JSON under an ordinary `StopReasonStop` does not enter the truncated-prefix path;
+- when a single chapter is still truncated it fails explicitly, without generating empty facts;
+- parse/business errors of the Prompt Contract keep feeding back for self-repair until success or context cancellation; native Schema contract violations, refusals and truncation immediately keep the raw response and terminate;
+- models that do not support thinking/JSON Schema do not receive illegal parameters.
 
-模型测试断言契约和不变量，不断言精确文学判断。
+Model tests assert contracts and invariants, not exact literary judgments.
 
-### 20.3 崩溃矩阵
+### 20.3 Crash matrix
 
-至少覆盖：
+Cover at least:
 
-- 源快照后；
-- segmentation 后、确认前；
-- analysis batch 第 N 个对象落盘前后；
-- 长度截断前缀最后一章落盘前后；
-- RangeDigest 中间；
-- Synthesis 后、Foundation 前；
-- 每个 Foundation 工件前后；
-- draft/StartChapter/PendingCommit/progress/checkpoint 各窗口；
-- 最后一章提交后、AdvanceHold 前后；
-- Foundation/章节部分发布后重启并尝试普通 Host.Resume。
+- after the source snapshot;
+- after segmentation, before confirmation;
+- before and after the N-th object of an analysis batch is persisted;
+- before and after the last chapter of a length-truncation prefix is persisted;
+- in the middle of a RangeDigest;
+- after Synthesis, before the Foundation;
+- before and after each Foundation artifact;
+- each window of draft/StartChapter/PendingCommit/progress/checkpoint;
+- after the last chapter commits, before and after AdvanceHold;
+- restarting after the Foundation/chapters are partially published and attempting a normal Host.Resume.
 
-每个窗口重启后只能继续当前动作，不能重复消费成功的模型调用，也不能越过失败工件。`NextAction != done` 时普通 Engine 必须被门禁阻止，直到导入恢复完成。
+After a restart in each window, only the current action may continue; a successful model call must not be consumed again, and a failed artifact must not be skipped past. When `NextAction != done`, the normal Engine must be blocked by the gate until import resume is complete.
 
-### 20.4 #83 回归形状
+### 20.4 #83 regression shape
 
-构造 54 章及更长输入，验证：
+Construct inputs of 54 chapters and longer, and verify:
 
-1. 没有单次调用要求输出 54 章详细大纲；
-2. analysis batch 同时根据输入 context 和可见输出 completion 预算组批，不因输入放得下就塞入过多章节；
-3. 阶段三·补：模拟“前 13 章完整、第 14 章截断”的 `StopReasonLength`，只提交前 13 章，下一动作从第 14 章开始；未实现前缀打捞时，整批失败后从批次首章重组批；
-4. 模拟无完整对象的截断响应，错误完整显示、写 log、保存原始响应且不落分析工件；
-5. 模拟普通损坏 JSON，走结构反馈重试而不是前缀打捞；
-6. 修正后只重跑第一份缺失动作，不重做已完成章节；
-7. 非标准标题通过语义切分进入预览，不通过新增正则修复。
+1. No single call is required to output a detailed 54-chapter outline;
+2. An analysis batch is grouped according to both the input context and the visible-output completion budget, and does not pack in too many chapters merely because the input fits;
+3. Phase 3 supplement: simulate a `StopReasonLength` of "the first 13 chapters complete, chapter 14 truncated", commit only the first 13 chapters, and the next action starts from chapter 14; before prefix salvage is implemented, the whole batch fails and the batch is regrouped from its first chapter;
+4. Simulate a truncated response with no complete object: the error is shown in full, written to the log, the raw response is saved, and no analysis artifact is persisted;
+5. Simulate ordinary corrupted JSON: it takes the structural-feedback retry rather than prefix salvage;
+6. After the fix, only the first missing action is rerun, and completed chapters are not redone;
+7. Non-standard titles enter the preview through semantic segmentation, and are not fixed by adding new regexes.
 
-### 20.5 最终验收标准
+### 20.5 Final acceptance criteria
 
-1. 默认交互模式让用户在正式写盘前看到并确认全部章节边界；`--yes` 能显式自动接受且留下同等审计工件。
-2. 任意非空源文本都能从 segmentation 找到唯一归属。
-3. 200～500 章不会形成一次读取全书正文并输出全部章节对象的模型调用；每个分析批次同时受输入和输出预算约束，全局输出只表达全局事实与卷弧范围。
-4. 任一阶段崩溃后无需 `from=N` 即可精确恢复。
-5. 正式状态在完整语义验证前保持不变。
-6. 发布中断后现有 commit saga 能恢复，且不会重复提交章节。
-7. 未完成导入跨重启后不能启动普通 Engine；只能查看、诊断或恢复导入。
-8. `--yes` 不跳过完成 Hold；只有独立 `--continue` 才跳过，且不会绕过 review 门禁。
-9. 模型和 provider 的能力、用量、StopReason、预算估算和错误均可观测。
-10. 更换更强模型即可改善切分、分析和综合质量，并自然扩大安全批次、减少调用次数，不修改 Go 文学规则。
+1. The default interactive mode lets the user see and confirm all chapter boundaries before the formal write to disk; `--yes` can explicitly auto-accept and leaves equivalent audit artifacts.
+2. Any non-empty source text can find its unique attribution in the segmentation.
+3. 200 to 500 chapters do not form a single model call that reads the whole book body and outputs all chapter objects; each analysis batch is constrained by both input and output budgets, and the global output expresses only global facts and volume/arc ranges.
+4. After a crash in any stage, precise resume works without `from=N`.
+5. The formal state stays unchanged until complete semantic validation.
+6. After an interrupted publish the existing commit saga can resume, and chapters are not committed twice.
+7. After a restart, an unfinished import cannot start the normal Engine; it can only be viewed, diagnosed or resumed.
+8. `--yes` does not skip the completion Hold; only the independent `--continue` skips it, and it does not bypass the review gate.
+9. The capabilities, usage, StopReason, budget estimates and errors of models and providers are all observable.
+10. Switching to a stronger model improves segmentation, analysis and synthesis quality, and naturally enlarges the safe batch and reduces the number of calls, without modifying Go literary rules.
 
-## 21. 面向未来的扩展性
+## 21. Future extensibility
 
-本方案的扩展性来自稳定边界，而不是预建抽象：
+The extensibility of this design comes from stable boundaries, not from pre-built abstractions:
 
-- 模型理解增强：Boundary/Chapter/Synthesis 三类语义函数直接变准；
-- 上下文或输出窗口扩大：双预算器自动扩大安全 analysis batch，并减少分块和 Reduce 层数；
-- 结构化输出增强：typed-call 自动选择更强的 provider 约束；
-- 廉价档位模型变强：机械性更强的 segment 可切到更便宜档位，成本红利随之进入，不改语义契约；
-- 新输入格式：只需把 EPUB 等转换为同一归一化文本和 SourceUnit 坐标；
-- 新的全书语义：在 `ImportedChapterFacts` 或 `BookSynthesis` 增加有明确消费者的字段，不改恢复和发布协议；
-- 用户共创增强：在确认边界增加自然语言修正，不把格式知识写进代码。
+- stronger model understanding: the three kinds of semantic function (Boundary/Chapter/Synthesis) become more accurate directly;
+- a larger context or output window: the dual-budget planner automatically enlarges the safe analysis batch and reduces the number of chunks and Reduce layers;
+- stronger structured output: the typed call automatically selects stronger provider constraints;
+- cheap-tier models getting stronger: the more mechanical segment can be switched to a cheaper tier, and the cost benefit flows in with it, without changing the semantic contract;
+- new input formats: only requires converting EPUB and the like to the same normalized text and SourceUnit coordinates;
+- new book-wide semantics: add a field with a clear consumer in `ImportedChapterFacts` or `BookSynthesis`, without changing the resume and publish protocols;
+- stronger user co-creation: add natural-language correction at the confirmation boundary, without writing format knowledge into the code.
 
-不变的部分是全文覆盖、`InputDigest` 身份、范围校验和幂等发布。这些是模型再强也不值得交给模型的簿记；可变的语义全部留在模型函数中，因此模型升级的红利可以穿透到产品结果。
+What does not change is full-text coverage, `InputDigest` identity, range validation and idempotent publishing. These are bookkeeping that is not worth handing to the model no matter how strong it becomes; everything variable and semantic stays in the model functions, so the benefit of model upgrades can pass through to product results.
 
-## 22. 最终决策
+## 22. Final decision
 
-采用**分阶段语义导入管线**，拒绝两条方向：
+Adopt a **staged semantic import pipeline**, rejecting two directions:
 
-1. 继续扩大章节正则和章数/弧数阈值；
-2. 用一个自由长循环 Agent 接管全部导入。
+1. continuing to enlarge the chapter regexes and the chapter-count/arc-count thresholds;
+2. handing the whole import over to a freely running long-loop Agent.
 
-最终边界是：
+The final boundary is:
 
-> **模型决定文本意味着什么；代码保证每个字去了哪里、每个结果对应哪份输入、每次调用的输入输出都装得下、失败后从哪里继续，以及什么时候有资格成为正式事实。**
+> **The model decides what the text means; the code guarantees where every character went, which input every result corresponds to, that the input and output of every call fit, where to continue after a failure, and when something qualifies to become a formal fact.**
 
-这既保留模型自主能力和未来红利，也保持 ainovel-cli 当前 Engine + 类型化语义函数 + 文件事实层的简洁架构。
+This both preserves the model's autonomy and its future benefits, and keeps ainovel-cli's current lean architecture of Engine + typed semantic functions + a file-based fact layer.

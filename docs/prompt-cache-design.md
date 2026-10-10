@@ -1,106 +1,106 @@
-# 提示词缓存设计：litellm / agentcore / ainovel 三层协同
+# Prompt Cache Design: litellm / agentcore / ainovel Working Together in Three Layers
 
-> 本文是一份讲解材料：介绍我们如何在三个协作仓库中设计端到端的 LLM 提示词缓存
-> （prompt caching），包含设计原理、真实排查案例与可对照的源码位置。
+> This document is explanatory material: it describes how we designed end-to-end LLM prompt-cache support
+> (prompt caching) across three cooperating repositories, covering the design rationale, a real troubleshooting case and the matching source locations.
 >
-> - **litellm** —— LLM 网关：协议翻译与能力声明
-> - **agentcore** —— Agent 框架：缓存放置与缓存身份
-> - **ainovel-cli** —— 应用层：一行配置接入（codebot 同理）
+> - **litellm** — the LLM gateway: protocol translation and capability declaration
+> - **agentcore** — the Agent framework: cache placement and cache identity
+> - **ainovel-cli** — the application layer: plugged in with one line of configuration (codebot likewise)
 
 ---
 
-## 1. 为什么值得做：成本模型与一个真实案例
+## 1. Why it is worth doing: the cost model and a real case
 
-Agent 系统的请求有个结构特点：**每一轮请求都携带全部历史**。一个 30 轮的工具循环，
-第 30 轮的请求体里包含前 29 轮的所有消息。不做缓存时，同样的前缀字节被反复计费。
+Agent system requests have a structural trait: **every request carries the entire history**. In a 30-round tool loop,
+the request body of round 30 contains all the messages of the previous 29 rounds. Without caching, the same prefix bytes are billed over and over.
 
-两大厂商的缓存定价（以 Anthropic 为例）：
+Cache pricing of the two major vendors (taking Anthropic as the example):
 
-| 项目 | 相对普通输入价 |
+| Item | Relative to the normal input price |
 |---|---|
-| 缓存写入（5 分钟 TTL） | 1.25x |
-| 缓存写入（1 小时 TTL） | 2x |
-| **缓存读取** | **0.1x（省 90%）** |
+| Cache write (5-minute TTL) | 1.25x |
+| Cache write (1-hour TTL) | 2x |
+| **Cache read** | **0.1x (saves 90%)** |
 
-真实案例：一次 33 章的长篇小说生成跑掉了 $58，事后分析 `meta/usage.json` 发现
-**整体缓存命中率只有 8.5%**（coordinator 仅 2.7%，architect 为 0）。逐请求比对
-usage 序列（input vs cache_read）后定位出三个根因：
+A real case: one 33-chapter long-form novel generation cost $58. Post-hoc analysis of `meta/usage.json` showed
+an **overall cache hit rate of only 8.5%** (coordinator only 2.7%, architect 0). Comparing the usage sequence
+(input vs cache_read) request by request located three root causes:
 
-1. **tools 字节抖动**：subagent 工具的 Description/Schema 每轮从 Go map 直接迭代重建，
-   顺序随机 → 请求体从第 0 字节起就与上一轮不同 → 前缀缓存全部失效；
-2. **没有路由亲和**：OpenAI 系没传 `prompt_cache_key`，字节完全相同的请求也可能被
-   负载均衡到没有缓存的实例（铁证：33 个会话中字节相同的首请求只命中 12 个）；
-3. **Claude 系零断点**：Anthropic 是显式缓存，不打 `cache_control` 断点 = 完全没有缓存。
+1. **tools byte jitter**: the Description/Schema of the subagent tool was rebuilt every round by iterating a Go map directly,
+   in random order → the request body differed from the previous round from byte 0 → the prefix cache was invalidated entirely;
+2. **No routing affinity**: OpenAI-family endpoints were not sent `prompt_cache_key`, so even byte-identical requests could be
+   load-balanced to instances with no cache (hard evidence: of 33 sessions, only 12 of the byte-identical first requests hit);
+3. **Zero breakpoints on the Claude family**: Anthropic caching is explicit, and no `cache_control` breakpoint = no cache at all.
 
-这三个根因分别对应下文的三块设计：**前缀稳定纪律**、**缓存身份**、**断点编排**。
-
----
-
-## 2. 预备知识：两种缓存协议的心智模型
-
-### 2.1 OpenAI：自动前缀缓存（隐式）
-
-- 服务端自动对 **≥1024 tokens** 的前缀做缓存，无需客户端声明；
-- 命中按 128-token 对齐的粒度增长；
-- 请求可带 `prompt_cache_key`（官方字段）做**路由亲和**——同 key 的请求尽量落到
-  同一缓存分片；
-- usage 里 `cached_tokens` 报告命中量；**缓存写入永远不上报**（`cache_write` 恒 0
-  是正常现象，不是 bug）。
-
-### 2.2 Anthropic：显式断点（cache_control）
-
-- 客户端在内容块上打 `cache_control` 断点，**断点覆盖它之前的一切**
-  （顺序固定为 tools → system → messages）；
-- 每请求**最多 4 个断点**；
-- 写价 1.25x（5m）/ 2x（1h），读价 0.1x；
-- `cache_control` **不允许打在 thinking 块上**（会被 400 拒绝）。
-
-### 2.3 共同前提
-
-无论隐式还是显式，缓存都只认**字节级前缀相等**。所以一切设计的地基是同一句话：
-
-> **把变化频率从低到高排序整个请求：静态的放最前面，动态的放最后面，
-> 且已发送的历史一个字节都不能变。**
+These three root causes map respectively to the three pieces of design below: **prefix stability discipline**, **cache identity** and **breakpoint orchestration**.
 
 ---
 
-## 3. 总体架构：三层分工
+## 2. Background: a mental model of the two cache protocols
+
+### 2.1 OpenAI: automatic prefix caching (implicit)
+
+- The server automatically caches prefixes of **≥1024 tokens**, with no client declaration needed;
+- Hits grow in 128-token aligned increments;
+- A request may carry `prompt_cache_key` (an official field) for **routing affinity**: requests with the same key
+  land on the same cache shard as far as possible;
+- `cached_tokens` in usage reports the hit volume; **cache writes are never reported** (`cache_write` being constantly 0
+  is normal, not a bug).
+
+### 2.2 Anthropic: explicit breakpoints (cache_control)
+
+- The client places `cache_control` breakpoints on content blocks, and **a breakpoint covers everything before it**
+  (the order is fixed as tools → system → messages);
+- **At most 4 breakpoints** per request;
+- Write price 1.25x (5m) / 2x (1h), read price 0.1x;
+- `cache_control` **must not be placed on a thinking block** (it is rejected with a 400).
+
+### 2.3 Common premise
+
+Whether implicit or explicit, the cache recognizes only **byte-level prefix equality**. So the foundation of every design is one sentence:
+
+> **Order the entire request from low to high change frequency: put the static parts first and the dynamic parts last,
+> and never change a single byte of the history already sent.**
+
+---
+
+## 3. Overall architecture: a three-layer division of labor
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│ 应用层（ainovel-cli / codebot）                          │
-│   决定"缓存身份"取什么值：一书一基、一角色一名             │
-│   接入成本 = 每个 agent 两行配置                          │
+│ Application layer (ainovel-cli / codebot)              │
+│  decides the "cache identity": book base + role name   │
+│  integration cost = two lines of config per agent      │
 ├────────────────────────────────────────────────────────┤
-│ agentcore（Agent 框架）                                  │
-│   决定"断点放哪、key 何时派生"：                          │
-│   system 地板 + 末消息滚动尖端；spawn 追加 #seq；          │
-│   按 provider 能力门控，不支持则静默丢弃                   │
+│ agentcore (Agent framework)                            │
+│  decides where breakpoints go, when the key derives:   │
+│  system floor + rolling tip; spawn appends #seq;       │
+│  gated by provider capability, dropped if unsupported  │
 ├────────────────────────────────────────────────────────┤
-│ litellm（LLM 网关）                                      │
-│   纯协议翻译：cache_control ↔ 各厂商字段、                │
-│   prompt_cache_key 透传、Capabilities 能力声明            │
-│   不做任何"要不要缓存"的决策                              │
+│ litellm (LLM gateway)                                  │
+│  pure translation: cache_control ↔ vendor fields,      │
+│  prompt_cache_key passthrough, Capabilities declaration│
+│  makes no "whether to cache" decision                  │
 └────────────────────────────────────────────────────────┘
 ```
 
-切分原则：**litellm 只回答"这个端点支持什么"，agentcore 只回答"缓存点放在哪"，
-应用层只回答"身份是什么"**。每层单独可测，应用换一个（codebot 复用同一套
-agentcore/litellm）不用重写缓存逻辑。
+The separation principle: **litellm only answers "what does this endpoint support", agentcore only answers "where do cache points go",
+and the application layer only answers "what is the identity"**. Each layer is testable on its own, and when an application is swapped (codebot reuses the same
+agentcore/litellm) the cache logic need not be rewritten.
 
 ---
 
-## 4. 根基：前缀字节稳定三纪律
+## 4. Foundation: the three disciplines of prefix byte stability
 
-缓存收益的前提是前缀字节稳定。三条纪律各自对应一次真实事故。
+The payoff of caching presupposes a stable prefix. Each of the three disciplines corresponds to a real incident.
 
-### 纪律一：tools 序列化必须字节确定
+### Discipline 1: tools serialization must be byte-deterministic
 
-事故：`subagent` 工具把注册的 agent 列表嵌进自己的 Description/Schema，而列表来自
-Go map 迭代——每次调用顺序随机，tools 字节每轮都变，coordinator 命中率因此只有 2.7%。
-（Claude Code 团队也被同款问题咬过：他们的全 fleet 曾因此多付 10.2% 的缓存写入。）
+Incident: the `subagent` tool embedded the list of registered agents in its own Description/Schema, and that list came from
+Go map iteration, so the order was random on every call, the tools bytes changed every round, and the coordinator hit rate was therefore only 2.7%.
+(The Claude Code team was bitten by the same problem: their whole fleet once paid 10.2% extra in cache writes because of it.)
 
-修复（agentcore `subagent/subagent.go`）：
+Fix (agentcore `subagent/subagent.go`):
 
 ```go
 // sortedAgentNames returns registered agent names in deterministic order.
@@ -112,60 +112,60 @@ func (t *Tool) sortedAgentNames() []string {
 }
 ```
 
-> 教训的一般形式：**任何进入请求体的集合，序列化前必须排序**。Go 的 map 迭代
-> 随机化会把这个 bug 藏得很深——功能完全正常，只有账单不正常。
+> The general form of the lesson: **any collection that goes into the request body must be sorted before serialization**. Go's map iteration
+> randomization hides this bug very deeply: functionality is completely normal, and only the bill is abnormal.
 
-### 纪律二：历史必须 append-only（压缩要"提交"）
+### Discipline 2: history must be append-only (compaction must "commit")
 
-事故：writer 的上下文压缩策略是"投影"（每次调用时临时改写历史视图，但不落回
-基线）。一旦超过阈值，**每一轮都在重新改写整个前缀** → 每轮全 miss。
+Incident: the writer's context compaction strategy was a "projection" (temporarily rewriting the history view on every call without writing it back to the
+baseline). Once past the threshold, **every round rewrote the entire prefix** → a full miss every round.
 
-修复：投影后提交（`CommitOnProject: true`），让改写只发生一次，之后恢复
-append-only，直到下次越过阈值。
+Fix: commit after projection (`CommitOnProject: true`), so the rewrite happens only once and the history then returns to
+append-only until the threshold is crossed again.
 
-> 一般形式：上下文压缩是**计划内的一次性断裂**（重置前缀，付一次全价），
-> 这没问题；不能接受的是**每轮都断**。压缩要么不做，要么做完固化。
+> The general form: context compaction is a **planned one-time break** (reset the prefix, pay full price once),
+> which is fine; what is unacceptable is **breaking every round**. Either do not compact, or solidify after compacting.
 
-### 纪律三：动态内容进尾部
+### Discipline 3: dynamic content goes at the tail
 
-每轮变化的东西（世界状态信封、每轮提醒、最新工具结果）只允许**追加在消息尾部**，
-绝不回头修改中段。ainovel 的 `novel_context` 信封就是尾部追加式设计——它每章都变，
-但它变不影响前面几十万 token 的缓存。
+Things that change every round (the world-state envelope, per-round reminders, the latest tool results) may only be **appended at the tail of the messages**,
+and never modify the middle retroactively. ainovel's `novel_context` envelope is designed as tail-append: it changes every chapter,
+but its changing does not affect the cache of the hundreds of thousands of tokens before it.
 
 ---
 
-## 5. 缓存身份：一书一基、一角色一名、一会话一键
+## 5. Cache identity: one base per book, one name per role, one key per session
 
-OpenAI 系的 `prompt_cache_key` 解决的是**路由问题**：字节相同的请求若被负载均衡到
-不同实例，照样 miss。key 的设计目标是"同一条缓存血统的请求，永远带同一个 key"。
+The `prompt_cache_key` of the OpenAI family solves a **routing problem**: if byte-identical requests are load-balanced to
+different instances, they miss all the same. The design goal of the key is "requests of the same cache lineage always carry the same key".
 
-我们的三级身份（ainovel `internal/agents/build.go`）：
+Our three-level identity (ainovel `internal/agents/build.go`):
 
 ```go
-// promptCacheBase 从书目录派生稳定短哈希，作为提示词缓存身份前缀：同一本书
-// 跨进程重启共享路由桶，且不向 provider 泄露本地路径。角色后缀由调用方拼接，
-// subagent 每次 spawn 再追加 "#seq"（一次会话一个键）。
+// promptCacheBase derives a stable short hash from the book directory as the prompt-cache identity prefix: the same book
+// shares a routing bucket across process restarts, and no local path is leaked to the provider. The caller appends the role suffix,
+// and each subagent spawn appends "#seq" (one key per session).
 func promptCacheBase(bookDir string) string {
 	sum := sha256.Sum256([]byte(bookDir))
 	return "nvl-" + hex.EncodeToString(sum[:6])
 }
 ```
 
-应用层接入就是每个 agent 两行：
+The application layer plugs in with just two lines per agent:
 
 ```go
 writer := subagent.Config{
 	// ...
-	CacheLastMessage: "ephemeral",                // Claude 断点开关（见 §6）
-	PromptCacheKey:   cacheBase + "-writer",      // OpenAI 路由身份（角色级）
+	CacheLastMessage: "ephemeral",                // Claude breakpoint switch (see §6)
+	PromptCacheKey:   cacheBase + "-writer",      // OpenAI routing identity (role level)
 }
-// coordinator（顶层 Agent）同理：
+// the coordinator (top-level Agent) likewise:
 agentcore.WithCacheLastMessage("ephemeral"),
 agentcore.WithPromptCacheKey(cacheBase+"-coordinator"),
 ```
 
-第三级（会话级）由 agentcore 自动派生——每次 spawn 一个新会话，就是一条新的
-缓存血统（agentcore `subagent/subagent.go`）：
+The third level (session level) is derived automatically by agentcore: every spawn of a new session is a new
+cache lineage (agentcore `subagent/subagent.go`):
 
 ```go
 runSeq := t.runSeq.Add(1)
@@ -179,28 +179,28 @@ if promptCacheKey != "" {
 }
 ```
 
-最终形态：`nvl-a1b2c3-writer#17` = 这本书、writer 角色、第 17 次 spawn 的会话。
+End form: `nvl-a1b2c3-writer#17` = this book, the writer role, the session of the 17th spawn.
 
-> 为什么不是全局一个 key？不同会话前缀不同，混在一个路由桶里会稀释命中。
-> 为什么不带时间戳/随机数？key 必须**跨请求稳定**，会话内每轮都要相同。
+> Why not one global key? Different sessions have different prefixes, and mixing them in one routing bucket dilutes the hit rate.
+> Why no timestamp/random number? The key must be **stable across requests**, identical on every round within a session.
 
-codebot 的对应设计：key 语义 = SessionID（切会话 = 换血统），teammate 追加名字
-后缀，宿主复用同一 Agent 实例切会话时调 `Agent.SetPromptCacheKey` 重指身份。
+codebot's corresponding design: the key semantics = SessionID (switching session = switching lineage), a teammate appends its name
+as a suffix, and when the host reuses the same Agent instance to switch sessions it calls `Agent.SetPromptCacheKey` to re-point the identity.
 
 ---
 
-## 6. Claude 断点编排：地板 + 滚动尖端
+## 6. Claude breakpoint orchestration: floor + rolling tip
 
-Anthropic 不打断点 = 零缓存。我们的预算分配（上限 4 个断点/请求）：
+On Anthropic, no breakpoints = zero cache. Our budget allocation (limit of 4 breakpoints per request):
 
 ```
-[tools][system ←断点①"地板"][...历史消息...][最新消息 ←断点②"滚动尖端"]
+[tools][system ←breakpoint ① "floor"][...history messages...][latest message ←breakpoint ② "rolling tip"]
 ```
 
-### 6.1 地板（floor）：钉住静态前缀
+### 6.1 Floor: pin the static prefix
 
-system prompt 是最大的静态块。给它一个专属断点，保证**新会话/尾部缓存被逐出时，
-至少 system+tools 前缀仍然从缓存读**（agentcore `loop.go`）：
+The system prompt is the largest static block. Give it a dedicated breakpoint to guarantee that **when a new session / the tail cache has been evicted,
+the system+tools prefix is still read from cache** (agentcore `loop.go`):
 
 ```go
 } else if agentCtx.SystemPrompt != "" {
@@ -215,10 +215,10 @@ system prompt 是最大的静态块。给它一个专属断点，保证**新会�
 }
 ```
 
-### 6.2 滚动尖端（rolling tip）：每轮推进覆盖面
+### 6.2 Rolling tip: advance the coverage every round
 
-把一个断点打在**最后一条非 system 消息**上。工具循环里每次 LLM 调用都会写一条
-覆盖到最新 tool_use+tool_result 的缓存，下一轮直接读，不再重传：
+Place one breakpoint on the **last non-system message**. In a tool loop, every LLM call writes a cache entry
+covering up to the latest tool_use+tool_result, and the next round reads it directly with no retransmission:
 
 ```go
 // markLastMessageForCache returns a copy of messages with cache_control attached
@@ -237,15 +237,15 @@ func markLastMessageForCache(messages []Message, cacheControl string) []Message 
 }
 ```
 
-注意跳过尾部 system reminder：它每轮都变，把断点打在它身上等于每轮写一条
-永远不会被复用的缓存。
+Note that the trailing system reminder is skipped: it changes every round, and putting the breakpoint on it means writing, every round, a cache entry
+that will never be reused.
 
-### 6.3 末块语义：一条消息只烧一个断点
+### 6.3 Last-block semantics: one message burns only one breakpoint
 
-消息级的 `cache_control` 语义是"在这条消息之后写一个断点"。翻译到块级时只允许
-落在**最后一个可缓存块**上——给每个块都打标会把 4 个断点的预算烧穿；而 Anthropic
-拒绝 thinking 块携带 `cache_control`，所以从尾部扫、跳过 reasoning
-（agentcore `llm/litellm.go`）：
+The message-level `cache_control` semantics is "write a breakpoint after this message". When translated to block level it may only
+land on the **last cacheable block**: tagging every block would burn through the budget of 4 breakpoints; and Anthropic
+rejects a thinking block carrying `cache_control`, so we scan from the tail and skip reasoning
+(agentcore `llm/litellm.go`):
 
 ```go
 if cache != nil {
@@ -261,9 +261,9 @@ if cache != nil {
 }
 ```
 
-### 6.4 TTL 管道
+### 6.4 TTL pipeline
 
-配置值约定为 `"type[:ttl]"` 字符串，如 `"ephemeral"`（默认 5m）或 `"ephemeral:1h"`：
+The config value is conventionally a `"type[:ttl]"` string, such as `"ephemeral"` (default 5m) or `"ephemeral:1h"`:
 
 ```go
 func cacheControlFromMetadata(metadata map[string]any) *litellm.CacheControl {
@@ -278,17 +278,17 @@ func cacheControlFromMetadata(metadata map[string]any) *litellm.CacheControl {
 }
 ```
 
-要不要升 1h 用数据说话：写价从 1.25x 涨到 2x，只有实测调用间隔经常超过 5 分钟
-才值得（我们实测 coordinator 中位间隔 172s，没升）。
+Whether to upgrade to 1h should be decided by data: the write price rises from 1.25x to 2x, so it is only worth it if the measured call interval often exceeds 5 minutes
+(we measured a coordinator median interval of 172s and did not upgrade).
 
 ---
 
-## 7. 安全发送：能力门控 + 官方端点判定
+## 7. Safe sending: capability gating + official endpoint detection
 
-### 7.1 能力门控：不支持的字段不出门
+### 7.1 Capability gating: unsupported fields do not leave the building
 
-litellm 各 provider 对 `ProviderOptions` **严格校验**（未知键直接报错），所以
-agentcore 在发送前按能力声明门控（agentcore `llm/litellm.go`）：
+Each litellm provider validates `ProviderOptions` **strictly** (an unknown key is an immediate error), so
+agentcore gates by the capability declaration before sending (agentcore `llm/litellm.go`):
 
 ```go
 // Prompt-cache routing identity. Capability-gated: litellm providers
@@ -299,19 +299,19 @@ if callCfg.PromptCacheKey != "" && caps.Cache.PromptKey == litellm.SupportYes {
 }
 ```
 
-### 7.2 官方端点判定：兼容生态没有未知字段契约
+### 7.2 Official endpoint detection: the compatible ecosystem has no unknown-field contract
 
-`prompt_cache_key` 是 OpenAI 官方字段，但"OpenAI 兼容"端点的行为没有任何统一契约。
-联网实证（2026-07）：
+`prompt_cache_key` is an official OpenAI field, but the behavior of "OpenAI-compatible" endpoints has no uniform contract.
+Online verification (2026-07):
 
-- **严格端直接拒绝**：Groq、Cerebras、火山引擎、Fireworks 对该字段返回 400/422
-  （Zed #36215、OpenClaw #48155 都因此改成条件发送）；
-- **重编组型中转静默丢弃**：one-api/new-api/sub2api 的非透传路径把请求体解析进
-  结构体再 re-marshal，未知字段无声消失（发了白发）；
-- **宽松端忽略**：Ollama、当前版 vLLM、MiniMax。
+- **Strict endpoints reject it outright**: Groq, Cerebras, Volcano Engine (火山引擎) and Fireworks return 400/422 for this field <!-- han:keep -->
+  (Zed #36215 and OpenClaw #48155 both changed to conditional sending because of this);
+- **Re-marshaling relays silently drop it**: on the non-passthrough path, one-api/new-api/sub2api parse the request body into
+  a struct and re-marshal it, so unknown fields vanish without a trace (sent for nothing);
+- **Lenient endpoints ignore it**: Ollama, the current vLLM, MiniMax.
 
-所以 litellm openai provider 的能力声明按 BaseURL **动态**判定
-（litellm `provider/openai/capabilities.go`）：
+So the capability declaration of the litellm openai provider is judged **dynamically** by BaseURL
+(litellm `provider/openai/capabilities.go`):
 
 ```go
 // promptCacheParamsSupport reports whether this endpoint is trusted to accept
@@ -333,130 +333,130 @@ func isOfficialBaseURL(baseURL string) bool {
 }
 ```
 
-官方 `api.openai.com` → `SupportYes`（发送）；第三方 BaseURL → `SupportUnknown`
-（§7.1 的门控自动不发，**默认永不炸任何端点**）；确认自己的中转原样透传的用户，
-在 provider 配置里显式 opt-in：
+Official `api.openai.com` → `SupportYes` (send); a third-party BaseURL → `SupportUnknown`
+(the gating of §7.1 automatically does not send, so **by default it never blows up any endpoint**); a user who has confirmed that their relay passes through unchanged
+opts in explicitly in the provider config:
 
 ```jsonc
 "my-relay": {
   "type": "openai",
   "base_url": "https://relay.example.com/v1",
-  "extra": { "prompt_cache_params": true }   // 我确认这个中转透传请求体
+  "extra": { "prompt_cache_params": true }   // I confirm this relay passes the request body through
 }
 ```
 
-> 为什么开关做在 litellm 能力层而不是应用配置层？因为运行时 `/model` 切 provider
-> 会换 client，能力声明跟着 client 自动切换；应用构造期的判定覆盖不了运行时切换。
+> Why is the switch placed in litellm's capability layer rather than the application config layer? Because switching provider at runtime via `/model`
+> swaps the client, and the capability declaration switches automatically along with the client; a decision made when the application is constructed cannot cover a runtime switch.
 
 ---
 
-## 8. 观测：缓存链断裂检测
+## 8. Observability: cache chain break detection
 
-缓存是"看不见的功能"——坏了不报错，只是变贵。所以要有观测（借鉴 Claude Code 的
-promptCacheBreakDetection，做了轻量版）。
+The cache is an "invisible feature": when broken it raises no error, it just gets more expensive. So observability is needed (borrowing from Claude Code's
+promptCacheBreakDetection, as a lightweight version).
 
-判定口径（ainovel `internal/host/usage.go`）：
+Definition of the judgment (ainovel `internal/host/usage.go`):
 
 ```go
-// 同一会话（role+task）内：前缀未缩短，而命中量较上次下降 >5% 且降幅 ≥2000 tokens
+// Within the same session (role+task): the prefix has not shortened, while the hit volume dropped >5% from last time and the drop is ≥2000 tokens
 broke := prevPrefix > 0 && prefix >= prevPrefix &&
 	float64(u.CacheRead) < float64(prevRead)*cacheBreakKeepRatio &&
 	prevRead-u.CacheRead >= cacheBreakMinDropTokens
 ```
 
-四个关键设计，每个都对应一类误报：
+Four key design points, each corresponding to one class of false positive:
 
-| 设计 | 防的误报 |
+| Design | The false positive it prevents |
 |---|---|
-| **双阈值**（相对 5% 且绝对 2000） | 单一相对阈值被小前缀噪声淹没；单一绝对阈值漏掉大前缀退化 |
-| **基线跟随会话（role+task）** | 检测维度必须与 `prompt_cache_key` 的会话粒度（`#seq`）对齐；按 role 跨会话比较，会在"上一会话很短、新会话首请求前缀反而更长"时误报（Codex review 抓到的真实缺口） |
-| **前缀缩短 = 合法重置** | 上下文压缩是计划内断裂，重置基线不告警 |
-| **replay 不检测** | 启动时重放历史会把陈年断裂刷成新告警 |
+| **Dual thresholds** (relative 5% and absolute 2000) | A single relative threshold is drowned by noise on small prefixes; a single absolute threshold misses degradation on large prefixes |
+| **Baseline follows the session (role+task)** | The detection dimension must align with the session granularity of `prompt_cache_key` (`#seq`); comparing across sessions by role alone gives a false positive when "the previous session was very short and the new session's first request has an even longer prefix" (a real gap caught by the Codex review) |
+| **Shortened prefix = legitimate reset** | Context compaction is a planned break; the baseline is reset without an alert |
+| **No detection on replay** | Replaying history at startup would turn stale breaks into fresh alerts |
 
-告警时按时间间隔给归因提示：间隔 >1h → 疑似 1h TTL 过期；>5m → 疑似 5m TTL 过期；
-很短 → 疑似服务端逐出/路由漂移（**中转站轮询上游账号是最常见原因**）。计数持久化到
-`usage.json` 并显示在 TUI 缓存面板的"链路断裂"行。
-
----
-
-## 9. 闩锁红线：会话单调原则
-
-一条对未来功能的宪法级约束：
-
-> **一切会进入缓存前缀的量（system prompt、tools、thinking 参数、采样参数），
-> 在会话内首次计算后必须冻结——宁可陈旧，不可破缓存。**
-
-例子:"运行时调 thinking 强度"这类功能，如果让新强度立即作用于进行中的会话，
-等于每次调整都重写前缀、作废全部缓存。正确做法是新值只对**新 spawn 的会话**生效。
-任何"运行时可调 X"的需求评审，第一个问题都是：X 在不在缓存前缀里？
+When alerting, an attribution hint is given by the time interval: interval >1h → suspected 1h TTL expiry; >5m → suspected 5m TTL expiry;
+very short → suspected server-side eviction / routing drift (**a relay polling upstream accounts is the most common cause**). The count is persisted to
+`usage.json` and shown on the "chain breaks" row of the TUI cache panel.
 
 ---
 
-## 10. 常见误判与天花板
+## 9. The latch red line: the session-monotonic principle
 
-1. **OpenAI 的 `cache_write` 恒 0 是正常的**——API 不上报写入量，别当 bug 查。
-2. **中转站天花板**：中转若轮询多个上游账号，客户端字节再稳也会 miss（上游账号 A
-   的缓存对账号 B 不可见）。这解释了"字节完全相同的请求只命中 12/33"的谜团。
-   **这不是客户端可解的问题**——Claude Code 团队的数据也显示约九成"客户端未变化
-   却断裂"的案例是服务端原因。
-3. **验证口径**：会话 JSONL 不含 system prompt 和完整请求体，**逐请求 usage 序列
-   （input vs cache_read）才是诊断金标准**。一个实用指纹：命中量若恰好钉在
-   "system 提示词 token 数按 128 向下取整"，说明只有 system 段命中、消息段全 miss。
-4. **收益核算**：读价 0.1x、写价 1.25x，意味着一条缓存只要被读 1 次就回本。
-   多轮 agent 会话里断点几乎总是正收益，所以 `CacheLastMessage` 不设开关、默认开。
+A constitutional-level constraint on future features:
+
+> **Everything that enters the cache prefix (system prompt, tools, thinking parameters, sampling parameters),
+> once first computed within a session, must be frozen — better stale than a broken cache.**
+
+Example: for a feature like "adjust the thinking intensity at runtime", if the new intensity took effect immediately on an in-progress session,
+every adjustment would rewrite the prefix and invalidate the whole cache. The correct approach is for the new value to apply only to **newly spawned sessions**.
+In the review of any "X adjustable at runtime" request, the first question is: is X in the cache prefix?
 
 ---
 
-## 11. 接入指南速查
+## 10. Common misjudgments and ceilings
 
-**ainovel-cli**（已内置）：每个 agent 配 `CacheLastMessage: "ephemeral"` +
-`PromptCacheKey: promptCacheBase(bookDir) + "-<role>"`，其余全自动。
+1. **OpenAI's `cache_write` being constantly 0 is normal** — the API does not report write volume; do not investigate it as a bug.
+2. **The relay ceiling**: if a relay polls several upstream accounts, a miss happens no matter how stable the client bytes are (the cache of upstream account A
+   is invisible to account B). This explains the puzzle of "byte-identical requests hit only 12/33".
+   **This is not a problem the client can solve** — the Claude Code team's data also shows that about 90% of the "break despite no client change"
+   cases have server-side causes.
+3. **Basis for verification**: the session JSONL contains neither the system prompt nor the full request body, so the **per-request usage sequence
+   (input vs cache_read) is the gold standard for diagnosis**. A practical fingerprint: if the hit volume is pinned at exactly
+   "the system prompt token count rounded down to a multiple of 128", only the system segment hits and the message segment misses entirely.
+4. **Payoff accounting**: read price 0.1x and write price 1.25x mean a cache entry pays for itself once it is read just once.
+   In a multi-round agent session a breakpoint is almost always net positive, so `CacheLastMessage` has no switch and is on by default.
 
-**codebot**（已内置）：key = SessionID；`Reset`/`SwitchSession` 时
-`agent.SetPromptCacheKey(newSessionID)`；teammate 用 `sessionID + "-" + name`。
+---
 
-**新应用接 agentcore** 的最小清单：
+## 11. Integration quick reference
+
+**ainovel-cli** (built in): configure each agent with `CacheLastMessage: "ephemeral"` +
+`PromptCacheKey: promptCacheBase(bookDir) + "-<role>"`; everything else is automatic.
+
+**codebot** (built in): key = SessionID; on `Reset`/`SwitchSession`,
+`agent.SetPromptCacheKey(newSessionID)`; a teammate uses `sessionID + "-" + name`.
+
+The minimal checklist for **a new application integrating agentcore**:
 
 ```go
 agentcore.NewAgent(
-	agentcore.WithCacheLastMessage("ephemeral"),   // Claude 断点：地板+滚动尖端
-	agentcore.WithPromptCacheKey(stableIdentity),  // OpenAI 路由：稳定、每会话唯一
+	agentcore.WithCacheLastMessage("ephemeral"),   // Claude breakpoints: floor + rolling tip
+	agentcore.WithPromptCacheKey(stableIdentity),  // OpenAI routing: stable, unique per session
 	// ...
 )
 ```
 
-外加自查三问（对应三纪律）：
+Plus three self-check questions (corresponding to the three disciplines):
 
-1. 我的 tools 序列化是字节确定的吗？（集合都排序了吗）
-2. 我的历史是 append-only 的吗？（压缩会提交吗）
-3. 我每轮变化的内容都在尾部吗？
-
----
-
-## 12. 给学习者的经验清单
-
-- 缓存优化的本质是**字节纪律**，不是调参：先保证前缀稳定，再谈 key 和断点。
-- 诊断永远从**逐请求 usage 序列**开始，不要从代码猜。
-- Go map 迭代随机化 + 请求体序列化 = 最隐蔽的缓存杀手，功能测试永远发现不了。
-- "OpenAI 兼容"是营销词不是契约：官方字段发给第三方端点前，先找一手证据
-  （源码/issue/同类客户端的已落地修法），"一般会忽略"是危险的推断。
-- 观测要防误报优先：检测维度必须与缓存血统的粒度对齐；宁可漏报不可误报，
-  否则告警很快会被无视。
-- 分层的检验标准：换一个应用（codebot）接入时，缓存逻辑一行都不用重写。
+1. Is my tools serialization byte-deterministic? (Are all collections sorted?)
+2. Is my history append-only? (Does compaction commit?)
+3. Is everything that changes each round at the tail?
 
 ---
 
-### 附：源码索引
+## 12. Checklist of lessons for learners
 
-| 主题 | 位置 |
+- The essence of cache optimization is **byte discipline**, not parameter tuning: first guarantee prefix stability, then talk about keys and breakpoints.
+- Diagnosis always starts from the **per-request usage sequence**; do not guess from the code.
+- Go map iteration randomization + request body serialization = the most insidious cache killer, which functional tests can never find.
+- "OpenAI-compatible" is a marketing term, not a contract: before sending an official field to a third-party endpoint, first find primary evidence
+  (source code / issues / fixes already landed in comparable clients); "it will generally be ignored" is a dangerous inference.
+- With observability, avoid false positives first: the detection dimension must align with the granularity of the cache lineage; prefer a missed alert to a false one,
+  otherwise alerts soon get ignored.
+- The test of good layering: when a different application (codebot) integrates, not a single line of cache logic needs to be rewritten.
+
+---
+
+### Appendix: source index
+
+| Topic | Location |
 |---|---|
-| tools 确定性排序 | agentcore `subagent/subagent.go` `sortedAgentNames` |
-| 会话级 key 派生（#seq） | agentcore `subagent/subagent.go` `runAgent` |
-| system 地板 + 滚动尖端 | agentcore `loop.go` `callLLM` / `markLastMessageForCache` |
-| 末块断点 + 跳 thinking | agentcore `llm/litellm.go` `convertAgentBlocks` |
-| TTL 解析（"ephemeral:1h"） | agentcore `llm/litellm.go` `cacheControlFromMetadata` |
-| 能力门控 | agentcore `llm/litellm.go` `applyCallConfig` |
-| 官方端点判定 + opt-in | litellm `provider/openai/capabilities.go` / `provider.go Config` |
-| 缓存身份（一书一基） | ainovel `internal/agents/build.go` `promptCacheBase` |
-| 断裂检测 | ainovel `internal/host/usage.go` `noteCacheBreak` |
-| 架构定位 | ainovel `docs/architecture.md` §6.6 |
+| Deterministic tools ordering | agentcore `subagent/subagent.go` `sortedAgentNames` |
+| Session-level key derivation (#seq) | agentcore `subagent/subagent.go` `runAgent` |
+| system floor + rolling tip | agentcore `loop.go` `callLLM` / `markLastMessageForCache` |
+| Last-block breakpoint + skip thinking | agentcore `llm/litellm.go` `convertAgentBlocks` |
+| TTL parsing ("ephemeral:1h") | agentcore `llm/litellm.go` `cacheControlFromMetadata` |
+| Capability gating | agentcore `llm/litellm.go` `applyCallConfig` |
+| Official endpoint detection + opt-in | litellm `provider/openai/capabilities.go` / `provider.go Config` |
+| Cache identity (one base per book) | ainovel `internal/agents/build.go` `promptCacheBase` |
+| Break detection | ainovel `internal/host/usage.go` `noteCacheBreak` |
+| Architecture positioning | ainovel `docs/architecture.md` §6.6 |

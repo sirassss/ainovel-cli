@@ -1,337 +1,337 @@
-# 用户规则统一设计
+# Unified Design of User Rules
 
-## 一句话
+## In one sentence
 
-所有长期写作规则都归一化进同一份本书规则快照；运行时只通过 `novel_context` 注入这份快照，不再把原始规则文本反复塞进 prompt。
+All long-term writing rules are normalized into the same book rule snapshot; at runtime, that snapshot is injected only through `novel_context`, and the raw rule text is no longer stuffed into the prompt over and over.
 
 ```text
-启动 prompt / 用户 rules 文件 / 运行中长期要求
+Startup prompt / user rules files / long-term requirements given during a run
         ↓
-LLM 语义归一化（按来源）
+LLM semantic normalization (per source)
         ↓
-Go 确定性合并（按优先级）  ←  系统默认规则（代码内置，直接进合并，不经 LLM）
+Go deterministic merge (by priority)  ←  system default rules (built into the code, go straight into the merge, no LLM)
         ↓
 output/novel/meta/user_rules.json
         ↓
-novel_context 注入
+novel_context injection
         ↓
-Architect / Writer / Editor / commit 检查共用
+Shared by Architect / Writer / Editor / commit checks
 ```
 
-## 实现状态（2026-07-19，已落地 + 经 review 修缺）
+## Implementation status (2026-07-19, landed + gaps fixed after review)
 
-本设计已实现，24 包 `go build` / `go vet` / `go test` 全绿。一轮 code review 后修掉 4 个缺口（均已修复）：①启动 prompt 规则只接在死方法 `Host.Start` 上、真实入口走 `StartPrepared` 而漏建快照——已把原始 prompt 从 quick/cocreate 两条入口直接透传，统一调 `Host.PrepareUserRules`；②快照落盘失败被吞——`PrepareUserRules` 改为落盘失败即返 error 中止开书（resume 路径保持 best-effort，避免给老书引入新失败模式）；③rules 文件读取错误静默跳过——`raw.go` 对非"不存在"错误（权限等）打日志；④README 仍教旧 YAML/front matter 且链向已删文件——已重写。
+This design has been implemented, and `go build` / `go vet` / `go test` are all green across 24 packages. One round of code review found 4 gaps, all now fixed: ① the startup-prompt rules were wired only into the dead method `Host.Start`, while the real entry goes through `StartPrepared` and so missed building the snapshot — the raw prompt is now passed straight through from both the quick and cocreate entries, which uniformly call `Host.PrepareUserRules`; ② a snapshot persistence failure was swallowed — `PrepareUserRules` now returns an error and aborts book creation when persistence fails (the resume path stays best-effort, to avoid introducing a new failure mode for existing books); ③ rules-file read errors were silently skipped — `raw.go` now logs errors other than "does not exist" (permissions and the like); ④ the README still taught the old YAML/front matter and linked to a deleted file — it has been rewritten.
 
-落地与本文档基本一致，结构化输出升级后的实现选择如下：
+The landing is largely consistent with this document; the implementation choices after the structured-output upgrade are as follows:
 
-1. **归一化只有一份 `Contract.Schema`，不维护两套提示词。**
-   模型声明支持时下发原生 JSON Schema；不支持或能力未知时，统一契约层把同一份 Schema 注入提示词。
-   两种模式都会在 Go 侧复核 Schema，随后执行值域和跨字段业务校验。
-2. **单个字段值非法时降级到"该字段缺失"，而非降级整个来源。**
-   如某字段是空占位或类型非法，sanitize 把该字段丢弃（视为未声明）、保留该来源其余合法字段；
-   只有"整条归一化失败"（网络/模型/非法 JSON/解析失败）才把整个来源降级为 raw preferences、
-   置 `status=degraded`。这样一个坏字段不会连累同来源的其它有效规则。可由模型修复的输出错误会携带
-   精确原因继续自愈，生命周期由 `context` 控制；明确的终止错误进入日志并按来源降级。
+1. **Normalization has only one `Contract.Schema`; two sets of prompts are not maintained.**
+   When the model declares support, the native JSON Schema is sent down; when it is unsupported or its capability is unknown, the unified contract layer injects the same Schema into the prompt.
+   In both modes the Schema is re-checked on the Go side, followed by value-domain and cross-field business validation.
+2. **A single invalid field value degrades to "that field is missing", rather than degrading the whole source.**
+   If a field is an empty placeholder or has an invalid type, sanitize drops that field (treated as undeclared) and keeps the remaining valid fields of that source;
+   only a "whole normalization failure" (network / model / invalid JSON / parse failure) downgrades the whole source to raw preferences
+   and sets `status=degraded`. This way one bad field does not drag down the other valid rules from the same source. Output errors that the model can repair carry
+   the exact reason and continue to self-heal, with the lifecycle controlled by `context`; explicit terminating errors go to the log and degrade by source.
 
-代码落点：`internal/rules`（纯数据 + 确定性合并：snapshot.go / raw.go / types.go）、`internal/userrules`
-（LLM 归一化 + 编排 + 落盘：normalize.go / service.go）、`internal/store/user_rules.go`（快照存储）、
-`internal/userrules/service.go`（运行中规则落盘）、`assets/prompts/arbiter-intervention.md`（三类分流）。
-系统默认机械基线已从 `assets/rules/default.md` 迁入代码内置 `rules.SystemDefaults()`，YAML 解析路径与
-yaml.v3 依赖已删除。**未验**：真实 LLM 开书 / 运行中 Arbiter rules 动作全链路（normalizer 离线原型已验 10/10）。
+Code locations: `internal/rules` (pure data + deterministic merge: snapshot.go / raw.go / types.go), `internal/userrules`
+(LLM normalization + orchestration + persistence: normalize.go / service.go), `internal/store/user_rules.go` (snapshot storage),
+`internal/userrules/service.go` (persistence of rules added during a run), `assets/prompts/arbiter-intervention.md` (three-way triage).
+The system-default mechanical baseline has moved from `assets/rules/default.md` into the code-built-in `rules.SystemDefaults()`, and the YAML parsing path and the
+yaml.v3 dependency have been deleted. **Not verified**: the full chain of a real LLM book opening / the Arbiter rules action during a run (the normalizer offline prototype has been verified 10/10).
 
-## 为什么
+## Why
 
-Writer 每章并不会稳定拿到用户最初的完整 prompt。它主要依赖本章任务和 `novel_context(chapter=N)`。
+The Writer does not reliably receive the user's original full prompt for every chapter. It mainly relies on this chapter's task and `novel_context(chapter=N)`.
 
-所以长期规则不能靠对话历史记忆，也不应该靠 regex 从自然语言里偷偷猜。正确做法是：把长期规则显式归一化成状态，再由 `novel_context` 统一分发。
+So long-term rules cannot depend on conversation-history memory, and should not be secretly guessed from natural language with regex either. The correct approach is to explicitly normalize long-term rules into state, and then have `novel_context` distribute them uniformly.
 
-这里的“归一化”必须利用大模型的自然语言理解能力，而不是在 Go 里枚举表达方式。程序只定义少量可机械检查字段，负责 schema、确定性合并、校验、落盘和 commit 检查；“每章一千五左右”“单章别超过两千”“不要再写命运齿轮这种话”这类表达由 LLM 语义理解。
+The "normalization" here must use the large model's natural-language understanding rather than enumerate phrasings in Go. The program defines only a small number of mechanically checkable fields, and is responsible for the schema, deterministic merging, validation, persistence, and commit checks; expressions such as "around 1,500 characters per chapter", "no chapter over 2,000 characters", and "don't write lines like 'wheel of fate' again" are understood semantically by the LLM.
 
-## 统一状态
+## Unified state
 
-本书运行时只维护一份用户规则事实源：
+At runtime this book maintains only one source of truth for user rules:
 
 ```text
 output/novel/meta/user_rules.json
 ```
 
-形状保持简单：
+The shape is kept simple:
 
 ```json
 {
   "version": 1,
   "status": "ready",
   "structured": {
-    "genre": "修仙",
+    "genre": "xianxia",
     "forbidden_chars": [],
-    "forbidden_phrases": ["某种程度上"],
+    "forbidden_phrases": ["to some extent"],
     "fatigue_words": {}
   },
-  "preferences": "主角冷静克制；少解释，多用行动和对话。",
+  "preferences": "The protagonist is calm and restrained; explain less, and use action and dialogue more.",
   "sources": [
     "startup_prompt",
     ".ainovel/rules/style.md"
   ],
   "uncertain": [
-    "少用比喻：没有明确阈值，按风格偏好处理"
+    "Use fewer metaphors: no explicit threshold, handled as a style preference"
   ]
 }
 ```
 
-字段边界：
+Field boundaries:
 
-- `version`：快照 schema 版本，便于未来迁移。
-- `status`：`ready` / `degraded`，标记归一化是否完整成功；只用于回显与诊断，不进入创作判断。
-- `structured`：代码能机械检查或稳定消费的规则。
-- `preferences`：不能机械检查、但对创作长期有效的自然语言偏好。
-- `sources`：来源审计，不进入创作判断。
-- `uncertain`：归一化诊断，只用于回显和排查，不进入创作判断。
+- `version`: the snapshot schema version, to ease future migration.
+- `status`: `ready` / `degraded`, marking whether normalization fully succeeded; used only for echo and diagnostics, and does not enter creative judgment.
+- `structured`: rules that code can check mechanically or consume stably.
+- `preferences`: natural-language preferences that cannot be checked mechanically but are long-term valid for creation.
+- `sources`: source audit, does not enter creative judgment.
+- `uncertain`: normalization diagnostics, used only for echo and troubleshooting, and does not enter creative judgment.
 
-注入给模型的只有 `structured` 和 `preferences`；`version` / `status` / `sources` / `uncertain` 是运维与诊断元数据，不进 `working_memory.user_rules`。技术错误不进快照，只进日志（见 §失败与降级）。
+Only `structured` and `preferences` are injected into the model; `version` / `status` / `sources` / `uncertain` are operations and diagnostics metadata and do not go into `working_memory.user_rules`. Technical errors do not go into the snapshot, only into the log (see §Failure and degradation).
 
-## 输入源
+## Input sources
 
-长期规则有四个输入源：
+Long-term rules have four input sources:
 
-1. **启动 prompt**：用户开书时写的长期要求。
-2. **用户 rules 文件**：全局或项目级长期偏好，按普通自然语言读取。
-3. **系统默认规则**：代码内置的机械基线。
-4. **运行中长期要求**：用户中途说“以后都怎样”，Arbiter 提取 `rules` 动作，Host 调用 `AddRuntimeRule`。
+1. **Startup prompt**: the long-term requirements the user wrote when opening the book.
+2. **User rules files**: global or project-level long-term preferences, read as ordinary natural language.
+3. **System default rules**: the mechanical baseline built into the code.
+4. **Long-term requirements given during a run**: the user says mid-run "from now on, always do it this way"; the Arbiter extracts a `rules` action, and the Host calls `AddRuntimeRule`.
 
-这些输入源不直接进入 Writer prompt，也不在运行时被反复读取。它们只在生成或更新快照时参与归一化，结果合并进 `meta/user_rules.json`。
+These input sources do not enter the Writer prompt directly, and are not read repeatedly at runtime. They take part in normalization only when the snapshot is generated or updated, and the result is merged into `meta/user_rules.json`.
 
-## rules 文件
+## Rules files
 
-rules 文件是普通长期提示词，不是运行时 prompt，也不是配置文件。它只作为归一化输入，不支持 YAML：
+A rules file is an ordinary long-term prompt; it is not a runtime prompt and not a configuration file. It serves only as normalization input and does not support YAML:
 
 ```md
-# 写作偏好
+# Writing preferences
 
-每章 1200-1600 字。
-主角冷静克制，不要圣母。
-少解释，多用行动和对话推进。
-不要出现“某种程度上”。
+1200-1600 characters per chapter.
+The protagonist is calm and restrained; no bleeding-heart naivety.
+Explain less, and push the story with action and dialogue.
+Do not use "to some extent".
 ```
 
-系统读取后归一化为：
+After the system reads it, it is normalized into:
 
 ```json
 {
   "structured": {
-    "forbidden_phrases": ["某种程度上"]
+    "forbidden_phrases": ["to some extent"]
   },
-  "preferences": "每章 1200-1600 字；主角冷静克制，不要圣母；少解释，多用行动和对话推进。"
+  "preferences": "1200-1600 characters per chapter; the protagonist is calm and restrained, no bleeding-heart naivety; explain less, and push the story with action and dialogue."
 }
 ```
 
-如果文件里出现 YAML front matter，也按普通文本处理，不作为结构化声明。结构化结果只来自统一归一化流程。
+If the file contains YAML front matter, it is likewise treated as ordinary text and not as a structured declaration. Structured results come only from the unified normalization flow.
 
-启动后如果用户修改 rules 文件，当前书不会自动变化；需要重新生成快照。这样旧书不会因为全局 rules 文件变化而行为漂移。
+If the user modifies a rules file after startup, the current book does not change automatically; the snapshot must be regenerated. This way an existing book does not drift in behavior because a global rules file changed.
 
-## 语义归一化
+## Semantic normalization
 
-归一化是独立的、schema 约束的 LLM 调用——每个来源各自归一化一次，不混在创作生成里，也不靠正则表达式或关键词表硬解析。
+Normalization is an independent, schema-constrained LLM call — each source is normalized once on its own, not mixed into creative generation, and not hard-parsed with regular expressions or keyword tables.
 
-输入：
+Input:
 
-- 单一来源的原文（启动 prompt / 一个 rules 文件 / 一条运行中要求）
-- 当前系统支持的 `structured` 字段说明
+- The original text of a single source (startup prompt / one rules file / one requirement given during a run)
+- A description of the `structured` fields the system currently supports
 
-系统默认规则不在此列——它们是代码内置的已编译结构化规则，直接进 §合并规则，不经 normalizer。
+System default rules are not in this list — they are compiled structured rules built into the code and go straight into §Merge rules without passing through the normalizer.
 
-输出：
+Output:
 
-- 该来源的候选 `structured`
-- 该来源的候选 `preferences`
+- That source's candidate `structured`
+- That source's candidate `preferences`
 - `sources`
 - `uncertain`
 
-Go 侧职责：
+Go-side responsibilities:
 
-- 提供 schema。
-- 校验字段类型和值域。
-- 按 §合并规则的优先级，确定性合并各来源（LLM 不裁定来源优先级）。
-- 保存快照。
-- 在 `novel_context` 注入快照。
-- 在 `commit_chapter` 用同一份快照做机械检查。
+- Provide the schema.
+- Validate field types and value domains.
+- Merge the sources deterministically by the priority in §Merge rules (the LLM does not rule on source priority).
+- Save the snapshot.
+- Inject the snapshot in `novel_context`.
+- Use the same snapshot for mechanical checks in `commit_chapter`.
 
-LLM 侧职责：
+LLM-side responsibilities:
 
-- 理解单一来源的自然语言规则。
-- 把明确、可机械检查的规则提升到 `structured`。
-- 把审美、风格、人物偏好保留为 `preferences`。
-- 对不确定内容保持保守，不自行发明阈值。
+- Understand the natural-language rules of a single source.
+- Promote clear, mechanically checkable rules into `structured`.
+- Keep aesthetic, style, and character preferences as `preferences`.
+- Stay conservative about uncertain content and do not invent thresholds on its own.
 
-### 保守提升
+### Conservative promotion
 
-`structured` 是硬规则或稳定参数，不是“模型猜测区”。提升规则必须保守：
+`structured` holds hard rules or stable parameters; it is not a "model guessing zone". Promotion must be conservative:
 
-- 只有用户明确、无歧义表达时，才写入 `structured`。
-- `forbidden_chars` / `forbidden_phrases` 是 error 级字段，必须尤其保守；只有“不要出现 X”“禁用 X”“别写 X”这类明确禁止才提升。
-- `fatigue_words` 只有用户给出明确词和阈值时才提升；“少用比喻”“别太书面”“减少口头禅”这类无阈值要求进入 `preferences`。
-- 字数/篇幅类意愿（“每章 3000 字”“短一点”）一律进入 `preferences`：章节长短是叙事节奏的语义裁量，不做机械检查——数字化成硬线会诱导模型为跨线注水。
-- 不可机械化、无明确阈值、依赖语境判断的要求都进入 `preferences`。
+- Write into `structured` only when the user's expression is explicit and unambiguous.
+- `forbidden_chars` / `forbidden_phrases` are error-level fields and must be especially conservative; promote only for explicit prohibitions such as "do not use X", "X is banned", or "don't write X".
+- `fatigue_words` are promoted only when the user gives explicit words and a threshold; threshold-less requirements such as "use fewer metaphors", "don't be so bookish", or "reduce verbal tics" go into `preferences`.
+- Length/word-count wishes ("3000 characters per chapter", "shorter") always go into `preferences`: chapter length is a semantic judgment call about narrative pacing and gets no mechanical check — turning a number into a hard line would tempt the model to pad text to cross it.
+- Requirements that cannot be mechanized, have no explicit threshold, or depend on contextual judgment all go into `preferences`.
 
-原则：
+Principle:
 
 ```text
-宁可漏进 structured，降级为软偏好；
-不可错进 structured，制造每章硬误报。
+Better to miss promoting into structured, degrading to a soft preference;
+never wrongly promote into structured, creating hard false positives every chapter.
 ```
 
-漏提炼的代价是风格偏好弱一些；错提炼的代价是每章产生错误规则事实。
+The cost of under-extraction is a somewhat weaker style preference; the cost of wrong extraction is an erroneous rule fact generated every chapter.
 
-## 失败与降级
+## Failure and degradation
 
-归一化是增强路径，不是主创作的前置条件。模型理解失败，绝不能阻断写书。
+Normalization is an enhancement path, not a precondition for the main creation. A failure of model understanding must never block book writing.
 
-- **按来源降级**：某个来源归一化失败（网络 / 模型 / 非法 JSON / schema 校验失败），该来源降级为 raw preferences、不产 `structured`；其它成功来源照常贡献 `structured`。
-- **上下文控制自愈**：可重试请求错误、提示词模式的格式/Schema 错误和业务校验错误持续自愈，直到成功或 `context` 结束；不设固定次数。原生契约违约、拒答、截断、错误终止和不可重试请求错误立即暴露并按来源降级。
-- **技术错误进日志**：JSON / schema / 网络等技术错误写入日志，不进 `working_memory.user_rules`，不作为创作输入。
-- **快照标记**：任一来源降级时，快照 `status=degraded`。
-- **能落盘就继续**：只要 `meta/user_rules.json` 能写入，主创作必须继续。
-- **只有落盘失败才中止**：快照无法写入磁盘时才中止，因为后续运行没有稳定事实源。
+- **Degrade per source**: when a source's normalization fails (network / model / invalid JSON / schema validation failure), that source degrades to raw preferences and produces no `structured`; the other successful sources contribute their `structured` as usual.
+- **Context-controlled self-healing**: retryable request errors, format/Schema errors in prompt mode, and business-validation errors keep self-healing until success or until `context` ends; there is no fixed attempt count. Native-contract violations, refusals, truncation, erroneous termination, and non-retryable request errors are surfaced immediately and degrade by source.
+- **Technical errors go to the log**: technical errors such as JSON / schema / network are written to the log, do not enter `working_memory.user_rules`, and are not used as creative input.
+- **Snapshot marker**: when any source degrades, the snapshot gets `status=degraded`.
+- **Continue as long as it can be persisted**: as long as `meta/user_rules.json` can be written, the main creation must continue.
+- **Abort only on persistence failure**: abort only when the snapshot cannot be written to disk, because later runs would have no stable source of truth.
 
-`AddRuntimeRule` 契约（运行中）：normalizer 失败时保存 degraded 快照，
-不把 JSON/schema/网络等归一化错误注入创作流程；只有落盘失败才返回 error。
+The `AddRuntimeRule` contract (during a run): when the normalizer fails, it saves a degraded snapshot
+and does not inject normalization errors such as JSON/schema/network into the creative flow; it returns an error only when persistence fails.
 
-## 系统默认规则
+## System default rules
 
-`System defaults` 是代码内置的机械基线，不是用户 rules 文件，也不使用 YAML。
+`System defaults` is a mechanical baseline built into the code; it is not a user rules file and does not use YAML.
 
-它不经 LLM 归一化——已是结构化形态，直接作为最低优先级来源进入 §合并规则的 Go 合并。这样默认规则没有 LLM 失败、漂移、成本问题。
+It does not pass through LLM normalization — it is already in structured form and goes directly, as the lowest-priority source, into the Go merge of §Merge rules. This way the default rules have no LLM failure, drift, or cost problem.
 
-系统默认机械规则原暂存在 `assets/rules/default.md`（旧实现细节，非要兼容的用户 YAML）；落地本设计时已迁入代码内置 `rules.SystemDefaults()`，YAML 解析路径已删除（见 §实现状态）。
+The system-default mechanical rules were originally kept temporarily in `assets/rules/default.md` (an old implementation detail, not a user YAML that must be kept compatible); when this design landed they were moved into the code-built-in `rules.SystemDefaults()`, and the YAML parsing path was deleted (see §Implementation status).
 
-迁移时保留必要注释说明阈值来源，例如某些疲劳词阈值来自长跑产物实证。这不是为了兼容旧 YAML，而是为了让未来维护者知道默认阈值为什么存在、何时应该调整。
+During the migration, the necessary comments explaining where the thresholds came from were kept, for example that some fatigue-word thresholds come from empirical evidence in long-run artifacts. This is not to stay compatible with the old YAML, but to let future maintainers know why a default threshold exists and when it should be adjusted.
 
-## 合并规则
+## Merge rules
 
-合并顺序按“越具体越优先”：
+The merge order follows "the more specific, the higher the priority":
 
 ```text
 System defaults
-→ Global rules 编译结果
-→ Project rules 编译结果
-→ Startup prompt 编译结果
+→ Global rules compiled result
+→ Project rules compiled result
+→ Startup prompt compiled result
 → Runtime user update
 ```
 
-优先级高的来源覆盖低的来源。
+A higher-priority source overrides a lower one.
 
-合并由 Go 确定性执行：LLM 只把单一来源的自然语言归一化成候选 `structured`/`preferences`，Go 按上面的顺序做字段覆盖与文本拼接，优先级不交给 LLM 裁定。
+The merge is executed deterministically by Go: the LLM only normalizes the natural language of a single source into candidate `structured`/`preferences`, and Go does field overriding and text concatenation in the order above; priority is not left to the LLM to rule on.
 
-- `structured`：按字段覆盖，后来源的同名字段覆盖前来源。
-- `preferences`：不互相覆盖，按优先级顺序拼成可读文本（高优先级来源在后），让 LLM 能看到来源次序。
+- `structured`: overridden per field; a field of the same name from a later source overrides the earlier source.
+- `preferences`: do not override each other; they are concatenated into readable text in priority order (higher-priority sources last), so that the LLM can see the source order.
 
-已知局限：`preferences` 按优先级排序，但 Go 不消解冲突。长跑中若用户先后给出相互矛盾的软偏好（如先“冷静克制”后“话痨”），两条都会留在文本里，由 LLM 按次序与上下文权衡；需要确定性硬覆盖的，应表达成可机械化的 `structured` 字段。
+Known limitation: `preferences` are ordered by priority, but Go does not resolve conflicts. In a long run, if the user successively gives mutually contradictory soft preferences (for example first "calm and restrained", then "chatty"), both stay in the text and the LLM weighs them by order and context; anything that needs a deterministic hard override should be expressed as a mechanizable `structured` field.
 
-## 落盘入口
+## Persistence entry points
 
-归一化、合并、落盘是同一套逻辑，但有两个调用方，必须分清，否则会把启动准备混进主创作上下文：
+Normalization, merging, and persistence are one and the same piece of logic, but there are two callers, which must be kept distinct, otherwise startup preparation would get mixed into the main creative context:
 
-- **开书 / 刷新（启动侧，确定性）**：由 Host / 启动流程直接调用这套逻辑生成初始快照，不进主创作循环。这是确定性的启动准备任务。
-- **运行中更新（干预裁定动作）**：Arbiter 分诊出的 `rules` 动作由 Host 直接调 `userrules.Service.AddRuntimeRule`，复用同一套校验 / 合并 / 落盘逻辑，把无进度起点的新规则作为 `Runtime user update` 合并进快照。
+- **Book opening / refresh (startup side, deterministic)**: the Host / startup flow calls this logic directly to generate the initial snapshot, without entering the main creative loop. This is a deterministic startup-preparation task.
+- **Update during a run (intervention ruling action)**: the `rules` action triaged by the Arbiter is passed by the Host directly to `userrules.Service.AddRuntimeRule`, reusing the same validation / merge / persistence logic, and merging the new rule, which has no progress starting point, into the snapshot as a `Runtime user update`.
 
-（实现上建议把这套逻辑收敛成一个内部服务，两个调用方共用；具体命名留给实现。）
+(For the implementation, it is suggested to consolidate this logic into one internal service shared by both callers; the concrete naming is left to the implementation.)
 
-无论哪个调用方，最终都写入同一份 `meta/user_rules.json`。落盘逻辑只做三件事：
+Whichever caller it is, the result is finally written into the same `meta/user_rules.json`. The persistence logic does only three things:
 
-1. 校验结构化字段。
-2. 按 §合并规则的优先级合并进当前本书快照。
-3. 返回保存后的完整规则事实。
+1. Validate the structured fields.
+2. Merge into this book's current snapshot by the priority in §Merge rules.
+3. Return the complete saved rule facts.
 
-不做：
+It does not:
 
-- 不派发子代理。
-- 不修改大纲。
-- 不静默吞掉非法字段（记录并降级，见 §失败与降级）。
-- 不把原始文本当成最终 prompt 直接注入。
+- Dispatch subagents.
+- Modify the outline.
+- Silently swallow invalid fields (record and degrade, see §Failure and degradation).
+- Inject the raw text directly as the final prompt.
 
-运行中更新示例：用户说“以后都怎样”（无进度起点）→ Arbiter 裁定为 `rules` 动作 → Host 经 `AddRuntimeRule` 归一化该条 → 作为 `Runtime user update` 以最高优先级合并进快照 → 事件流回显。
+Example of an update during a run: the user says "from now on, always do it this way" (no progress starting point) → the Arbiter rules it as a `rules` action → the Host normalizes that item through `AddRuntimeRule` → it is merged into the snapshot at the highest priority as a `Runtime user update` → echoed via the event stream.
 
-## 回显
+## Echo
 
-每次生成或更新 `user_rules` 快照，都必须把归一化结果回显给用户：
+Every time the `user_rules` snapshot is generated or updated, the normalization result must be echoed to the user:
 
 ```text
-已生成本书规则快照：
-- 机械规则：每章 1200-1600 字；禁用短语“某种程度上”
-- 风格偏好：主角冷静克制；少解释，多用行动和对话推进
-- 未提升为机械规则：少用比喻（无明确阈值，按风格偏好处理）
+Generated this book's rule snapshot:
+- Mechanical rules: 1200-1600 characters per chapter; banned phrase "to some extent"
+- Style preferences: protagonist calm and restrained; explain less, push the story with action and dialogue
+- Not promoted to mechanical rules: use fewer metaphors (no explicit threshold, handled as a style preference)
 ```
 
-- 启动 / 刷新：复用现有启动规则日志能力打印快照，不新增机制；共创场景可把回显并入共创确认环节。
-- 运行中：`AddRuntimeRule` 成功后经事件流回显（"写作规则已更新并持久化"）。
-- 降级：`status=degraded` 时，回显明确说明哪些来源未能解析、当前已按 raw preferences 运行、可重新生成快照。
+- Startup / refresh: reuse the existing startup-rules logging capability to print the snapshot, with no new mechanism; in the cocreate scenario the echo can be folded into the cocreate confirmation step.
+- During a run: after `AddRuntimeRule` succeeds, it is echoed via the event stream ("writing rules updated and persisted"; the current literal is `Quy tắc viết đã được cập nhật và lưu`).
+- Degradation: when `status=degraded`, the echo states clearly which sources could not be parsed, that the book is currently running on raw preferences, and that the snapshot can be regenerated.
 
-回显不是二次审批闸门；它的作用是让用户知道系统理解成了什么，发现错误后可以重新生成快照。
+The echo is not a second approval gate; its purpose is to let the user know what the system understood, so that after finding an error they can regenerate the snapshot.
 
-## Agent 消费方式
+## How agents consume it
 
-所有 agent 只看：
+All agents see only:
 
 ```json
 working_memory.user_rules
 ```
 
-职责分配：
+Division of duties:
 
-- Architect：按 `preferences` 中的字数意愿调整每章剧情密度和拆章数量。
-- Writer：按 `structured` 的硬规则写作，按 `preferences` 调整风格。
-- Editor：按同一份规则审阅。
-- `commit_chapter`：用 `structured` 做机械检查并返回 violations。
+- Architect: adjusts per-chapter plot density and the number of chapter splits according to the length wishes in `preferences`.
+- Writer: writes according to the hard rules in `structured`, and adjusts style according to `preferences`.
+- Editor: reviews against the same set of rules.
+- `commit_chapter`: uses `structured` for mechanical checks and returns violations.
 
-Writer 不重新理解原始启动 prompt，也不读原始 rules 文件。
+The Writer neither re-interprets the original startup prompt nor reads the raw rules files.
 
-## 干预分类：三类去向
+## Intervention classification: three destinations
 
-运行中干预按"要改什么"分三类：
+Interventions during a run are classified into three kinds by "what is to be changed":
 
-- **怎么写**（写作笔法 / 风格 / 质量：字数、用词、禁语、句式、对话占比、标题格式等）→ Arbiter `rules` 动作，归一化合并进 `meta/user_rules.json`。例：“每章 1500 字”“标题只用中文”“主角整体冷静克制”“对话占比高一点”。
-- **写什么**（剧情 / 结构 / 人物走向 / 篇幅）→ architect，落进 compass / outline / 角色档案。例：“这一卷多写战斗线”“从第 30 章起主角语气转冷”“增加到 40 章”。
-- **改已写的**（重写 / 修订指定章节）→ editor，入队 PendingRewrites。
+- **How to write** (writing craft / style / quality: word count, word choice, banned expressions, sentence patterns, dialogue share, title format, etc.) → Arbiter `rules` action, normalized and merged into `meta/user_rules.json`. Examples: "1500 characters per chapter", "titles use only Chinese", "the protagonist should be calm and restrained overall", "a bit more dialogue".
+- **What to write** (plot / structure / character direction / length) → architect, landing in the compass / outline / character profiles. Examples: "write more combat storyline in this volume", "from chapter 30 the protagonist's tone turns cold", "extend to 40 chapters".
+- **Change what is already written** (rewrite / revise specified chapters) → editor, enqueued into PendingRewrites.
 
-判据：**“怎么写” → rules；“写什么” → architect；“改已写的” → editor**。
+Criterion: **"how to write" → rules; "what to write" → architect; "change what is already written" → editor**.
 
-## 实施步骤
+## Implementation steps
 
-1. 新增 `meta/user_rules.json` store。
-2. 新增独立的 LLM 归一化 pass（按来源），使用 schema 约束输出候选 `structured/preferences/sources/uncertain`。
-3. 新增 Go 侧确定性合并：按优先级对各来源做字段覆盖与文本拼接，生成快照。
-4. 把归一化 / 合并 / 落盘收敛成一套逻辑，两个调用方共用：启动侧直接调用生成初始快照；运行中由干预裁定的 `rules` 动作经 `AddRuntimeRule` 复用。失败时按 §失败与降级 处理：来源降级为 raw preferences、快照 `status=degraded`、主创作继续。
-5. 把当前 `assets/rules/default.md` 的系统默认机械规则迁到代码内置结构或 JSON asset，保留阈值来源注释；删除用户 rules 的 YAML 解析路径，不做兼容层。
-6. rules 文件读取后不再直接把正文当 prompt 注入，而是归一化后合并进 `user_rules` 快照。
-7. `novel_context` 只注入 `meta/user_rules.json` 中的 `working_memory.user_rules`。
-8. `commit_chapter` 使用同一份 `user_rules.structured` 检查。
-10. 干预分诊（现由 Arbiter 承担,arbiter-intervention.md）明确按"要改什么"三类分流：写作风格 / 质量类长期要求走 `rules` 动作落快照；剧情 / 结构 / 人物 / 篇幅走 architect；已写章节返工走 editor（详见 §干预分类：三类去向）。
+1. Add the `meta/user_rules.json` store.
+2. Add an independent LLM normalization pass (per source), using schema-constrained output of candidate `structured/preferences/sources/uncertain`.
+3. Add the Go-side deterministic merge: apply field overriding and text concatenation across the sources by priority to produce the snapshot.
+4. Consolidate normalization / merging / persistence into one piece of logic shared by two callers: the startup side calls it directly to generate the initial snapshot; during a run, the intervention-ruling `rules` action reuses it via `AddRuntimeRule`. On failure, handle per §Failure and degradation: the source degrades to raw preferences, the snapshot gets `status=degraded`, and the main creation continues.
+5. Move the system-default mechanical rules from the current `assets/rules/default.md` into a code-built-in structure or a JSON asset, keeping the comments on threshold origins; delete the YAML parsing path for user rules, with no compatibility layer.
+6. After a rules file is read, its body is no longer injected directly as a prompt, but normalized and then merged into the `user_rules` snapshot.
+7. `novel_context` injects only `working_memory.user_rules` from `meta/user_rules.json`.
+8. `commit_chapter` checks with the same `user_rules.structured`.
+10. Intervention triage (now carried by the Arbiter, `assets/prompts/arbiter-intervention.md`) explicitly splits into three by "what is to be changed": long-term writing-style / quality requirements go through the `rules` action and land in the snapshot; plot / structure / characters / length go to architect; rework of already-written chapters goes to editor (see §Intervention classification: three destinations).
 
-## 验收标准
+## Acceptance criteria
 
-- 用户启动 prompt 写“每章 1200-1600 字”，Writer 第一章的 `novel_context` 能在 `preferences` 里看到这条意愿原文。
-- rules 文件只写自然语言，也能在生成快照时归一化进同一份 `user_rules`。
-- rules 文件不需要也不支持 YAML；全部按自然语言规则归一化。
-- 运行时不再读取 rules 文件；只读 `meta/user_rules.json`。
-- 默认机械规则不再来自 YAML rules 文件，用户 rules 也没有 YAML 兼容层。
-- 归一化不使用 regex/关键词硬编码；自然语言理解由 LLM 完成。
-- 模糊规则不会被提升为 error 级 `structured` 字段。
-- 系统默认规则不经 LLM，直接进 Go 合并。
-- 来源优先级与字段覆盖由 Go 确定性执行，相同输入产出相同快照。
-- 运行中用户说“以后都怎样”，经 Arbiter rules 动作合并进快照，后续章节的 `novel_context` 能看到更新。
-- 归一化失败不阻断写书：失败来源降级为 raw preferences，快照 `status=degraded`，主创作继续；只有快照无法落盘才中止。
-- 归一化失败返回 `status=degraded`，不把技术错误上抛污染主流程。
-- 生成或更新快照后会回显 `structured` / `preferences` / 未提升项；降级时回显说明降级来源。
-- 新开一本书不会继承上一本书的 `user_rules`。
-- 非法结构化字段不静默忽略：记录并降级该来源，不阻断主流程。
+- If the user's startup prompt says "1200-1600 characters per chapter", the Writer's first-chapter `novel_context` shows the original text of this wish in `preferences`.
+- A rules file written only in natural language is also normalized into the same `user_rules` when the snapshot is generated.
+- Rules files neither need nor support YAML; everything is normalized as natural-language rules.
+- At runtime the rules files are no longer read; only `meta/user_rules.json` is read.
+- The default mechanical rules no longer come from a YAML rules file, and user rules have no YAML compatibility layer either.
+- Normalization does not use regex/keyword hard-coding; natural-language understanding is done by the LLM.
+- Vague rules are not promoted into error-level `structured` fields.
+- System default rules do not pass through the LLM and go straight into the Go merge.
+- Source priority and field overriding are executed deterministically by Go, and the same input produces the same snapshot.
+- When the user says "from now on, always do it this way" during a run, it is merged into the snapshot via the Arbiter rules action, and later chapters' `novel_context` can see the update.
+- A normalization failure does not block book writing: the failed source degrades to raw preferences, the snapshot gets `status=degraded`, and the main creation continues; only a snapshot that cannot be persisted aborts.
+- A normalization failure returns `status=degraded` and does not throw technical errors up to pollute the main flow.
+- After the snapshot is generated or updated, `structured` / `preferences` / the not-promoted items are echoed; on degradation the echo states the degraded sources.
+- Opening a new book does not inherit the previous book's `user_rules`.
+- Invalid structured fields are not silently ignored: record them and degrade that source, without blocking the main flow.
 
-## 明确不做（判定不需要，非阶段切割）
+## Explicitly not doing (judged unnecessary, not phase cutting)
 
-以下能力在当前需求下没有收益，不进设计，避免过度设计：
+The following capabilities bring no benefit under current requirements and stay out of the design, to avoid over-design:
 
-- `clear_fields` 等字段级删除 / 撤销语义。
-- 监听 rules 文件变化的自动刷新（改了文件就显式重新生成快照即可）。
-- `preferences` 的时间锚点 / 覆盖消解（需要硬覆盖的请用 `structured`）。
-- 在快照里持久化 `diagnostics` 数组（技术错误进日志即可，快照只留 `status`）。
-- schema 字段说明从 Go 类型自动生成（手维护一份简短说明即可）。
+- Field-level deletion / revocation semantics such as `clear_fields`.
+- Automatic refresh that watches rules-file changes (after editing a file, just explicitly regenerate the snapshot).
+- Time anchors / override resolution for `preferences` (use `structured` if a hard override is needed).
+- Persisting a `diagnostics` array in the snapshot (technical errors go to the log; the snapshot keeps only `status`).
+- Auto-generating the schema field descriptions from Go types (maintaining a short description by hand is enough).
 
-设计原则不变：LLM 负责理解自然语言，Go 负责确定性合并、校验、落盘和检查。
+The design principle is unchanged: the LLM is responsible for understanding natural language, and Go is responsible for deterministic merging, validation, persistence, and checking.

@@ -1,114 +1,114 @@
-# ainovel-cli 运行时架构
+# ainovel-cli Runtime Architecture
 
-> 事实层确定，语义层自主：一个串行确定性 Engine、三个自主 Worker、少数几个按需 Arbiter 函数、一个文件系统事实层。
+> Deterministic fact layer, autonomous semantic layer: one serial deterministic Engine, three autonomous Workers, a few on-demand Arbiter functions, and one filesystem fact layer.
 >
-> 2026-07-12 控制面更替完成：Coordinator LLM 长循环退役，由 Engine（确定性循环）+ Arbiter（语义裁定函数）接管。设计决策与评审记录见 `docs/engine-arbiter.md`，RFC 见 `docs/engine-rfc.md`。
+> 2026-07-12 control-plane replacement complete: the Coordinator LLM long loop is retired, replaced by the Engine (deterministic loop) + Arbiter (semantic ruling functions). Design decisions and review records are in `docs/engine-arbiter.md`; the RFC is in `docs/engine-rfc.md`.
 
 ---
 
-## 1. 目标（按优先级）
+## 1. Goals (in priority order)
 
-1. **稳定性**：一句话输入，稳定写完整本小说（200~500 章）。中间不因架构问题自行中断。
-2. **质量可迭代**：prompt / 参考资料 / 评审维度 / 上下文策略可独立调整，不牵连架构。
-3. **可恢复**：崩溃、断网、暂停后能从最近 checkpoint 继续。
-4. **可观测**：每章每 step 的进度、产物、用时可查。
+1. **Stability**: from a one-sentence input, reliably write a complete novel (200~500 chapters). No self-interruption caused by architecture problems.
+2. **Iterable quality**: prompts / reference material / review dimensions / context strategy can be tuned independently without touching the architecture.
+3. **Recoverable**: after a crash, network loss, or pause, resume from the latest checkpoint.
+4. **Observable**: per-chapter, per-step progress, artifacts, and elapsed time are all queryable.
 
-"稳定"是前提，"质量"是上层。每个架构决策优先服务稳定性。
+"Stable" is the premise, "quality" is the layer above. Every architecture decision serves stability first.
 
 ---
 
-## 2. 核心原则
+## 2. Core principles
 
-### 2.1 三分法：决策按性质归位
+### 2.1 Three-way split: decisions are placed by their nature
 
-- **可枚举的状态迁移 → 代码**。"写完一章后派谁"是读事实查表：`flow.Route` 纯函数 + 万级组合穷举规格测试，错误率趋近 0、零 LLM 开销。
-- **边界清晰的语义判断 → LLM 函数（Arbiter）**。选规划师、用户干预分诊、失败/僵局出路：事实进、结构化决策出、机械校验兜底、每次裁定落盘可回放。
-- **开放式创作 → LLM 循环（Worker）**。一章、一次评审、一次规划之内，architect/writer/editor 完全自主。
+- **Enumerable state transitions → code**. "Who is dispatched after a chapter is written" is a fact lookup: the pure function `flow.Route` + a spec test that exhaustively covers tens of thousands of combinations, with an error rate approaching 0 and zero LLM overhead.
+- **Semantic judgments with clear boundaries → LLM functions (Arbiter)**. Choosing the planner, triaging user interventions, deciding the way out of a failure/deadlock: facts in, structured decision out, mechanical validation as a backstop, every ruling persisted to disk and replayable.
+- **Open-ended creation → LLM loops (Worker)**. Within one chapter, one review, or one planning pass, architect/writer/editor are fully autonomous.
 
-两平面对称是贯穿性纪律——未来任何新决策点照此形状，不发明新模式：
+The symmetry of the two planes is a cross-cutting discipline: any future new decision point follows this shape, and no new patterns are invented:
 
 ```
-确定性平面:  flow.LoadState   → flow.Route     → Instruction   (穷举规格测试)
-语义平面:    arbiter.Collect* → arbiter.Decide* → XxxDecision   (decisions.jsonl + eval 回归)
-              └── 事实采集(IO) ──┘└── 核心(可离线重放) ──┘└── Engine 执行 ──┘
+Deterministic plane:  flow.LoadState   → flow.Route     → Instruction   (exhaustive spec test)
+Semantic plane:       arbiter.Collect* → arbiter.Decide* → XxxDecision   (decisions.jsonl + eval regression)
+                      └── fact collection (IO) ──┘└── core (offline-replayable) ──┘└── Engine executes ──┘
 ```
 
-### 2.2 工具是事实层唯一接口
+### 2.2 Tools are the only interface to the fact layer
 
-所有与文件系统、Progress、Checkpoint 的交互都由工具完成。单个文件使用 `temp + fsync + rename` 原子替换；跨文件顺序写入不冒充数据库事务：章节提交使用持久化 `PendingCommit` Saga，结构写入使用确定性幂等重放并显式暴露失败。每一步都必须检查错误；只有已持久化恢复意图的流程才能承诺跨重启按原载荷恢复。
+All interaction with the filesystem, Progress, and Checkpoint is done by tools. A single file is replaced atomically with `temp + fsync + rename`; cross-file ordered writes do not pretend to be database transactions: chapter commit uses a persistent `PendingCommit` Saga, and structural writes use deterministic idempotent replay with failures explicitly surfaced. Every step must check errors; only flows whose recovery intent has been persisted may promise to resume across restarts with the original payload.
 
-### 2.3 观察层只观察
+### 2.3 The observation layer only observes
 
-UI、诊断、事件日志都是从事件流 / 只读工件投影出来的被动消费者。读事实，不产生事实，不影响控制流。
+The UI, diagnostics, and event log are passive consumers projected from the event stream / read-only artifacts. They read facts, produce no facts, and do not affect control flow.
 
-观测数据严格分三层：`agentcore.ProgressPayload` 是传输层，错误文本必须完整且不得包含 UI 截断策略；`host.Event.Summary` 是短展示语义，`Detail` 是完整诊断；文件日志优先写完整 `Detail`，TUI 只读 `Summary` 并在最终渲染时按终端宽度截断。文件 logger 由 `Host` 持有：先取得小说目录租约，再建立日志会话，随后才装配 Store、模型和 Engine；这样既不会绕过单书独占，也能覆盖全部装配和关闭日志。所谓“完整日志”指错误链、原始非法参数和生命周期元数据不丢失，不是把成功生成的小说正文重复转录到 `tui.log`；大内容仍由 Store 工件和 `meta/sessions` 承载。
+Observation data is strictly divided into three layers: `agentcore.ProgressPayload` is the transport layer, whose error text must be complete and must not include UI truncation policy; `host.Event.Summary` is the short display semantics and `Detail` is the full diagnostic; file logs preferentially write the full `Detail`, while the TUI reads only `Summary` and truncates it to the terminal width at final render time. The file logger is owned by `Host`: it first acquires the novel directory lease, then establishes the log session, and only then assembles the Store, models, and Engine; this neither bypasses single-book exclusivity nor misses any assembly or shutdown logging. "Full logging" means that error chains, raw invalid arguments, and lifecycle metadata are not lost; it does not mean re-transcribing successfully generated novel text into `tui.log`; large content is still carried by Store artifacts and `meta/sessions`.
 
-**`internal/diag` 是引擎唯一的可观测性子系统**——一等支撑设施，但不是产品核心。它跨读几乎所有工件 + session + log + checkpoint，承担两职：① **创作质量诊断**（规则 → Finding，`/diag` 屏上报告）；② **运行时排错 + 脱敏导出**（行为骨架剥正文 + 循环聚合 → 覆盖式 `meta/diag-export.md`）。
+**`internal/diag` is the engine's only observability subsystem**: a first-class supporting facility, but not the product core. It reads across nearly all artifacts + session + log + checkpoint, and takes on two duties: ① **creative-quality diagnostics** (rules → Finding, the on-screen `/diag` report); ② **runtime troubleshooting + redacted export** (behavioral skeleton with body text stripped + loop aggregation → overwrite-style `meta/diag-export.md`).
 
-**观察者纪律（不可松动）**：diag 可以诊断、可以建议，但**永不自己动手**——不自动修复、不续跑、不改流程（历史教训见 §10 第 5 条）。
+**Observer discipline (must not be loosened)**: diag may diagnose and may suggest, but **never acts on its own**: no auto-repair, no auto-resume, no changing the flow (for the historical lesson see §10 item 5).
 
-### 2.4 事实层扁平
+### 2.4 A flat fact layer
 
-只有三类事实：
+There are only three kinds of facts:
 
-- **Progress** — 进度索引（写到第几章、待重写列表）
-- **Checkpoint** — step 级推进记录（plan / draft / commit / review / arc_summary）
-- **Artifact** — 章节正文、大纲、角色、摘要等产物
+- **Progress** — the progress index (which chapter has been written, the list of pending rewrites)
+- **Checkpoint** — step-level progress records (plan / draft / commit / review / arc_summary)
+- **Artifact** — chapter text, outline, characters, summaries, and other products
 
-不引入 WorkflowInstance / TaskInstance / Command 等抽象。附属事实（大纲反馈池、机械违规记录、裁定审计）同样是扁平 jsonl，各有唯一生产者与消费者。
+No abstractions such as WorkflowInstance / TaskInstance / Command are introduced. Auxiliary facts (the outline feedback pool, mechanical violation records, ruling audit) are likewise flat jsonl, each with exactly one producer and one consumer.
 
-### 2.5 四铁律
+### 2.5 Four iron rules
 
-**铁律一：工具只返事实，不返跨调度指令**。`commit_chapter` 返回 `arc_end` / `needs_expansion` 等结构化字段；不夹带 `[系统]` 类指令字符串。子代理内的 `next_step` 字段是事实陈述的内联指引（"我刚保存了 plan，下一步是 draft"），不算违反——见 §6.3。
+**Iron rule 1: tools return only facts, never cross-scheduling instructions**. `commit_chapter` returns structured fields such as `arc_end` / `needs_expansion`; it carries no `[系统]` (`[System]`) style instruction strings. The `next_step` field inside a subagent is inline guidance stated as a fact ("I just saved the plan; the next step is draft") and does not count as a violation; see §6.3. <!-- han:keep -->
 
-**铁律二：流程路由由 Flow Router 承担，执行由 Engine 承担**。`internal/flow/router.go` 的 `Route(state) → *Instruction` 是纯函数（万级组合穷举规格测试钉死）；Engine 每轮从 store 读事实、Route 推导指令、**直接程序化运行 Worker**（`subagent.Runner.Run`，类型化入参/结果/错误链），无 LLM 工具转发层。返回 nil 表示语义场景（完本收尾/等待干预）或自然停机。**僵局有显式限界**（RFC §5）：上一轮后 Route 仍产生同一 `Agent+Task`，即路由后置条件未满足；3 次咨询 Arbiter、5 次硬熔断暂停。Worker 内部中间 checkpoint 不重置计数，确定性 Engine 不允许无限空转。
+**Iron rule 2: flow routing is the Flow Router's job, and execution is the Engine's job**. `Route(state) → *Instruction` in `internal/flow/router.go` is a pure function (pinned down by an exhaustive spec test over tens of thousands of combinations); on every round the Engine reads facts from the store, derives the instruction with Route, and **runs the Worker directly and programmatically** (`subagent.Runner.Run`, typed input/result/error chain), with no LLM tool-forwarding layer. Returning nil means a semantic scenario (book-completion wrap-up / waiting for intervention) or a natural stop. **Deadlock has an explicit bound** (RFC §5): if Route still produces the same `Agent+Task` after the previous round, the routing postcondition was not met; 3 repeats consult the Arbiter, and 5 trigger a hard circuit-breaker pause. Intermediate checkpoints inside a Worker do not reset the counter; a deterministic Engine must not spin forever.
 
-**铁律三：语义裁定走 Arbiter，每次裁定落盘**。启动选规划师、用户干预分诊、失败/僵局出路由 `internal/arbiter` 的逐场景 Decide 函数裁定：事实进、结构化决策出、机械校验兜底、decisions.jsonl 审计（可离线重放回归）。三个 Worker 保留各自的 `CheckpointDeltaGuard`（事实护栏：产物未落盘不得收工）。
+**Iron rule 3: semantic rulings go through the Arbiter, and every ruling is persisted**. Choosing the planner at startup, triaging user interventions, and deciding the way out of a failure/deadlock are ruled by the per-scenario Decide functions of `internal/arbiter`: facts in, structured decision out, mechanical validation as a backstop, decisions.jsonl audit (replayable offline for regression). The three Workers each keep their own `CheckpointDeltaGuard` (a fact guardrail: no finishing before the artifact is persisted).
 
-**铁律四：硬编码边界，不硬编码不可枚举的语义判断**。代码只固化可证明的不变量（权限、阶段、顺序、幂等、结构完整性）并向模型提供完整事实与足够的操作空间；创作取舍、质量判断、计划如何适应正文等开放问题必须留给 Worker / Arbiter。禁止用关键词、评分阈值、偏离枚举或规则表代替模型理解，也禁止因担心模型出错而缩窄其合法决策空间。新增代码规则前必须先证明决策空间封闭且结果可机械验证；否则应改善上下文与工具表达能力，让模型升级的收益无需改外壳即可兑现。
+**Iron rule 4: hard-code boundaries, not semantic judgments that cannot be enumerated**. Code fixes only provable invariants (permissions, phases, ordering, idempotency, structural integrity) and gives the model complete facts and enough room to operate; open questions such as creative trade-offs, quality judgments, and how a plan adapts to the text must be left to the Worker / Arbiter. Replacing model understanding with keywords, score thresholds, deviation enumerations, or rule tables is forbidden, as is narrowing the model's legitimate decision space out of fear that it will err. Before adding a new code rule, it must first be shown that the decision space is closed and the result is mechanically verifiable; otherwise, improve the context and tool expressiveness so that the gains from model upgrades are realized without changing the shell.
 
 ---
 
-## 3. 架构全景
+## 3. Architecture overview
 
 ```
 [Entry: TUI / headless]
         │ prompt / steer
-[Host 外壳]
-   ├── observer            Worker 进度中继 + Engine 派发事件 → UI/日志投影
-   ├── engine              确定性循环：LoadState → Route → 前置校验 → 运行 Worker → 哨兵边界
-   ├── 干预路径             Steer/Continue → Arbiter 裁定 → 动作执行(即时/边界提交)
-   └── usage / 预算 / 停靠点 / 模型管理
-        │ 程序化调用 subagent.Runner.Run（进度经 ctx ToolProgress 中继）
-[architect_short/long · writer · editor]（各自独立 run + context + 模型）
-        │ 工具调用
+[Host shell]
+   ├── observer            Worker progress relay + Engine dispatch events → UI/log projection
+   ├── engine              deterministic loop: LoadState → Route → precheck → run Worker → sentinel boundary
+   ├── intervention path   Steer/Continue → Arbiter ruling → action execution (immediate / boundary commit)
+   └── usage / budget / stop points / model management
+        │ programmatic call to subagent.Runner.Run (progress relayed via ctx ToolProgress)
+[architect_short/long · writer · editor] (each with its own run + context + model)
+        │ tool calls
 [Tools]  novel_context · read_chapter · plan_chapter · draft_chapter · edit_chapter
          check_consistency · commit_chapter · save_review · save_arc_summary
          save_volume_summary · save_foundation
-        │ 单文件原子 + 幂等重放（commit 使用持久化 Saga）
-[Store: 文件系统 (tmp + rename)]
+        │ single-file atomic + idempotent replay (commit uses a persistent Saga)
+[Store: filesystem (tmp + rename)]
    Progress · Checkpoints · Outline · Drafts · Summaries · Characters · World
-   · Signals · Decisions(裁定审计) · 反馈池 · 违规记录
+   · Signals · Decisions (ruling audit) · feedback pool · violation records
 ```
 
-| 层 | 做什么 | 不做什么 |
+| Layer | What it does | What it does not do |
 |---|---|---|
-| Entry | 展示、接收输入 | 业务决策 |
-| Host/Engine | 生命周期、Route 执行、Worker 运行、哨兵边界、干预编排 | 文学判断；写创作事实（控制态动作经工具内核） |
-| Arbiter | 语义裁定（结构化决策） | 亲自创作；执行动作 |
-| Workers | 思考、写作、审阅 | 直接读写 Store（必须经工具） |
-| Tools | 单文件原子 IO + 显式错误 + 幂等；commit 使用 Saga | 跨子代理调度指令 |
-| Store | 文件系统落盘 | 业务逻辑 |
+| Entry | Display, receive input | Business decisions |
+| Host/Engine | Lifecycle, Route execution, Worker runs, sentinel boundary, intervention orchestration | Literary judgment; writing creative facts (control-state actions go through the tool kernel) |
+| Arbiter | Semantic rulings (structured decisions) | Creating content itself; executing actions |
+| Workers | Thinking, writing, reviewing | Reading/writing the Store directly (must go through tools) |
+| Tools | Single-file atomic IO + explicit errors + idempotency; commit uses a Saga | Cross-subagent scheduling instructions |
+| Store | Filesystem persistence | Business logic |
 
-依赖单向：`entry → host → agents/arbiter → tools → store → domain`；`flow` 为顶层纯策略包（store 之上、host 之下）。横向独立：`errs/` 可被任何层引用，`diag/` 订阅 host 事件流 + 只读 `store/`。
+Dependencies are one-way: `entry → host → agents/arbiter → tools → store → domain`; `flow` is a top-level pure-policy package (above store, below host). Independent laterally: `errs/` may be referenced by any layer, and `diag/` subscribes to the host event stream + reads `store/` read-only.
 
 ---
 
-## 4. 数据模型
+## 4. Data model
 
-### 4.1 BookMetadata 与 Progress
+### 4.1 BookMetadata and Progress
 
-`BookMetadata` 是书名和面向读者简介的唯一事实源，持久化到 `meta/book.json`；`book.md` 只是可读投影。Premise 不重复保存书名，Progress 也不承载作品信息。
+`BookMetadata` is the single source of truth for the book title and the reader-facing synopsis, persisted to `meta/book.json`; `book.md` is only a human-readable projection. Premise does not store the title again, and Progress does not carry work information.
 
 ```go
 type BookMetadata struct {
@@ -117,7 +117,7 @@ type BookMetadata struct {
 }
 ```
 
-Progress（`internal/domain/runtime.go`）只记录运行状态：
+Progress (`internal/domain/runtime.go`) records runtime state only:
 
 ```go
 type Progress struct {
@@ -127,26 +127,26 @@ type Progress struct {
     CompletedChapters []int
     TotalWordCount    int
     ChapterWordCounts map[int]int
-    InProgressChapter int             // 正在写作的章节
+    InProgressChapter int             // chapter currently being written
     Flow              FlowState       // writing / reviewing / rewriting / polishing / steering
     PendingRewrites   []int
-    StrandHistory     []string        // dominant_strand 序列
-    HookHistory       []string        // hook_type 序列
-    CurrentVolume, CurrentArc int     // 长篇分层
+    StrandHistory     []string        // dominant_strand sequence
+    HookHistory       []string        // hook_type sequence
+    CurrentVolume, CurrentArc int     // long-form layering
     Layered           bool
 }
 ```
 
-控制逻辑只读上述事实字段，不依赖任何"更新时间戳"——时间信息由 checkpoint 的 `OccurredAt` 承载。
+Control logic reads only the fact fields above and does not depend on any "updated timestamp"; time information is carried by the checkpoint's `OccurredAt`.
 
-RunMeta（`meta/run.json`）承载**用户运行意图**（非创作事实）：PlanningTier、PlanStart（启动裁定固化，规划期崩溃恢复的唯一依据）、PendingSteer（干预崩溃保护，单在途槽位）、AdvanceMode / AdvancePermitChapter（逐章验收政策与精确章节许可）、AdvanceHold（干预签署的一次性暂停）。`RunMeta.Init` 跨重启保留全部意图字段。
+RunMeta (`meta/run.json`) carries the **user's run intent** (not creative facts): PlanningTier, PlanStart (the frozen startup ruling, the sole basis for crash recovery during planning), PendingSteer (intervention crash protection, a single in-flight slot), AdvanceMode / AdvancePermitChapter (the per-chapter approval policy and the exact chapter permit), AdvanceHold (a one-shot pause signed by an intervention). `RunMeta.Init` preserves all intent fields across restarts.
 
-### 4.2 Checkpoint（`internal/domain/checkpoint.go`）
+### 4.2 Checkpoint (`internal/domain/checkpoint.go`)
 
 ```go
 type Scope      struct { Kind ScopeKind; Chapter, Volume, Arc int }
 type Checkpoint struct {
-    Seq        int64       // 单调自增
+    Seq        int64       // monotonically increasing
     Scope      Scope       // chapter / arc / volume / global
     Step       string      // plan / draft / commit / review / arc_summary / ...
     Artifact   string
@@ -155,366 +155,366 @@ type Checkpoint struct {
 }
 ```
 
-存储：`meta/checkpoints.jsonl`，只追加。重复写入相同 `Scope+Step+Digest` 视为幂等不产生新行。
+Storage: `meta/checkpoints.jsonl`, append-only. Repeated writes of the same `Scope+Step+Digest` are treated as idempotent and produce no new line.
 
-### 4.3 Artifact 与附属事实
+### 4.3 Artifacts and auxiliary facts
 
-Artifact 在 `store/outline.go` `drafts.go` `summaries.go` `characters.go` `world.go`。
+Artifacts live in `store/outline.go` `drafts.go` `summaries.go` `characters.go` `world.go`.
 
-- **Signals**：`PendingCommit`（commit 中断恢复）。启动/恢复时读，运行时不读。
-- **Decisions**（`meta/decisions.jsonl`）：每次 Arbiter 裁定的审计记录（facts+input+decision），可离线重放；**不是恢复数据源**（恢复只依赖 Progress/Checkpoint/RunMeta）。
-- **增长型世界事实**：时间线与角色状态变化分别以 `timeline.jsonl`、`meta/state_changes.jsonl` 追加；进程内维护去重索引，正常提交只写本章增量。旧版 JSON 数组在下一次追加时按“先原子写新日志、后删除旧文件”的幂等协议迁移，`timeline.md` 是可重建的人类可读投影。
-- **大纲反馈池**（`meta/outline_feedback.jsonl`）：writer 的普通反馈在下一次结构操作中消费；外部正文修订若影响剧情，则在继续写作前优先交给 architect，处理后清空。
-- **机械违规记录**（`meta/rule_violations.jsonl`）：commit 时按 user_rules 检查的结果，editor 评审经 `novel_context(chapter=N)` 消费；best-effort 质量元数据，非与提交同级强一致。
+- **Signals**: `PendingCommit` (commit interruption recovery). Read at startup/resume, not read at runtime.
+- **Decisions** (`meta/decisions.jsonl`): the audit record of every Arbiter ruling (facts+input+decision), replayable offline; **not a recovery data source** (recovery depends only on Progress/Checkpoint/RunMeta).
+- **Growing world facts**: the timeline and character state changes are appended to `timeline.jsonl` and `meta/state_changes.jsonl` respectively; a dedup index is maintained in-process, and a normal commit writes only this chapter's delta. The old JSON array is migrated on the next append by an idempotent protocol of "atomically write the new log first, then delete the old file"; `timeline.md` is a rebuildable human-readable projection.
+- **Outline feedback pool** (`meta/outline_feedback.jsonl`): the writer's ordinary feedback is consumed at the next structural operation; if an external text revision affects the plot, it goes to the architect first before writing continues, and the pool is cleared after handling.
+- **Mechanical violation records** (`meta/rule_violations.jsonl`): the result of checking against user_rules at commit time, consumed by the editor review through `novel_context(chapter=N)`; best-effort quality metadata, not strongly consistent at the same level as the commit.
 
-### 4.4 分层大纲与完本收敛（收官卷）
+### 4.4 Layered outline and book-completion convergence (the finale volume)
 
-滚动规划（compass 锚点 + 卷骨架 + 弧按需展开）解决"开与滚"，但让"何时结束"从一个数字变成每卷末的开放裁定——完本收敛必须显式设计，否则出现两类僵局：账面写完收不了尾（越界续写死循环，已由结构兜底修复）与叙事写完账面不让停（estimated_scale 高估 + 完结门槛硬否决 → 注水或熔断）。
+Rolling planning (compass anchor + volume skeleton + arcs expanded on demand) solves "opening and rolling", but turns "when to end" from a number into an open ruling at the end of each volume. Book-completion convergence must be explicitly designed, otherwise two kinds of deadlock appear: the ledger says it is written but the ending cannot be wrapped up (an out-of-bounds continuation infinite loop, already fixed by a structural backstop), and the narrative is finished but the ledger will not let it stop (estimated_scale overestimated + the completion threshold hard-vetoing → padding or circuit break).
 
-**收官卷是收敛的一等概念**，完本 = 一次方向裁定 + 一段确定性滑行：
+**The finale volume is a first-class concept of convergence**, and book completion = one directional ruling + one deterministic glide:
 
-- **宣告（LLM 语义裁定）**：架构师在卷末三选一——append_volume（继续）/ append_volume 带 `"final": true`（收官卷）/ complete_book（条件当下全满足）。estimated_scale 在完结判定里是**证据不是否决权**。
-- **执行（代码事实查表）**：收官事实 = `domain.FinaleVolume`。终卷结构写完（`layeredStructurallyComplete`）**且卷末收尾三连齐备（弧评审/弧摘要/卷摘要）**即自动 MarkComplete——完结不抢在 editor 质量闸之前。未宣告的书仍走质量级 `layeredBookComplete`（伏笔+长线归零）。
-- **解除（数据推导，无撤销工具）**：宣告后又追加未标记新卷 → 收束态自然解除。状态永远可从 layered_outline 推导。
-- **完结判定的派发**：卷末由 Route 分支 10 派 architect_long 走完结判定清单——完结裁定权在架构师（一个 Worker），不在控制面。
+- **Declaration (LLM semantic ruling)**: at the end of a volume the architect picks one of three: append_volume (continue) / append_volume with `"final": true` (finale volume) / complete_book (all conditions currently met). estimated_scale is **evidence, not a veto** in the completion decision.
+- **Execution (code fact lookup)**: the finale fact = `domain.FinaleVolume`. Once the final volume's structure is fully written (`layeredStructurallyComplete`) **and the volume-end wrap-up trio is in place (arc review / arc summary / volume summary)**, MarkComplete is applied automatically, so completion never jumps ahead of the editor's quality gate. Books with no declaration still follow the quality-level `layeredBookComplete` (foreshadowing + long threads at zero).
+- **Release (data-derived, no undo tool)**: if an unmarked new volume is appended after the declaration, the wrap-up state is released naturally. The state can always be derived from layered_outline.
+- **Dispatch of the completion decision**: at the end of a volume, Route branch 10 dispatches architect_long to run the completion-decision checklist; the authority over the completion ruling lies with the architect (a Worker), not with the control plane.
 
 ---
 
-## 5. 工具规约
+## 5. Tool specification
 
-工具是事实层与 Agent 的唯一交互点。
+Tools are the only point of interaction between the fact layer and the Agent.
 
-### 5.1 读类工具
+### 5.1 Read tools
 
-`novel_context(scope)` / `read_chapter(n)` —— 任何时候可调用，不依赖前置状态，返回数据足够 LLM 独立决策。`novel_context(chapter=N)` 额外注入该章机械违规（如有）；architect 路径注入已完成卷/当前卷弧摘要、角色快照、大纲反馈池与 foundation 状态。扩弧时，已发生内容是事实，骨架只是计划；Architect 可在 `expand_arc` 中同步修订目标弧的 title/goal 并展开章节。
+`novel_context(scope)` / `read_chapter(n)` can be called at any time, do not depend on prior state, and return enough data for the LLM to decide independently. `novel_context(chapter=N)` additionally injects that chapter's mechanical violations (if any); the architect path injects completed-volume/current-volume arc summaries, character snapshots, the outline feedback pool, and foundation status. When expanding an arc, what has already happened is fact and the skeleton is only a plan; the Architect may revise the target arc's title/goal in `expand_arc` while expanding its chapters.
 
-### 5.2 写类工具（单文件原子 + 分级恢复语义）
+### 5.2 Write tools (single-file atomic + graded recovery semantics)
 
-单文件写入原子；跨文件步骤不承诺数据库式原子性。`commit_chapter` 的普通提交与返工提交共用 `PendingCommit`，按“完整意图 → artifact/状态 → Progress → checkpoint → 清除意图”推进；恢复只使用首次落盘的规范化 payload 与正文快照，禁止采用重启后模型重新生成的参数或被覆盖的 draft。`expand_arc` / `append_volume` 等结构操作没有持久化意图，只承诺同一参数的幂等重放、派生视图修复和错误显式返回。
+Single-file writes are atomic; cross-file steps do not promise database-style atomicity. The ordinary commit and the rewrite commit of `commit_chapter` share `PendingCommit` and advance in the order "complete intent → artifact/state → Progress → checkpoint → clear intent"; recovery uses only the canonicalized payload and text snapshot written to disk the first time, and it is forbidden to adopt parameters the model regenerated after a restart or a draft that has been overwritten. Structural operations such as `expand_arc` / `append_volume` have no persistent intent, and promise only idempotent replay with the same parameters, repair of derived views, and explicit error return.
 
-| 工具 | Artifact | Step |
+| Tool | Artifact | Step |
 |---|---|---|
 | `save_book` | meta/book.json + book.md | book |
 | `plan_chapter` | drafts/chXX.plan.json | plan |
 | `draft_chapter` | drafts/chXX.draft.md | draft |
 | `edit_chapter` | drafts/chXX.draft.md | edit |
-| `check_consistency` | 无（只读，inline 返回） | consistency_check |
-| `commit_chapter` | chapters/chXX.md + Progress（+ 反馈池/违规记录 best-effort） | commit |
-| `save_review` | reviews/chXX.json（global 为 chXX-global.json） | review |
+| `check_consistency` | none (read-only, returned inline) | consistency_check |
+| `commit_chapter` | chapters/chXX.md + Progress (+ feedback pool / violation records best-effort) | commit |
+| `save_review` | reviews/chXX.json (chXX-global.json for global) | review |
 | `save_arc_summary` | summaries/arc-vNNaNN.json | arc_summary |
 | `save_volume_summary` | summaries/vol-vNN.json | volume_summary |
-| `save_foundation` | foundation/*.json（expand_arc/append_volume/update_compass 成功即消费反馈池） | premise / outline / layered_outline / characters / world_rules / expand_arc / append_volume / update_compass / complete_book |
+| `save_foundation` | foundation/*.json (expand_arc/append_volume/update_compass consume the feedback pool on success) | premise / outline / layered_outline / characters / world_rules / expand_arc / append_volume / update_compass / complete_book |
 
-`commit_chapter` 承担弧/卷/全书完成检测，返回结构化事实；`save_review` 不做文学阈值裁定，只校验审阅事实并把 Editor 给出的 verdict 原子映射为 Flow 与返工队列。
+`commit_chapter` carries out arc/volume/whole-book completion detection and returns structured facts; `save_review` makes no literary threshold rulings, it only validates the review facts and atomically maps the verdict given by the Editor to Flow and the rewrite queue.
 
-`edit_chapter` 是 `agentcore.EditTool` 的薄封装，仅允许编辑已完成且位于 `PendingRewrites` 的章节；新章初稿需通过 `draft_chapter(mode="write")` 整章覆盖。
+`edit_chapter` is a thin wrapper over `agentcore.EditTool` and only allows editing chapters that are completed and in `PendingRewrites`; a new chapter's first draft must overwrite the whole chapter through `draft_chapter(mode="write")`.
 
-### 5.3 错误分层
+### 5.3 Error layering
 
-| 错误类型 | 处理层 | 动作 |
+| Error type | Handling layer | Action |
 |---|---|---|
-| 网络超时 / 流式 EOF | Tools | 重试 3 次 |
-| provider 429/503 | litellm | failover 到备用 provider |
-| 鉴权 / 模型不存在 | Tools | terminal 上抛 |
-| 缺前置 artifact | Tools | conflict 上抛，LLM 调 `novel_context` 后重试 |
-| 工具参数非法 | Tools | validation 上抛，LLM 改参数 |
-| retryable（stream-idle 等） | subagent 层 | MaxRetries=7 就近重试，不出 Worker |
-| Worker 失败（guard 升级/hard_stop 等） | Engine | 确定性错误直接暂停；其余同指令重试一次 → Arbiter 裁定 retry/reroute/abort |
-| 僵局（同一路由指令连续重现） | Engine | 3 次咨询 Arbiter，5 次硬熔断暂停 |
-| 流式空响应 / 长思考 | litellm (`StreamIdleTimeout=5min`) | watchdog 触发重试 |
+| Network timeout / stream EOF | Tools | Retry 3 times |
+| provider 429/503 | litellm | failover to a backup provider |
+| Auth / model not found | Tools | terminal, raised upward |
+| Missing prerequisite artifact | Tools | conflict raised upward; the LLM calls `novel_context` and retries |
+| Illegal tool arguments | Tools | validation raised upward; the LLM fixes the arguments |
+| retryable (stream-idle, etc.) | subagent layer | MaxRetries=7 retries locally, never leaving the Worker |
+| Worker failure (guard escalation / hard_stop, etc.) | Engine | Deterministic errors pause directly; otherwise retry the same instruction once → Arbiter rules retry/reroute/abort |
+| Deadlock (the same routing instruction keeps recurring) | Engine | 3 repeats consult the Arbiter, 5 trigger a hard circuit-breaker pause |
+| Empty stream response / long thinking | litellm (`StreamIdleTimeout=5min`) | watchdog triggers a retry |
 
-### 5.4 幂等
+### 5.4 Idempotency
 
-每个写类工具执行前先检查 checkpoint：如果当前 scope 最新 checkpoint 的 `Step+Digest` 与本次相同，直接返回已有产物。重试与崩溃恢复后的重复派发都是安全的——这也是 Engine 恢复模型（读 store 续跑）成立的根基。
+Before executing, every write tool first checks the checkpoint: if the `Step+Digest` of the latest checkpoint in the current scope equals this call's, it returns the existing artifact directly. Retries and repeated dispatch after crash recovery are both safe; this is also the foundation on which the Engine recovery model (read the store and carry on) stands.
 
 ---
 
-## 6. Worker 装配
+## 6. Worker assembly
 
-> 单一超大 Prompt + 单一 Agent 跑完一本书理论可行，但三件事会阻塞稳定性：**上下文爆炸**（200 章再强压缩也退化）、**职责干扰**（规划严谨 / 写作想象 / 审阅批判在同一 prompt 互相冲淡）、**模型异构红利损失**（规划/写作/审阅独立选模型是显著的成本/质量优化空间）。多 Worker 拓扑因此必要。
+> A single huge prompt + a single Agent running a whole book is feasible in theory, but three things block stability: **context explosion** (even strong compression degrades at 200 chapters), **role interference** (rigorous planning / imaginative writing / critical review dilute one another in one prompt), and **loss of the model-heterogeneity dividend** (choosing models independently for planning/writing/review is a significant cost/quality optimization space). A multi-Worker topology is therefore necessary.
 
-### 6.1 装配与运行
+### 6.1 Assembly and running
 
-`agents.BuildWorkers`（`internal/agents/build.go`）把三类 Worker 装配为一个 `subagent.Runner`：Engine 直接调用 `Run(agent, task)`，每次调用是一个完整的 `agentcore.AgentLoop`（独立 context、独立模型、独立重试）。全部装配一次生效：角色模型 + failover、prompt cache key（每 spawn 自增 #seq）、ThinkingLevel、UsageRecorder/SessionLogger（OnMessage）、Writer ContextManagerFactory（窗口随 /model 切换自动重建）、RestorePack、StopGuardFactory、StopAfterTools。
+`agents.BuildWorkers` (`internal/agents/build.go`) assembles the three kinds of Worker into one `subagent.Runner`: the Engine calls `Run(agent, task)` directly, and each call is one complete `agentcore.AgentLoop` (independent context, independent model, independent retries). The whole assembly takes effect at once: role models + failover, prompt cache key (#seq increments on each spawn), ThinkingLevel, UsageRecorder/SessionLogger (OnMessage), Writer ContextManagerFactory (the window is rebuilt automatically when /model switches), RestorePack, StopGuardFactory, StopAfterTools.
 
-Worker 进度中继走 **ctx 的 ToolProgress 回调**：Engine 以 `agentcore.WithToolProgress(ctx, relay)` 调 `Runner.Run`，子代理的工具调用/流式正文/thinking/retry/context 事件经 relay 进入 observer——与 Coordinator 时代同一 ProgressPayload 形态，观察层复用。
+Worker progress relay goes through the **ToolProgress callback in ctx**: the Engine calls `Runner.Run` with `agentcore.WithToolProgress(ctx, relay)`, and the subagent's tool calls / streamed body / thinking / retry / context events enter the observer through the relay, in the same ProgressPayload shape as in the Coordinator era, so the observation layer is reused.
 
 ```
 Engine ── Runner.Run(agent, task) ──▶ architect_short/long · writer · editor
-                                          │ 工具调用
-                                        Store（协作媒介，Worker 之间不直接通信）
+                                          │ tool calls
+                                        Store (collaboration medium; Workers do not communicate directly)
 ```
 
-`bootstrap.ModelSet` 支持角色级模型：architect/writer/editor 各自独立配置 + provider failover。Writer 跑 Sonnet 而不是 Opus 在 200 章长篇上能省一个数量级成本。Arbiter 统一使用 Default 模型（经 usageTrackedModel 计费），当前不开放独立角色配置。
+`bootstrap.ModelSet` supports role-level models: architect/writer/editor are each configured independently + provider failover. Running the Writer on Sonnet rather than Opus saves an order of magnitude in cost on a 200-chapter novel. The Arbiter uniformly uses the Default model (billed through usageTrackedModel) and currently does not expose an independent role configuration.
 
-### 6.2 三类协作模式
+### 6.2 Three collaboration patterns
 
-Worker 之间不直接通信，所有信息流经 Store 中的结构化工件：
+Workers do not communicate directly; all information flows through structured artifacts in the Store:
 
-**模式 A · 串行移交（主干）**：Route 派 Architect 规划 → Writer 章 1..N → Editor 弧末评审 → Writer 重写。每一步"下一个派谁"由 Route 从事实推导。
+**Pattern A · Serial handoff (the trunk)**: Route dispatches the Architect to plan → Writer chapters 1..N → Editor arc-end review → Writer rewrite. At each step, "who is next" is derived by Route from the facts.
 
-**模式 B · 反馈闭环**：Writer 在 commit 中报告大纲偏离 → 反馈池落盘（仅分层书）→ Architect 下次结构操作经 novel_context 参考 → 操作成功即消费清空。Writer 不直接呼叫 Architect，反馈经事实层流转。
+**Pattern B · Feedback loop**: the Writer reports an outline deviation in commit → the feedback pool is persisted (layered books only) → the Architect consults it via novel_context at its next structural operation → on success the operation consumes and clears it. The Writer never calls the Architect directly; feedback flows through the fact layer.
 
-**模式 C · 骨架展开（滚动规划）**：commit 后事实显示下一弧仍是骨架 → Route（或 Engine precheck）派 architect_long 展开 → Writer 继续。长篇"滚动规划"能力就是这个闭环。
+**Pattern C · Skeleton expansion (rolling planning)**: after a commit the facts show the next arc is still a skeleton → Route (or the Engine precheck) dispatches architect_long to expand it → the Writer continues. The long-form "rolling planning" capability is exactly this closed loop.
 
-### 6.3 Worker 流程的代码约束（不靠 prompt 拐杖）
+### 6.3 Code constraints on the Worker flow (no prompt crutches)
 
-> 早期 writer 流程靠 `writer.md` 的"严格按以下顺序推进"约束。LLM 经常违反——跳过 plan 直接 draft、把正文只写到聊天里不落盘。**提示词约束流程不稳定**，模型升级反而可能让它"创造性地不遵守"。
+> The early writer flow relied on the "advance strictly in the following order" constraint in `writer.md`. LLMs often violated it: skipping plan and going straight to draft, or writing the body only into the chat without persisting it. **Constraining the flow with prompts is unstable**, and a model upgrade may even make it "creatively disobey".
 
-四层代码约束（同时生效）：
+Four layers of code constraints (all in effect at once):
 
-| 层 | 落点 | 作用 |
+| Layer | Where | Effect |
 |---|---|---|
-| `StopAfterTools` / `StopAfterToolResult` | `agents/build.go` SubAgentConfig | 关键工具成功即退出 Worker run（终态退出仍咨询 StopGuard，见契约测试）。Writer `commit_chapter` 命中即停；Editor 的 `save_review`/`save_arc_summary`/`save_volume_summary`、Architect 弧/卷收尾走 `StopAfterToolResult` |
-| `CheckpointDeltaGuard` | `agents/guard/subagent_guards.go` | 以 baseline checkpoint 为分界，本轮结束前必须看到对应 step 的新 checkpoint，否则拒绝 `end_turn`；连续拦 3 次升级 terminate（弱模型死循环兜底）。Editor 的 guard 任务感知：被派生成摘要时仅复核不算完成 |
-| 工具内联 `next_step` | 各工具返回值字段 | 每个事实自带"下一步建议"，LLM 看到事实就知道下一步 |
-| 工具内归属/前置检查 | `edit_chapter` `commit_chapter` 等 | 数据层物理拦截：初稿定点编辑、改未入队的已完成章、空提交均被拒，`ConcurrencySafe=false` 阻止并发竞态 |
+| `StopAfterTools` / `StopAfterToolResult` | `agents/build.go` SubAgentConfig | A Worker run exits as soon as a key tool succeeds (terminal exits still consult StopGuard, see the contract tests). The Writer stops once `commit_chapter` hits; the Editor's `save_review`/`save_arc_summary`/`save_volume_summary` and the Architect's arc/volume wrap-up go through `StopAfterToolResult` |
+| `CheckpointDeltaGuard` | `agents/guard/subagent_guards.go` | With the baseline checkpoint as the dividing line, a new checkpoint for the corresponding step must be seen before the round ends, otherwise `end_turn` is rejected; 3 consecutive blocks escalate to terminate (a backstop against weak-model deadlock). The Editor's guard is task-aware: when dispatched to generate a summary, a re-check alone does not count as completion |
+| Inline tool `next_step` | return-value fields of each tool | Every fact carries a "suggested next step", so the LLM knows the next step upon seeing the fact |
+| In-tool ownership / precondition checks | `edit_chapter` `commit_chapter`, etc. | Physical interception at the data layer: point edits on a first draft, edits to completed chapters not in the queue, and empty commits are all rejected, and `ConcurrencySafe=false` prevents concurrency races |
 
-writer.md 只承担：执行协议、断点续跑认知模型、章节契约解读；写作标准在文风层（`{{VOICE}}` 占位回填，用户可覆盖，见 `docs/voice-layer.md`）。**这正是文风层敢开放给用户的前提：不变量住在工具层，prompt 随便改坏不了状态机。**
+writer.md carries only: the execution protocol, the mental model for resuming from a breakpoint, and interpretation of the chapter contract; writing standards live in the voice layer (the `{{VOICE}}` placeholder is backfilled and users may override it, see `docs/voice-layer.md`). **This is exactly the precondition for opening the voice layer to users: invariants live in the tool layer, so no matter how the prompt is broken, it cannot damage the state machine.**
 
-### 6.4 agentcore 依赖
+### 6.4 agentcore dependency
 
-`../agentcore` 是本项目自有的通用 Agent 库（go.work 关联）。Engine 用到的原语：`subagent.Runner.Run`（程序化直调，类型化结果与错误链——`errors.Is(err, subagent.ErrUnknownAgent)` 等分类不依赖错误文案）、ctx `ToolProgress`（事件中继）、`subagent.Config`、`StopGuard`/`StopAfterTools`。`subagent.Tool` 只供需要把 Runner 暴露给模型的宿主通过 `Runner.AsTool()` 使用，AINovel 不经过这层。
+`../agentcore` is this project's own general-purpose Agent library (linked via go.work). The primitives the Engine uses: `subagent.Runner.Run` (direct programmatic call, typed results and error chains; classification such as `errors.Is(err, subagent.ErrUnknownAgent)` does not depend on error wording), the ctx `ToolProgress` (event relay), `subagent.Config`, `StopGuard`/`StopAfterTools`. `subagent.Tool` is only for hosts that need to expose the Runner to the model via `Runner.AsTool()`; AINovel does not go through this layer.
 
-**修改边界**：可进 agentcore——新 ContextManager 策略、新 provider 适配、新事件类型；不进 agentcore——业务模型与业务工具。判断准则：假设 agentcore 未来会被 coding agent / 客服 agent 引入，新能力在那个场景仍有意义才允许进。**禁止在应用层写兜底补丁**——缺能力直接改上游。
+**Modification boundary**: allowed into agentcore: new ContextManager strategies, new provider adapters, new event types; not allowed into agentcore: business models and business tools. The criterion: suppose agentcore is later adopted by a coding agent / customer-service agent; a new capability is allowed in only if it still makes sense in that scenario. **Writing backstop patches at the application layer is forbidden**; if a capability is missing, change upstream directly.
 
-**契约测试**（`internal/agents/agentcore_contract_test.go`，6 条，全部经 `Runner.Run` 驱动）：把本项目依赖的框架行为钉成可执行断言（终态退出咨询 StopGuard、Error/Aborted 不触达 guard、Escalate 错误链可 `errors.Is` 匹配、`Run` 的类型化 `ErrUnknownAgent`、工具错误进度完整且为纯文本）。**bump agentcore 前必须全绿**——注释会过时，测试不会（这条纪律已经抓到过一次失效假设并省下一个 workaround）。
+**Contract tests** (`internal/agents/agentcore_contract_test.go`, 6 of them, all driven through `Runner.Run`): they pin the framework behaviors this project depends on into executable assertions (a terminal exit consults StopGuard, Error/Aborted do not reach the guard, an Escalate error chain can be matched with `errors.Is`, `Run`'s typed `ErrUnknownAgent`, tool error progress is complete and plain text). **They must all be green before bumping agentcore**: comments go stale, tests do not (this discipline has already caught a failed assumption once and saved a workaround).
 
-### 6.5 提示词缓存
+### 6.5 Prompt caching
 
-长跑成本的第二杠杆（第一是模型选型）。完整讲解版见 `docs/prompt-cache-design.md`。三层分工：**litellm 只做协议翻译**，**agentcore 决定缓存放置与身份**，**ainovel 一行配置接入**。
+The second lever of long-run cost (the first is model selection). The full explanatory version is in `docs/prompt-cache-design.md`. A three-layer division of labor: **litellm does only protocol translation**, **agentcore decides cache placement and identity**, **ainovel plugs in with one line of configuration**.
 
-缓存收益的前提是**请求前缀字节稳定**，由三条纪律保证（都在 agentcore）：
+The premise of cache benefit is **a byte-stable request prefix**, guaranteed by three disciplines (all in agentcore):
 
-1. **tools 字节确定性** — Description/Schema 每次重建，任何 map 迭代都先排序
-2. **历史 append-only** — 消息只追加不改写；上下文压缩是"付一次全 miss 换窗口"的显式交易，投影必须 `CommitOnProject`
-3. **动态内容进尾部** — 信封/指令全部尾部追加，永不回写早期消息
+1. **Byte-deterministic tools** — Description/Schema are rebuilt every time, and any map iteration is sorted first
+2. **Append-only history** — messages are only appended, never rewritten; context compression is an explicit trade of "pay one full miss to get the window back", and the projection must `CommitOnProject`
+3. **Dynamic content goes to the tail** — envelopes/instructions are all appended at the tail, never written back into earlier messages
 
-配置为「一书一基、一角色一名、一会话一键」：OpenAI 系 `PromptCacheKey = nvl-<书哈希>-<角色>#<spawn序号>` 做路由亲和（默认只对官方端发送，中转可显式开启）；Claude 系 `CacheLastMessage: "ephemeral"` 滚动断点 + system 地板断点。**闩锁红线**：一切进缓存键的量会话内首算即冻结，宁陈旧不破缓存。断裂检测（`host/usage.go noteCacheBreak`）纯观测不修复，计数进 `usage.json cache_breaks` 与 TUI 缓存面板。
+The configuration is "one base per book, one name per role, one key per session": for the OpenAI family `PromptCacheKey = nvl-<book hash>-<role>#<spawn sequence>` provides routing affinity (sent only to the official endpoint by default; relays may enable it explicitly); for the Claude family `CacheLastMessage: "ephemeral"` is a rolling breakpoint + a system floor breakpoint. **Latch red line**: every quantity that goes into the cache key is frozen at first computation within a session, preferring staleness over breaking the cache. Break detection (`host/usage.go noteCacheBreak`) is pure observation and does no repair; its count goes into `usage.json cache_breaks` and the TUI cache panel.
 
 ---
 
-## 7. Engine 与 Arbiter
+## 7. Engine and Arbiter
 
-### 7.1 Engine 循环（`internal/host/engine.go`）
+### 7.1 Engine loop (`internal/host/engine.go`)
 
 ```
 for {
-    应用干预控制态动作(排空;hold+dispatch 先建立返工事实)
-    advanceGate.HandleBoundary() // hold 消费 + review 许可对账
-    inst := 干预派单 ?? Route(LoadState) ?? planStartFallback
-    inst == nil → return          // 完本 / 语义停机,等 Continue
-    precheck(inst)                // 原 ToolGate 的确定性化身:完本期丢弃派发;
-                                  // writer 目标章未展开 → 改派 architect 展开
-    advanceGate.Allow(inst)       // 仅阻断未获许可的正向新章
-    trackDeadlock(inst)           // 同一 Agent+Task 连续重现:3 次问 Arbiter,5 次熔断
-    runWorker(inst)               // subagent.Runner.Run + 进度中继 + DISPATCH 事件
-    错误分类:确定性错误→暂停;首败重试一次;再败→Arbiter(retry/reroute/abort)
-    政策边界:budget → advanceGate
+    apply intervention control-state actions (drain; hold+dispatch first establish the rewrite facts)
+    advanceGate.HandleBoundary() // hold consumption + review permit reconciliation
+    inst := intervention dispatch ?? Route(LoadState) ?? planStartFallback
+    inst == nil → return          // book complete / semantic stop, wait for Continue
+    precheck(inst)                // the deterministic successor of the old ToolGate: discard dispatch once complete;
+                                  // writer target chapter not expanded → reroute to architect to expand
+    advanceGate.Allow(inst)       // blocks only forward new chapters without a permit
+    trackDeadlock(inst)           // same Agent+Task keeps recurring: 3 times ask the Arbiter, 5 times circuit-break
+    runWorker(inst)               // subagent.Runner.Run + progress relay + DISPATCH event
+    error classification: deterministic error → pause; retry once on first failure; fail again → Arbiter (retry/reroute/abort)
+    policy boundary: budget → advanceGate
 }
 ```
 
-单 goroutine 串行；`ctx` cancel = 暂停（checkpoint 保证无损）。**控制状态只在循环边界变更**：干预的 hold/reopen/dispatch 排队至边界提交（hold+dispatch 组合先执行派单建队列，再允许 Gate 消费 hold）；answer/rules 即时执行。`review` 模式只约束正向新章，不阻断返工、评审、结构维护与提交恢复。Arbiter 派单执行前做 Expect 对账（Phase/Flow/QueueHead 语义字段；CheckpointSeq 只审计不对账——干预时 worker 多在跑，seq 必变），不符则丢弃并把原始干预**同步**送回完整裁定路径重询。
+Single-goroutine serial; `ctx` cancel = pause (checkpoints guarantee nothing is lost). **Control state changes only at loop boundaries**: an intervention's hold/reopen/dispatch are queued and committed at the boundary (for a hold+dispatch combination the dispatch runs first to build the queue, then the Gate is allowed to consume the hold); answer/rules execute immediately. `review` mode constrains only forward new chapters and does not block rewrites, reviews, structural maintenance, or commit recovery. Before executing an Arbiter dispatch, an Expect reconciliation is done (the semantic fields Phase/Flow/QueueHead; CheckpointSeq is audited only, not reconciled, because workers are mostly still running at intervention time so seq always changes); on mismatch the dispatch is discarded and the original intervention is **synchronously** sent back to the full ruling path for re-consultation.
 
-### 7.2 Arbiter（`internal/arbiter/`）
+### 7.2 Arbiter (`internal/arbiter/`)
 
-四个场景，每场景一对 `Collect*Facts`（IO 边界）/ `Decide*`（除统一执行器管理的模型请求外无 IO，可离线重放）+ 专属 Decision 类型（场景不匹配的动作在类型上不可表达）：
+Four scenarios, each with a `Collect*Facts` (IO boundary) / `Decide*` (no IO other than the model request managed by the unified executor, replayable offline) pair + a dedicated Decision type (actions that do not match the scenario are inexpressible in the type):
 
-| 场景 | 触发 | 决策类型 |
+| Scenario | Trigger | Decision type |
 |---|---|---|
-| `plan_start` | 新书启动 | 选 short/long 规划师 + 扩充过短需求 |
-| `intervention` | 用户干预 | answer/rules/hold/reopen/dispatch 组合（执行顺序由 Engine 固定） |
-| `worker_failure` | Worker 报错且确定性分类无出路 | retry / reroute / abort |
-| `deadlock` | 同指令反复无进展 | retry / reroute / abort |
+| `plan_start` | New book startup | Choose the short/long planner + expand an overly short request |
+| `intervention` | User intervention | A combination of answer/rules/hold/reopen/dispatch (execution order fixed by the Engine) |
+| `worker_failure` | Worker errors and the deterministic classification has no way out | retry / reroute / abort |
+| `deadlock` | The same instruction repeats with no progress | retry / reroute / abort |
 
-失败路径：统一结构化执行器按能力选择原生 JSON Schema 或提示词契约；提示词模式的格式/Schema 错误与两种模式的业务校验错误会把精确原因反馈给模型继续修正，直至成功或 `context` 结束，不设置次数上限。原生契约违约、拒答、截断、错误终止及不可重试请求错误立即显式返回；干预不产生写入，启动显式报错，failure/deadlock 保守暂停。**Arbiter 输出与一切 LLM 输出同样不可信**——JSON Schema 校验后，`Validate` 继续按事实做机械校验（phase 约束、reopen 仅限完本、章节越界）。用量经 `usageTrackedModel` 进预算与 usage 系统。
+Failure path: the unified structured executor chooses between native JSON Schema and a prompt contract depending on capability; format/Schema errors in prompt mode and business-validation errors in both modes feed the exact reason back to the model to keep correcting, until success or `context` ends, with no cap on attempts. Native-contract violations, refusals, truncation, erroneous termination, and non-retryable request errors are returned explicitly and immediately; an intervention produces no writes, startup reports the error explicitly, and failure/deadlock pause conservatively. **Arbiter output, like all LLM output, is untrusted**: after JSON Schema validation, `Validate` continues with mechanical validation against the facts (phase constraints, reopen only after completion, chapter out-of-bounds). Usage enters the budget and usage systems through `usageTrackedModel`.
 
-### 7.3 Host 外壳（`internal/host/host.go`）
+### 7.3 Host shell (`internal/host/host.go`)
 
-生命周期（`StartPrepared`/`Resume`/`Continue`/`Steer`/`Abort`/`Close`）、干预编排（FIFO 串行 + PendingSteer 崩溃保护）、事件投影、模型管理。观察通道 `Events`/`Stream`/`Done`，UI 聚合 `Snapshot()`，扩展入口（导入/导出/共创/仿写/模型切换）。
+Lifecycle (`StartPrepared`/`Resume`/`Continue`/`Steer`/`Abort`/`Close`), intervention orchestration (FIFO serial + PendingSteer crash protection), event projection, and model management. Observation channels `Events`/`Stream`/`Done`, the UI aggregate `Snapshot()`, and extension entry points (import/export/co-creation/imitation/model switching).
 
-`runEnded`（engine.onDone 回调）按 store 事实定终态：Phase=Complete → completed + 确定性完本总结（不花 LLM 调用）；其余 → idle/paused。**禁止任何"自动续跑"逻辑出现在此**（历史教训 §10 第 5 条）。
+`runEnded` (the engine.onDone callback) decides the terminal state from store facts: Phase=Complete → completed + a deterministic completion summary (no LLM call spent); otherwise → idle/paused. **No "auto-resume" logic may appear here** (historical lesson, §10 item 5).
 
 ---
 
-## 8. 启动、恢复与干预
+## 8. Startup, recovery, and intervention
 
-### 8.1 新建
+### 8.1 New book
 
 ```
-User: "一句话需求"
+User: "one-line request"
   → StartPrepared(raw)
     → Progress.Init / Checkpoints.Reset
-    → StartPrompt 固化进 RunMeta(输入事实先于裁定落盘)
-    → Arbiter plan_start 裁定(选规划师+扩充需求) → 失败显式报错(审计带 error)
-    → PlanStartRecord 固化进 RunMeta(裁定先落事实,再起执行)
-    → engine.start(首条派单指令)
+    → StartPrompt frozen into RunMeta (input facts are persisted before the ruling)
+    → Arbiter plan_start ruling (choose planner + expand request) → failure is reported explicitly (the audit carries the error)
+    → PlanStartRecord frozen into RunMeta (the ruling is persisted as fact first, then execution starts)
+    → engine.start (first dispatch instruction)
 ```
 
-裁定失败不是死局:StartPrompt 已在,之后任何一次恢复/继续都会由引擎补裁(见 §8.2)。
+A failed ruling is not a dead end: StartPrompt is already there, and any later resume/continue will have the engine make up the ruling (see §8.2).
 
-### 8.2 恢复（崩溃后重启）
-
-```
-进程启动 → resumeLabel(纯 UI 标签) → 一致性告警 → AdvanceGate 对账
-  → PendingSteer 存在 → 同步走干预裁定路径(干预先于续跑生效)后拉起引擎
-  → 否则 engine.start(nil):只恢复事实,Route 从 store 重算续跑
-```
-
-没有会话需要恢复。规划期崩溃（裁定已落盘、首个 foundation 未落盘）由 `planStartFallback` 按 PlanStartRecord 续派，不重做已有裁定。若启动裁定**从未完成**（启动时模型故障），`planStartFallback` 依据 StartPrompt 现场补裁——这是首次裁定的重试，不违反"恢复不重新裁定"；补裁失败显式暂停告知，不允许无声停机。重复派发安全由工具幂等保证（§5.4）。
-
-### 8.3 用户干预
-
-`Steer`/`Continue` 统一走 Arbiter 裁定路径（`doIntervention`）：
+### 8.2 Recovery (restart after a crash)
 
 ```
-持久化 PendingSteer(崩溃保护) → Collect facts → Decide(秒级)
-  → 落 decisions.jsonl → answer 回显 / rules 即时落盘
-  → hold/reopen/dispatch 入队边界提交(引擎停机时立即执行并视意图拉起引擎)
-  → 全部动作成功 → 原子清除 PendingSteer(ClearHandledSteer)
+process start → resumeLabel (pure UI label) → consistency warning → AdvanceGate reconciliation
+  → PendingSteer exists → go through the intervention ruling path synchronously (the intervention takes effect before resuming), then bring up the engine
+  → otherwise engine.start(nil): restore facts only, Route recomputes from the store and carries on
 ```
 
-崩溃保护是 **best-effort 单在途持久化**：首次 `SetPendingSteer` 失败会显式报错并停止裁定，绝不在无恢复记录时继续执行；裁定期、动作失败（保留待重放）、正常退出/Abort（defer 回存残留派单）受保护。仍有两个明确不保证的窗口——派单转入内存执行队列后被硬杀（毫秒级）、interMu 等待中的并发输入。用户在场可感知，重发成本秒级。
+There is no session to recover. A crash during planning (ruling persisted, first foundation not persisted) is handled by `planStartFallback`, which continues dispatching per the PlanStartRecord without redoing the existing ruling. If the startup ruling was **never completed** (model failure at startup), `planStartFallback` makes up the ruling on the spot from StartPrompt; this is a retry of the first ruling and does not violate "recovery does not re-rule"; if the make-up ruling fails, it pauses explicitly and notifies, and a silent stop is not allowed. Safety of repeated dispatch is guaranteed by tool idempotency (§5.4).
 
-**长效干预的持久层**：写作风格/质量规则由裁定的 `rules` 动作经 `userrules.Service` 归一化进本书规则快照，`novel_context` 注入 `working_memory.user_rules`——跨压缩、跨重启生效（详见 [用户规则快照](user-rules-runtime.md)）。其余出路本就落 store（篇幅/剧情→architect 派单，改旧章→editor 入队 PendingRewrites，完本返工→reopen）。
+### 8.3 User intervention
 
-### 8.4 章节推进控制
+`Steer`/`Continue` both go through the Arbiter ruling path (`doIntervention`):
 
-`ChapterAdvanceGate` 统一执行两种不同时间尺度的用户意图：
+```
+persist PendingSteer (crash protection) → Collect facts → Decide (seconds)
+  → write decisions.jsonl → answer echoed / rules persisted immediately
+  → hold/reopen/dispatch queued for boundary commit (when the engine is stopped, execute immediately and bring up the engine according to intent)
+  → all actions succeed → atomically clear PendingSteer (ClearHandledSteer)
+```
 
-| 意图 | 来源 | 语义 |
+Crash protection is **best-effort single in-flight persistence**: if the first `SetPendingSteer` fails, it reports an error explicitly and stops ruling, and never continues executing without a recovery record; the ruling phase, action failure (kept for replay), and normal exit/Abort (defer saves back the leftover dispatch) are protected. Two windows are still explicitly not guaranteed: a hard kill after the dispatch has moved into the in-memory execution queue (milliseconds), and concurrent input waiting on interMu. A present user can notice, and the cost of resending is seconds.
+
+**Persistence layer for long-lived interventions**: writing-style/quality rules are normalized into this book's rule snapshot by the ruling's `rules` action through `userrules.Service`, and `novel_context` injects `working_memory.user_rules`, taking effect across compression and across restarts (see [User rules snapshot](user-rules-runtime.md) for details). The other outlets already land in the store (length/plot → architect dispatch, revising old chapters → editor enqueues PendingRewrites, rework after completion → reopen).
+
+### 8.4 Chapter advance control
+
+`ChapterAdvanceGate` uniformly enforces two kinds of user intent at different time scales:
+
+| Intent | Source | Semantics |
 |---|---|---|
-| `AdvanceMode=review` + 精确 permit | `/review on`、`/next` | 持久政策：每个正向新章必须单独放行 |
-| `AdvanceHold` | Arbiter intervention | 一次性意图：当前边界、返工排空或目标章节稳定提交后暂停 |
+| `AdvanceMode=review` + exact permit | `/review on`, `/next` | Persistent policy: every forward new chapter must be released individually |
+| `AdvanceHold` | Arbiter intervention | One-shot intent: pause at the current boundary, after the rewrite drains, or after the target chapter commits stably |
 
-许可绑定章节号。只有目标章进入 CompletedChapters、PendingCommit 清空且 commit checkpoint 存在才消费，因此提交 saga 任一窗口崩溃都不会把同一许可用于下一章。详细不变量见 [Chapter Advance Gate](chapter-advance-gate.md)。
+A permit is bound to a chapter number. It is consumed only when the target chapter enters CompletedChapters, PendingCommit is cleared, and the commit checkpoint exists, so a crash in any window of the commit saga will never reuse the same permit for the next chapter. Detailed invariants are in [Chapter Advance Gate](chapter-advance-gate.md).
 
 ---
 
-## 9. 目录结构
+## 9. Directory structure
 
 ```
 internal/
-  domain/         纯数据：Phase / FlowState / Progress / Checkpoint / Scope / Story / Plan /
-                  Review / StateChange / Phase-Flow 迁移规则
-  store/          文件系统持久化（tmp+rename + 幂等协调；commit 有 Saga 阶段事实）：progress / checkpoints / outline /
+  domain/         pure data: Phase / FlowState / Progress / Checkpoint / Scope / Story / Plan /
+                  Review / StateChange / Phase-Flow transition rules
+  store/          filesystem persistence (tmp+rename + idempotent reconciliation; commit has Saga phase facts): progress / checkpoints / outline /
                   drafts / summaries / characters / world / signals / run_meta / runtime /
-                  session / decisions(裁定审计)
-  tools/          11 个 Agent 工具，写类单文件原子 + 显式错误 + 幂等；commit 额外使用持久化 Saga
-  flow/           路由策略（纯函数 + IO 边界）：router.go (Route 决策表) + state.go (LoadState)
-                  + pause.go (停靠点裁定)
-  arbiter/        语义裁定层（LLM-as-function）：plan_start / intervention / failure(deadlock)
-                  逐场景 Collect/Decide 函数对 + 逐场景 Decision 类型 + 机械校验
-  agents/         build.go 装配三个 Worker(subagent.Runner,Engine 程序化直调)；ctxpack/ Writer 上下文压缩策略
-    guard/        subagent_guards.go (CheckpointDeltaGuard ×3,Worker 事实护栏)
-  host/           host.go (生命周期/干预编排) + engine.go (确定性执行循环) + observer*.go
+                  session / decisions (ruling audit)
+  tools/          11 Agent tools, write tools are single-file atomic + explicit errors + idempotent; commit additionally uses a persistent Saga
+  flow/           routing policy (pure functions + IO boundary): router.go (Route decision table) + state.go (LoadState)
+                  + pause.go (stop-point ruling)
+  arbiter/        semantic ruling layer (LLM-as-function): plan_start / intervention / failure(deadlock)
+                  per-scenario Collect/Decide function pairs + per-scenario Decision types + mechanical validation
+  agents/         build.go assembles the three Workers (subagent.Runner, called directly and programmatically by the Engine); ctxpack/ Writer context compression strategy
+    guard/        subagent_guards.go (CheckpointDeltaGuard ×3, Worker fact guardrails)
+  host/           host.go (lifecycle / intervention orchestration) + engine.go (deterministic execution loop) + observer*.go
                   + events.go + usage*.go + budget.go + advance_gate.go + resume.go + cocreate.go
-    imp/          外部小说语义编译导入：ingest → segment → analyze → synthesize → publish（纯状态推导 + LLM 作函数）
-    exp/          已完成章节导出：TXT / EPUB 3；纯只读
+    imp/          external-novel semantic-compilation import: ingest → segment → analyze → synthesize → publish (pure state derivation + LLM as a function)
+    exp/          export of completed chapters: TXT / EPUB 3; purely read-only
   entry/          tui (Bubble Tea) / headless / startup
-  bootstrap/      config + ModelSet + provider failover + setup 向导
-  eval/           离线评测（prompt/voice A/B、回归）
+  bootstrap/      config + ModelSet + provider failover + setup wizard
+  eval/           offline evaluation (prompt/voice A/B, regression)
   diag/ errs/ models/ notify/ rules/ userrules/ stylestat/ ...
 
 assets/
   prompts/        arbiter-plan-start / arbiter-intervention / arbiter-failure / architect-short|long
-                  / writer(协议模板,{{VOICE}} 占位) / editor / import-* / simulation-*
-  voice.md        写作标准(文风层内置默认;三层覆盖见 docs/voice-layer.md)
-  references/     写作技巧 + anti-ai-tone + 体裁模板等
-  styles/         默认/奇幻/言情/悬疑(用户可覆盖/新增)
+                  / writer (protocol template, {{VOICE}} placeholder) / editor / import-* / simulation-*
+  voice.md        writing standards (built-in default of the voice layer; three-layer override see docs/voice-layer.md)
+  references/     writing techniques + anti-ai-tone + genre templates, etc.
+  styles/         default/fantasy/romance/suspense (users can override/add)
 
-../agentcore     通用 Agent 框架（go.work 兄弟目录，可加通用能力，不加业务）
-../litellm       LLM 网关
+../agentcore     general-purpose Agent framework (go.work sibling directory; may gain general capabilities, never business logic)
+../litellm       LLM gateway
 ```
 
-### 9.1 演进里程碑
+### 9.1 Evolution milestones
 
-| 时间 | 重构 | 净效果 |
+| Date | Refactor | Net effect |
 |---|---|---|
-| 2026-04-10 | `internal/orchestrator/` (6342 行) → `host/` + `agents/` | 运行时核心 -74% |
-| 2026-04-20 | Hybrid Coordinator：新建 `host/flow/`，路由收归纯函数 | 路由错误率趋近 0 |
-| 2026-05-02 | agentcore 慢思考/流式修复；删除 `idleResumeCount` 续跑补丁 | mimo / 慢思考流式跑通 |
-| 2026-06-05 | 滚动规划闭环 + `/import` 反推续写 | 200+ 章首次跑通 |
-| 2026-07-12 | **Engine + Arbiter 控制面更替**：Coordinator 长循环及七项补丁生态退役；文风层三层覆盖；五轮对抗评审加固 | 每边界省一次 LLM 转发；控制面 100% 离线可测；语义裁定可回放 |
-| 2026-07-15 | **`/import` 语义编译管线**：硬编码切分规则退役，改为 ingest→segment→analyze→synthesize→publish 分阶段编译；纯状态推导（`NextAction(Facts)`）+ 输入指纹绑定工件，全程可恢复幂等 | 切分随模型能力自然增强；无漂移阶段枚举；中断可续、控制面离线可测 |
+| 2026-04-10 | `internal/orchestrator/` (6342 lines) → `host/` + `agents/` | Runtime core -74% |
+| 2026-04-20 | Hybrid Coordinator: new `host/flow/`, routing consolidated into pure functions | Routing error rate approaches 0 |
+| 2026-05-02 | agentcore slow-thinking/streaming fixes; removed the `idleResumeCount` auto-resume patch | mimo / slow-thinking streaming runs through |
+| 2026-06-05 | Rolling-planning closed loop + `/import` reverse-engineering continuation | 200+ chapters run through for the first time |
+| 2026-07-12 | **Engine + Arbiter control-plane replacement**: the Coordinator long loop and its seven-patch ecosystem retired; three-layer override for the voice layer; hardened by five rounds of adversarial review | One fewer LLM forward per boundary; control plane 100% testable offline; semantic rulings replayable |
+| 2026-07-15 | **`/import` semantic compilation pipeline**: hard-coded splitting rules retired, replaced by staged compilation ingest→segment→analyze→synthesize→publish; pure state derivation (`NextAction(Facts)`) + input-fingerprint-bound artifacts, fully recoverable and idempotent throughout | Splitting improves naturally with model capability; no drifting stage enumeration; interruptions can resume, control plane testable offline |
 
-实测：hy3-preview free 12 章 / 73 分钟、mimo-v2.5-pro 10 章 / 8.4 万字，均一次跑完；长篇 gpt-5.4《凡骨》235 章 / 127 万字滚动规划闭环跑通（Coordinator 时代数据，Engine 时代首跑待补）。
-
----
-
-## 10. 明确不做的事
-
-违反即代表架构偏离。
-
-1. **不引入 Task / Job / WorkItem 概念**。UI 显示的"当前任务"是事件流投影，不是事实。
-2. **不在 Route 之外发明第二个调度器**。所有"下一步派谁"必须经 Route 决策表（穷举规格钉死）或 Arbiter 裁定（落盘审计），不允许散落的 if-else 派发。
-3. **不做"空闲续跑"机制**。Engine 循环结束 = Host 进入终态；再动起来只有用户 `Continue` 或重启 `Resume`。
-4. **不给 prompt 加行为规训**。需要行为护栏说明分层错了——不变量进工具前置条件，判断进 Arbiter，流程进 Route。
-5. **不在 Host 为异常停机加自动续跑补丁**。曾经的 `idleResumeCount` 在唯一一次实际触发的长跑里 100% 没救场，反而掩盖了 agentcore 层真因（详见 `feedback_no_host_resilience.md`）。
-6. **不基于"tool exec end"推断任务完成**。完成的唯一证据是 checkpoint 写入。
-7. **不做 WorkflowInstance / Command + Apply 等四层模型**。事实层只有 Progress + Checkpoint + Artifact。
-8. **不支持并行 Worker**。单活跃 Engine 循环，单本书串行推进。多本小说请用多进程。
-9. **不在工具层做 LLM 调用**（除 Agent 工具自身）。纯 IO + 校验 + 幂等。
-10. **不让 UI 直接读 Store**。只能订阅事件或读 Host `Snapshot()`。
-11. **不写 Host 端的 Flow 状态机**。Flow 标签只由工具更新，Route 只读不写。
-12. **不为"LLM 幻觉"写兜底硬编码**。优化 prompt、改进工具返回值、让 novel_context 更清楚地呈现事实。
-13. **不让 diag / 观察层介入控制流**。诊断只读；自动修复 / 续跑 / 改流程一律不做。
-14. **预算与章节推进政策不进 Route/工具层**。`BudgetSentinel` / `ChapterAdvanceGate` 是 Engine 边界的政策组件（执行用户预先签署的指令，不评估文学行为）；`notify` 纯观察。
-15. **控制面改动必须先改穷举规格再改实现**；**bump agentcore 前必须过契约测试**。
-16. **不做通用工作流 DSL、事件溯源、全局 State Digest**。Route 是一个领域一张表，泛化即过度设计。
+Measured: hy3-preview free 12 chapters / 73 minutes and mimo-v2.5-pro 10 chapters / 84,000 characters, both finished in a single run; the long-form gpt-5.4 novel 《凡骨》 (Fan Gu) 235 chapters / 1.27 million characters ran through the rolling-planning closed loop (Coordinator-era data; the first Engine-era run is yet to be added). <!-- han:keep -->
 
 ---
 
-## 11. 验证策略
+## 10. What is explicitly not done
 
-### 11.1 测试资产清单
+A violation means the architecture has deviated.
 
-| 层 | 资产 | 覆盖 |
+1. **Do not introduce the Task / Job / WorkItem concept**. The "current task" shown by the UI is an event-stream projection, not a fact.
+2. **Do not invent a second scheduler outside Route**. Every "who is next" must go through the Route decision table (pinned by the exhaustive spec) or an Arbiter ruling (persisted audit); scattered if-else dispatching is not allowed.
+3. **Do not build an "idle resume" mechanism**. The Engine loop ending = Host enters a terminal state; the only ways to get moving again are the user's `Continue` or a restart `Resume`.
+4. **Do not add behavioral discipline to prompts**. Needing a behavioral guardrail means the layering is wrong: invariants go into tool preconditions, judgment goes to the Arbiter, flow goes into Route.
+5. **Do not add auto-resume patches in the Host for abnormal stops**. The former `idleResumeCount` failed to save the day 100% of the time in the only long run where it actually fired, and instead masked the real cause at the agentcore layer (see `feedback_no_host_resilience.md`).
+6. **Do not infer task completion from "tool exec end"**. The only evidence of completion is a checkpoint write.
+7. **Do not build four-layer models such as WorkflowInstance / Command + Apply**. The fact layer is only Progress + Checkpoint + Artifact.
+8. **Do not support parallel Workers**. A single active Engine loop, one book advances serially. For multiple novels, use multiple processes.
+9. **Do not make LLM calls in the tool layer** (except the Agent tool itself). Pure IO + validation + idempotency.
+10. **Do not let the UI read the Store directly**. It may only subscribe to events or read the Host `Snapshot()`.
+11. **Do not write a Host-side Flow state machine**. The Flow label is updated only by tools; Route only reads and never writes.
+12. **Do not write hard-coded backstops for "LLM hallucination"**. Optimize the prompt, improve tool return values, and make novel_context present the facts more clearly.
+13. **Do not let diag / the observation layer intervene in control flow**. Diagnostics are read-only; auto-repair / auto-resume / changing the flow are never done.
+14. **Budget and chapter-advance policy do not go into Route / the tool layer**. `BudgetSentinel` / `ChapterAdvanceGate` are policy components at the Engine boundary (executing instructions the user signed in advance, not evaluating literary behavior); `notify` is pure observation.
+15. **Control-plane changes must change the exhaustive spec first and the implementation second**; **the contract tests must pass before bumping agentcore**.
+16. **Do not build a general workflow DSL, event sourcing, or a global State Digest**. Route is one table per domain; generalizing it is over-design.
+
+---
+
+## 11. Verification strategy
+
+### 11.1 Test asset inventory
+
+| Layer | Asset | Coverage |
 |---|---|---|
-| 控制面规格 | `flow/router_exhaustive_test.go` | Route 决策表 12 万组合穷举 + 纯函数/确定性/守恒性质 |
-| 框架契约 | `agents/agentcore_contract_test.go` | 5 条 agentcore 行为假设，经 `Runner.Run` 驱动（升级前必跑） |
-| 引擎端到端 | `host/engine_test.go` | fake 模型 + 真实工具:写完整书 / 失败裁定 / 僵局裁定 / 返工验收时序 / boundary hold 即停 / 退出竞态保全 / 单许可单章节 |
-| 裁定 | `arbiter/arbiter_test.go` | 解析/反馈重试/逐场景校验矩阵/事实采集 |
-| 事实管道契约 | store/tools 测试 | 反馈池跨重启、违规记录 latest-wins/重写清除/novel_context 注入、PlanStart 跨 Init 保留 |
-| 文风层 | `assets/load_test.go` | 拆分逐字节一致 / 三层覆盖语义 / eval 同组装路径 |
-| 语义质量 | `internal/eval` + decisions.jsonl | prompt/voice A/B、裁定离线重放（回归集建设中） |
+| Control-plane spec | `flow/router_exhaustive_test.go` | Exhaustive 120k combinations of the Route decision table + pure-function / determinism / conservation properties |
+| Framework contract | `agents/agentcore_contract_test.go` | 5 agentcore behavior assumptions, driven through `Runner.Run` (must be run before an upgrade) |
+| Engine end-to-end | `host/engine_test.go` | fake model + real tools: write a complete book / failure ruling / deadlock ruling / rewrite-approval timing / boundary hold stops immediately / exit-race preservation / one permit per chapter |
+| Ruling | `arbiter/arbiter_test.go` | parsing / feedback retry / per-scenario validation matrix / fact collection |
+| Fact pipeline contract | store/tools tests | feedback pool across restarts, violation records latest-wins / cleared on rewrite / novel_context injection, PlanStart preserved across Init |
+| Voice layer | `assets/load_test.go` | splitting is byte-for-byte identical / three-layer override semantics / eval uses the same assembly path |
+| Semantic quality | `internal/eval` + decisions.jsonl | prompt/voice A/B, offline replay of rulings (regression set under construction) |
 
-### 11.2 稳定性场景
+### 11.2 Stability scenarios
 
-- **A 长跑**：80~200 章一次跑完，Phase=complete。允许 provider failover、重试；禁止任何自动续跑。
-- **B 崩溃恢复**：任意 step 后 kill 进程 → Resume → Route 从事实续跑，不重写已落盘产物，checkpoints 无重复 step。规划期崩溃走 PlanStartRecord。
-- **C provider 抖动**：间歇 503 → litellm failover，Worker 无感知。
-- **D 用户干预**：运行中 Steer → 秒级裁定回显、动作边界提交；停机 Steer → 裁定后按意图拉起；崩溃 → PendingSteer 重放。
+- **A Long-run**: 80~200 chapters finished in one run, Phase=complete. Provider failover and retries are allowed; any auto-resume is forbidden.
+- **B Crash recovery**: kill the process after any step → Resume → Route continues from the facts, does not rewrite persisted artifacts, and checkpoints have no duplicate steps. A crash during planning goes through PlanStartRecord.
+- **C Provider jitter**: intermittent 503 → litellm failover, the Worker is unaware.
+- **D User intervention**: Steer while running → ruling echoed in seconds, actions committed at the boundary; Steer while stopped → after the ruling, bring up the engine according to intent; crash → PendingSteer replay.
 
-### 11.3 合规性（可写成 linter / test）
+### 11.3 Compliance (can be written as a linter / test)
 
-- `flow.Route` 必须纯函数：禁止读 Store / 任何 IO
-- `runEnded` 函数体内不允许出现任何启动引擎的调用
-- 新裁定场景必须成对新增 Collect/Decide + Decision 类型 + 落盘
-- recovery 相关代码只能出现在 `host/resume.go` 与 `engine.planStartFallback`
+- `flow.Route` must be a pure function: reading the Store / any IO is forbidden
+- No call that starts the engine may appear in the body of `runEnded`
+- A new ruling scenario must add a Collect/Decide pair + a Decision type + persistence together
+- Recovery-related code may appear only in `host/resume.go` and `engine.planStartFallback`
 
-### 11.4 质量迭代
+### 11.4 Quality iteration
 
-改文风 → 改 `<书目录>/style/`（用户级）或 assets/voice.md（内置），文风评测集 A/B 验证；新增评审维度 → 改 editor.md（save_review 结构化接收）；新增参考资料 → 三处显式接线（`tools.References` + `loadReferences` + novel_context 注入映射）。
+Changing the voice → edit `<book directory>/style/` (user level) or assets/voice.md (built-in), verified by A/B on the voice evaluation set; adding review dimensions → edit editor.md (save_review receives them in structured form); adding reference material → wire it explicitly in three places (`tools.References` + `loadReferences` + the novel_context injection mapping).
 
-**全书级风格统计（`internal/stylestat`）**：Host 为每本书创建唯一 `StyleStatsIndex`，并显式注入 `novel_context` 与 `commit_chapter`。首次启动从全部已完成章节恢复索引，后续对新增/重写章节增量更新（句式模式/高频短语/跨章重复句/章末形态），相同书状态下复用快照并注入 `episodic_memory.style_stats`：editor 按数字裁定，writer 据此自避免。离线 eval 仍可直接调用纯函数 `Compute`。**统计归代码，裁定归 LLM**。
+**Whole-book style statistics (`internal/stylestat`)**: the Host creates a unique `StyleStatsIndex` per book and explicitly injects it into `novel_context` and `commit_chapter`. On first startup it rebuilds the index from all completed chapters, then updates it incrementally for newly added/rewritten chapters (sentence patterns / high-frequency phrases / cross-chapter repeated sentences / chapter-ending shapes); under the same book state the snapshot is reused and injected as `episodic_memory.style_stats`: the editor rules by the numbers, and the writer uses them to avoid repeating itself. Offline eval can still call the pure function `Compute` directly. **Statistics belong to code, rulings belong to the LLM**.
 
 ---
 
-## 12. 总结
+## 12. Summary
 
-> **事实层确定，语义层自主。**模型自由在验证不可能的地方（写什么、怎么写、怎么判），被约束在验证可能的地方（顺序、幂等、阶段）。
+> **Deterministic fact layer, autonomous semantic layer.** The model is free where verification is impossible (what to write, how to write it, how to judge), and constrained where verification is possible (ordering, idempotency, phases).
 
-没有 task queue，没有 policy engine，没有常驻会话。有的只是：
+There is no task queue, no policy engine, no resident session. What there is:
 
-- 一个串行确定性 Engine 循环（~500 行，六条端到端路径钉死）
-- 一张 Route 决策表（纯函数，12 万组合穷举规格）
-- 四个 Arbiter 裁定函数（事实进、结构化决策出、落盘可回放）
-- 三类职能 Worker（context 与模型独立，事实护栏零打扰）
-- 11 个单文件原子、跨文件显式失败/幂等恢复的工具；其中 commit 使用持久化 Saga + 一个 jsonl checkpoint 文件
+- One serial deterministic Engine loop (~500 lines, six end-to-end paths pinned down)
+- One Route decision table (a pure function, a 120k-combination exhaustive spec)
+- Four Arbiter ruling functions (facts in, structured decision out, persisted and replayable)
+- Three kinds of functional Worker (independent context and model, fact guardrails with zero disturbance)
+- 11 tools that are single-file atomic with explicit cross-file failure / idempotent recovery; of these, commit uses a persistent Saga + one jsonl checkpoint file
 
-模型升级的收益流向何处一目了然：创作更好（Writer/Architect/Editor 的全部输出）、裁定更准（Arbiter 四场景）、摘要更好（ctxpack）——全部换模型即得，外壳一行不改。控制面不吃模型红利，因为**查表不需要智力**；它需要的是被证明正确，而它已经被证明了。
+Where the gains from model upgrades flow is clear at a glance: better creation (all output of Writer/Architect/Editor), more accurate rulings (the Arbiter's four scenarios), better summaries (ctxpack), all obtained just by swapping the model, with not one line of the shell changed. The control plane does not take the model dividend, because **a table lookup needs no intelligence**; what it needs is to be proven correct, and it has been proven.
 
-流程刚性是有意的、标了价的、留了门的：想放开 writer 的工具顺序 → 松一段协议 prompt（不变量在工具层兜底）；想按弧派发 → Route 加一行分支；想扩裁定能力 → 加一对 Collect/Decide。每一次松绑都有裁判（穷举规格、文风评测、decisions 回放）——**用证据决定给模型多少绳子，而不是用信仰**。
+The rigidity of the flow is intentional, priced, and left with a door: to loosen the writer's tool order → relax one section of the protocol prompt (invariants are backstopped at the tool layer); to dispatch by arc → add one branch to Route; to extend ruling capability → add a Collect/Decide pair. Every loosening has a referee (the exhaustive spec, voice evaluation, decisions replay): **use evidence, not faith, to decide how much rope to give the model**.
 
-唯一的纪律：**有人想加一个决策点时，先过三分法——可枚举的进 Route，边界清晰的进 Arbiter，开放式的进 Worker**。三者都不是的决策，重新想清楚它是不是真的存在。
+The only discipline: **when someone wants to add a decision point, first run it through the three-way split: enumerable ones go into Route, those with clear boundaries go into the Arbiter, open-ended ones go into the Worker**. For a decision that is none of the three, think again about whether it really exists.
