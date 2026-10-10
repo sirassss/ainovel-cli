@@ -32,8 +32,8 @@ type engine struct {
 
 	arbiterModel    agentcore.ChatModel
 	failurePrompt   string
-	planStartPrompt string // Startup-ruling system prompt: when the ruling never completed, the engine uses StartPrompt to make up the
-	style           string // style-name ruling on the spot and passes it to DecidePlanStart
+	planStartPrompt string // Startup-ruling system prompt: when the ruling never completed, the engine uses StartPrompt to make up the ruling on the spot
+	style           string // Style name; passed to DecidePlanStart for the make-up ruling
 	// reconsult sends a stale intervention back into the host's full ruling path (persistence/audit/applying all actions),
 	// executed asynchronously; the engine only discards stale dispatches and does not do a partial re-ruling itself.
 	reconsult func(text string)

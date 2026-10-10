@@ -9,6 +9,10 @@
 // dimensions from the numbers, the writer avoids the patterns accordingly).
 // Compute is for one-shot full offline evaluation; at runtime a Tracker maintains the
 // statistics incrementally per chapter.
+//
+// The pattern regexes always match Chinese prose. The book language (Input.Language /
+// Tracker.SetLanguage) only selects the display label of each pattern: Vietnamese by
+// default, the original Chinese label for "zh". It never changes any count.
 package stylestat
 
 import (
@@ -32,6 +36,8 @@ type Input struct {
 	Chapters  []string
 	Titles    []string
 	Stopwords []string
+	// Language is the book language ("vi" or "zh"); it only selects the pattern labels.
+	Language string
 }
 
 // Stats is the book-wide style statistics result. Every field is a factual count with no
@@ -47,7 +53,7 @@ type Stats struct {
 }
 
 // PatternStat is the book-wide count of one fixed sentence-pattern class (generic
-// AI-style tics).
+// AI-style tics). Name is the label in the book language (Vietnamese unless "zh").
 type PatternStat struct {
 	Name       string  `json:"name"`
 	Total      int     `json:"total"`
@@ -82,23 +88,38 @@ type TitleStat struct {
 	WithoutPrefix int `json:"without_prefix"`
 }
 
-// patternDefs lists generic AI-style sentence patterns. The regexes match Chinese prose
-// and are matching data that must stay in Chinese (each carries han:keep); only the
-// Vietnamese labels are shown to the writer. Counts are approximate (the regexes do no
-// grammar analysis); they serve as a longitudinal baseline for this book, so absolute
-// precision does not matter.
-var patternDefs = []struct {
-	name string
+// patternDef is one sentence-pattern class: a display label per book language plus the
+// regex that counts it.
+type patternDef struct {
+	name string // Vietnamese label (default)
+	zh   string // original Chinese label, shown to zh-mode books
 	re   *regexp.Regexp
-}{
-	{"câu chỉnh lý『không phải…mà là…』", regexp.MustCompile(`不是[^。！？\n]{1,24}?[，、]?(?:而)?是`)},                                            // han:keep (regex)
-	{"lượng từ đếm thời gian『X hơi thở/X chớp mắt』", regexp.MustCompile(`[一两二三四五六七八九十几数半][息瞬]`)},                                        // han:keep (regex)
-	{"so sánh ví von『như một/phảng phất/như thể/tựa như』", regexp.MustCompile(`像一|仿佛|如同|宛如`)},                                           // han:keep (regex)
-	{"nhịp im lặng『đã im lặng/không nói gì/không ngoảnh lại』", regexp.MustCompile(`沉默了|没有说话|没有回头`)},                                     // han:keep (regex)
-	{"khuôn thần thái『trong mắt lóe lên/khóe môi nhếch/cắn môi』", regexp.MustCompile(`眼[中底]闪过|目光一凝|瞳孔一缩|眼眶微红|嘴角[微轻一]?[勾扬翘]|咬了咬唇|不可置信`)}, // han:keep (regex)
-	{"phản ứng cơ thể『lòng thắt lại/người run lên/hít một hơi lạnh』", regexp.MustCompile(`心头一[紧沉颤]|身子一[颤震僵]|倒吸(?:了)?一口凉气`)},             // han:keep (regex)
-	{"dấu hiệu suy nghĩ『nghĩ thầm/nhận ra/cảm thấy/thấy rằng』", regexp.MustCompile(`心想|意识到|感到|觉得`)},                                     // han:keep (regex)
-	{"câu sáo rỗng trừu tượng『một thứ không nói nên lời/ý nghĩa nằm ở』", regexp.MustCompile(`一种说不出的|说不清[的道]|的意义在于|真正的[^。！？\n]{1,10}是`)}, // han:keep (regex)
+}
+
+// label returns the display label for the book language; anything other than "zh" is
+// Vietnamese. The language only picks the label and never affects counting.
+func (d patternDef) label(lang string) string {
+	if lang == "zh" {
+		return d.zh
+	}
+	return d.name
+}
+
+// patternDefs lists generic AI-style sentence patterns, in a fixed order that counters
+// are indexed by. The regexes match Chinese prose and the Chinese labels are matching
+// data that must stay in Chinese (each line carries han:keep); the writer and editor see
+// the label in the book language (see patternDef.label). Counts are approximate (the
+// regexes do no grammar analysis); they serve as a longitudinal baseline for this book,
+// so absolute precision does not matter.
+var patternDefs = []patternDef{
+	{"câu chỉnh lý『không phải…mà là…』", "矫正句『不是…(而)是…』", regexp.MustCompile(`不是[^。！？\n]{1,24}?[，、]?(?:而)?是`)},                                                   // han:keep (regex)
+	{"lượng từ đếm thời gian『X hơi thở/X chớp mắt』", "计时量词『X息/X瞬』", regexp.MustCompile(`[一两二三四五六七八九十几数半][息瞬]`)},                                                 // han:keep (regex)
+	{"so sánh ví von『như một/phảng phất/như thể/tựa như』", "明喻『像一/仿佛/如同/宛如』", regexp.MustCompile(`像一|仿佛|如同|宛如`)},                                                // han:keep (regex)
+	{"nhịp im lặng『đã im lặng/không nói gì/không ngoảnh lại』", "沉默节拍『沉默了/没有说话/没有回头』", regexp.MustCompile(`沉默了|没有说话|没有回头`)},                                      // han:keep (regex)
+	{"khuôn thần thái『trong mắt lóe lên/khóe môi nhếch/cắn môi』", "神态模板『眼中闪过/嘴角勾起/咬了咬唇』", regexp.MustCompile(`眼[中底]闪过|目光一凝|瞳孔一缩|眼眶微红|嘴角[微轻一]?[勾扬翘]|咬了咬唇|不可置信`)}, // han:keep (regex)
+	{"phản ứng cơ thể『lòng thắt lại/người run lên/hít một hơi lạnh』", "躯体反应『心头一紧/身子一颤/倒吸凉气』", regexp.MustCompile(`心头一[紧沉颤]|身子一[颤震僵]|倒吸(?:了)?一口凉气`)},             // han:keep (regex)
+	{"dấu hiệu suy nghĩ『nghĩ thầm/nhận ra/cảm thấy/thấy rằng』", "思维标记『心想/意识到/感到/觉得』", regexp.MustCompile(`心想|意识到|感到|觉得`)},                                       // han:keep (regex)
+	{"câu sáo rỗng trừu tượng『một thứ không nói nên lời/ý nghĩa nằm ở』", "抽象套话『一种说不出的/的意义在于』", regexp.MustCompile(`一种说不出的|说不清[的道]|的意义在于|真正的[^。！？\n]{1,10}是`)},   // han:keep (regex)
 }
 
 var (
@@ -127,7 +148,7 @@ func Compute(in Input) *Stats {
 			continue
 		}
 		s.Patterns = append(s.Patterns, PatternStat{
-			Name:       def.name,
+			Name:       def.label(in.Language),
 			Total:      total,
 			PerChapter: round1(float64(total) / float64(n)),
 		})

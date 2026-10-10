@@ -250,7 +250,7 @@ func verifyChecksum(archivePath, checksumPath, assetName string) error {
 	}
 	actual := fmt.Sprintf("%x", h.Sum(nil))
 	if actual != expected {
-		return fmt.Errorf("kiểm tra SHA256 của %s thất bại: got %s, expected %s", assetName, actual, expected)
+		return fmt.Errorf("không xác minh được SHA256 của %s: got %s, expected %s", assetName, actual, expected)
 	}
 	return nil
 }

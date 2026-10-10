@@ -67,7 +67,7 @@ Tạo file `config/config.json` trong thư mục `Ainovel-cli`:
 
 ### Cách 1: Dùng Ollama Cục Bộ (Miễn phí, 100% Offline)
 
-1. **Tạo model trên Ollama với cửa sổ ngữ cảnh (Context Window) 65536 tokens**:
+1. **Tạo model trên Ollama với Context window 65536 tokens**:
    - Mở PowerShell / Terminal và chạy:
      ```powershell
      @"

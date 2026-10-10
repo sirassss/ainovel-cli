@@ -125,3 +125,34 @@ func assertStyleStatsIndexMatchesCompute(
 		t.Fatalf("index mismatch\n got: %+v\nwant: %+v", got, want)
 	}
 }
+
+// TestStyleStatsIndexPatternLabelFollowsBookLanguage: vi books get Vietnamese labels, zh
+// books the original Chinese ones, even when the language is set after the first snapshot.
+func TestStyleStatsIndexPatternLabelFollowsBookLanguage(t *testing.T) {
+	st := store.NewStore(t.TempDir())
+	if err := st.Init(); err != nil {
+		t.Fatal(err)
+	}
+	completed := []int{1, 2, 3, 4, 5}
+	for _, chapter := range completed {
+		if err := st.Drafts.SaveFinalChapter(chapter, "# 章\n他不是退缩，而是在等待。"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	index := NewStyleStatsIndex(st)
+	first := func(want string) {
+		t.Helper()
+		stats, err := index.Snapshot(completed, nil, nil)
+		if err != nil || stats == nil || len(stats.Patterns) == 0 {
+			t.Fatalf("snapshot = %+v, %v", stats, err)
+		}
+		if !strings.HasPrefix(stats.Patterns[0].Name, want) {
+			t.Fatalf("label = %q, want prefix %q", stats.Patterns[0].Name, want)
+		}
+	}
+	first("câu chỉnh lý")
+	st.SetLanguage("zh")
+	first("矫正句")
+	st.SetLanguage("vi")
+	first("câu chỉnh lý")
+}

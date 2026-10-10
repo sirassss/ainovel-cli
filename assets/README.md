@@ -40,6 +40,10 @@ Prompt, mô tả tool và thông báo trong code dùng thống nhất các từ 
 | cung phác thảo | cung mới có `title`, `goal`, `estimated_chapters`, chưa có chương chi tiết; mở rộng bằng `save_foundation(type="expand_arc")` |
 | dàn ý (phẳng / phân tầng) | `outline` (truyện ngắn) / `layered_outline` (truyện dài, tập → cung → chương) |
 | la bàn | `compass` (`ending_direction`, `open_threads`, `estimated_scale`); cập nhật bằng `type="update_compass"` |
+| nội dung chương | văn bản chương gửi cho người đọc (`chapter` text, bản chính thức); phân biệt với tóm tắt, dàn ý |
+| lập kế hoạch | bước lên khung truyện trước khi viết chương (`save_foundation`: premise, dàn ý, nhân vật, quy tắc thế giới) |
+| điểm đã | điểm thỏa mãn người đọc (tình huống được đền đáp, cú lật, phần thưởng) mà chương cần trao đúng lúc |
+| trau chuốt | sửa câu chữ, giữ nguyên cốt truyện; `verdict` = `polish`, chương vào `PendingRewrites`, luồng `polishing` |
 | tập cuối | tập kết thúc cả truyện, `append_volume` với `"final": true`; viết xong tự kết thúc truyện |
 | kết thúc truyện | `complete_book`, `phase=complete` |
 | yêu cầu chương | `chapter_contract` (`required_beats`, `forbidden_moves`, `continuity_checks`…) |

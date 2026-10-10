@@ -18,6 +18,7 @@ type Tracker struct {
 	sentences     map[string]sentenceAggregate
 	openingHits   int
 	version       uint64
+	lang          string
 
 	cacheVersion   uint64
 	cacheTitles    []string
@@ -45,6 +46,18 @@ func NewTracker() *Tracker {
 		chapters:      make(map[int]chapterStats),
 		patternTotals: make([]int, len(patternDefs)),
 		sentences:     make(map[string]sentenceAggregate),
+	}
+}
+
+// SetLanguage sets the book language used for pattern labels ("zh" shows the original
+// Chinese labels, anything else Vietnamese). It never changes counts; a change only
+// invalidates the cached snapshot, so labels cannot go stale.
+func (t *Tracker) SetLanguage(lang string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.lang != lang {
+		t.lang = lang
+		t.cacheReady = false
 	}
 }
 
@@ -170,7 +183,7 @@ func (t *Tracker) snapshot(titles, stopwords []string) *Stats {
 			continue
 		}
 		stats.Patterns = append(stats.Patterns, PatternStat{
-			Name:       patternDefs[i].name,
+			Name:       patternDefs[i].label(t.lang),
 			Total:      total,
 			PerChapter: round1(float64(total) / float64(n)),
 		})

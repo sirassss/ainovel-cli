@@ -1,6 +1,6 @@
 {
   // Provider và Model mặc định sử dụng.
-  // ★ Giá trị "provider" là một con trỏ (指针 / pointer) trỏ tới một key trong danh sách "providers" bên dưới.
+  // ★ Giá trị "provider" là một con trỏ (pointer) trỏ tới một key trong danh sách "providers" bên dưới.
   //   Trong TUI, bạn có thể dùng lệnh /config để quản lý Provider/Model và /model để chuyển đổi nhanh.
   "provider": "openrouter",
   "model": "google/gemini-2.5-flash",

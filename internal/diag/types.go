@@ -14,7 +14,7 @@ type Category string
 
 const (
 	CatFlow     Category = "flow"     // stalled flow, abnormal state, recovery problems
-	CatQuality  Category = "quality"  // review scores, chapter requirement fulfilment, consistency
+	CatQuality  Category = "quality"  // review scores, chapter contract fulfilment, consistency
 	CatPlanning Category = "planning" // outline gaps, foreshadow drift, stale compass
 	CatContext  Category = "context"  // character / timeline / relationship anomalies
 )

@@ -1,6 +1,6 @@
 # Việt hóa phase 2: ngôn ngữ theo đối tượng đọc — Thiết kế
 
-Ngày: 2026-10-10 · Tiếp nối `2026-10-09-viet-hoa-chuoi-han-va-sua-loi-log-design.md` (phase 1 đã xong, nhánh `feat/viet-hoa-chuoi-han`).
+Ngày: 2026-10-10 · Trạng thái: đã triển khai (kế hoạch `docs/superpowers/plans/2026-10-10-viet-hoa-phase2.md`) · Tiếp nối `2026-10-09-viet-hoa-chuoi-han-va-sua-loi-log-design.md` (phase 1 đã xong, nhánh `feat/viet-hoa-chuoi-han`).
 
 ## Mục tiêu
 Mỗi đoạn chữ trong repo dùng ngôn ngữ hợp với **người đọc nó**; truyện tiếng Việt không bị lẫn chữ Hán hay từ Hán-Việt khó hiểu.

@@ -170,3 +170,65 @@ func TestZhPatternsStillMatch(t *testing.T) {
 		t.Errorf("sentenceSplit: got %q", got)
 	}
 }
+
+var zhPatternLabels = []string{
+	"矫正句『不是…(而)是…』",
+	"计时量词『X息/X瞬』",
+	"明喻『像一/仿佛/如同/宛如』",
+	"沉默节拍『沉默了/没有说话/没有回头』",
+	"神态模板『眼中闪过/嘴角勾起/咬了咬唇』",
+	"躯体反应『心头一紧/身子一颤/倒吸凉气』",
+	"思维标记『心想/意识到/感到/觉得』",
+	"抽象套话『一种说不出的/的意义在于』",
+}
+
+// TestPatternLabelsFollowLanguage checks that the language only switches the labels:
+// "zh" gives the original Chinese labels, everything else Vietnamese, and counts match.
+func TestPatternLabelsFollowLanguage(t *testing.T) {
+	samples := []string{
+		"他不是愤怒，而是恐惧", "沉默了几息", "像一盏灯", "她沉默了",
+		"她眼中闪过慌乱", "他心头一紧", "他心想这不对", "这是一种说不出的寒意",
+	}
+	chapters := make([]string, 5)
+	for i := range chapters {
+		chapters[i] = strings.Join(samples, "。")
+	}
+
+	zh := Compute(Input{Chapters: chapters, Language: "zh"})
+	if zh == nil || len(zh.Patterns) != len(patternDefs) {
+		t.Fatalf("zh stats = %+v", zh)
+	}
+	for i, p := range zh.Patterns {
+		if p.Name != zhPatternLabels[i] {
+			t.Errorf("zh label %d = %q, want %q", i, p.Name, zhPatternLabels[i])
+		}
+	}
+	for _, lang := range []string{"", "vi", "xx"} {
+		got := Compute(Input{Chapters: chapters, Language: lang})
+		for i, p := range got.Patterns {
+			if p.Name != patternDefs[i].name || p.Name == zhPatternLabels[i] {
+				t.Errorf("lang %q label %d = %q, want Vietnamese %q", lang, i, p.Name, patternDefs[i].name)
+			}
+			if p.Total != zh.Patterns[i].Total || p.PerChapter != zh.Patterns[i].PerChapter {
+				t.Errorf("lang %q counts differ at %d: %+v vs %+v", lang, i, p, zh.Patterns[i])
+			}
+		}
+	}
+
+	// Tracker: language set after chapters are loaded and after a snapshot is cached.
+	tr := NewTracker()
+	for i, c := range chapters {
+		tr.Upsert(i+1, c)
+	}
+	if got := tr.Snapshot(nil, nil).Patterns[0].Name; got != patternDefs[0].name {
+		t.Errorf("default tracker label = %q", got)
+	}
+	tr.SetLanguage("zh")
+	if got := tr.Snapshot(nil, nil).Patterns[0].Name; got != zhPatternLabels[0] {
+		t.Errorf("zh tracker label (after cached vi snapshot) = %q", got)
+	}
+	tr.SetLanguage("vi")
+	if got := tr.Snapshot(nil, nil).Patterns[0].Name; got != patternDefs[0].name {
+		t.Errorf("vi tracker label after switching back = %q", got)
+	}
+}

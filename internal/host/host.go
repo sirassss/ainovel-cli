@@ -487,7 +487,7 @@ func (h *Host) startEngine(initial *flow.Instruction) bool {
 	return true
 }
 
-// Reopen forcibly reopens a concluded book into the creative state. Both completion and reopening are re-decisions: completion can be ruled by the architect,
+// Reopen forcibly reopens a concluded book into the creative state. Completion and reopening are both major decisions: completion can be ruled by the architect,
 // while reopening can only be explicitly initiated by the user (/reopen), with no model ruling. When direction is non-empty it is registered as a pending intervention,
 // and on recovery it is first injected through the Arbiter ruling (the same channel as an intervention made while stopped), then the engine continues (the end-of-volume route dispatches a continuation volume).
 func (h *Host) Reopen(direction string) error {

@@ -46,6 +46,7 @@ func (s *StyleStatsIndex) Snapshot(
 		}
 		s.tracker = tracker
 		s.completed = wanted
+		tracker.SetLanguage(s.store.Language())
 		return tracker.Snapshot(titles, stopwords), nil
 	}
 
@@ -53,6 +54,7 @@ func (s *StyleStatsIndex) Snapshot(
 		chapter int
 		text    string
 	}
+	s.tracker.SetLanguage(s.store.Language())
 	var additions []chapterText
 	for _, chapter := range completed {
 		if _, ok := s.completed[chapter]; ok {

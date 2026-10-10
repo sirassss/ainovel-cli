@@ -106,7 +106,7 @@ File cấu hình đặt tại `config/config.json`:
 
 ### Dùng Ollama Cục Bộ (100% Offline)
 
-1. **Tạo model trên Ollama với Context Window lớn (65536 tokens)**:
+1. **Tạo model trên Ollama với Context window lớn (65536 tokens)**:
    - Trên PowerShell (Windows):
      ```powershell
      @"
@@ -242,7 +242,7 @@ Khi đang ở trong giao diện TUI, bạn có thể gõ `/` để mở bảng c
 | :--- | :--- |
 | `/help` | Mở bảng trợ giúp tra cứu danh sách lệnh và phím tắt |
 | `/model` | Chuyển đổi Model hoặc mức độ suy luận (reasoning/thinking) |
-| `/config` | Quản lý cấu hình Provider, Model ID, API key, Base URL, Context Window |
+| `/config` | Quản lý cấu hình Provider, Model ID, API key, Base URL, Context window |
 | `/diag` | Xem báo cáo chẩn đoán toàn diện về sức khỏe, tiến độ và chất lượng truyện |
 | `/review [on\|off]` | Bật/tắt chế độ duyệt từng chương (dừng lại sau mỗi chương để bạn duyệt) |
 | `/next` | Phê duyệt cho phép viết chương tiếp theo (khi ở chế độ duyệt) |

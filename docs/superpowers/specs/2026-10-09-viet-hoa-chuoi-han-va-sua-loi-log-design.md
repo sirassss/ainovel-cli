@@ -1,6 +1,6 @@
 # Việt hóa chuỗi chữ Hán trong Go và sửa lỗi từ tui.log — Thiết kế
 
-Ngày: 2026-10-09 · Trạng thái: đã triển khai giai đoạn 1 (còn lại phase 2: diag 277, eval 150, models 51, stylestat 47, version 13 dòng chứa chữ Hán)
+Ngày: 2026-10-09 · Trạng thái: đã triển khai giai đoạn 1 (phase 2 đã xong, xem spec 2026-10-10)
 
 ## Mục tiêu
 - Người dùng tiếng Việt thấy TUI, thông báo, lỗi tool hoàn toàn tiếng Việt; LLM không nhận chữ Hán trong task/lỗi tool khi viết truyện tiếng Việt.

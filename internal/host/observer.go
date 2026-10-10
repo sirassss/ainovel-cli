@@ -36,8 +36,8 @@ func errorKind(err error, msg string) string {
 		return "tool_validation"
 	case strings.Contains(lower, "too many concurrent requests"):
 		return "overloaded"
-		// providerError appends litellm's structured type to the end of the text.
-		// HTTP/2 INTERNAL_ERROR itself has no classifiable keyword, so keeping this explicit network marker is enough.
+	// providerError appends litellm's structured type to the end of the text.
+	// HTTP/2 INTERNAL_ERROR itself has no classifiable keyword, so keeping this explicit network marker is enough.
 	case strings.Contains(lower, "[network,"):
 		return "network"
 	}

@@ -142,13 +142,14 @@ The old `prompt_ab.sh` had to copy the source and recompile because the prompts 
 
 A Case is the smallest unit of evaluation input, and also a set of **fact-layer assertions**. It is described in JSON so that rules are not scattered across command-line arguments.
 
-```jsonc
+<!-- han:keep --> The `prompt` value below is Chinese on purpose (it is case data); English gloss: "Write a long-form xianxia novel; the protagonist starts as a menial servant in a border town and, through an anomalous memory, cracks an old sect case and is drawn into the immortality game."
+```json
 {
   "id": "writer_first_chapter_xianxia",
   "category": "smoke",
   "role": "writer",
   "description": "Verify the quality of the Writer's first chapter prose and the stability of the tool chain",
-  "prompt": "写一本修仙长篇，主角从边城杂役起步，靠异常记忆破解宗门旧案卷入长生局。", // <!-- han:keep --> English gloss: "Write a long-form xianxia novel; the protagonist starts as a menial servant in a border town and, through an anomalous memory, cracks an old sect case and is drawn into the immortality game."
+  "prompt": "写一本修仙长篇，主角从边城杂役起步，靠异常记忆破解宗门旧案卷入长生局。",
   "style": "fantasy",
   "max_chapters": 1,
   "target_prompts": ["writer.md"],

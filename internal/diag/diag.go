@@ -11,7 +11,7 @@ import (
 
 const (
 	ThresholdDimScoreLow      = 70  // ChronicLowDimension: warn when a dimension's mean score is below this
-	ThresholdContractMissRate = 0.3 // ContractMissPattern: upper bound of the chapter-requirement miss rate
+	ThresholdContractMissRate = 0.3 // ContractMissPattern: upper bound of the chapter contract miss rate
 	ThresholdRewriteRate      = 0.5 // ExcessiveRewrites: upper bound of the rewrite rate
 	ThresholdWordShortRatio   = 0.4 // WordCountAnomaly: word count below this fraction of the mean is anomalous
 	ThresholdWordLongRatio    = 2.5 // WordCountAnomaly: word count above this multiple of the mean is anomalous

@@ -414,7 +414,7 @@ func (t *CommitChapterTool) Execute(_ context.Context, args json.RawMessage) (js
 		}
 	}
 
-	// Mechanical rules are part of the output and must be solidified before ProgressMarked, so recovery returns the same output directly.
+	// Mechanical rules are part of the output and must be persisted before ProgressMarked, so recovery returns the same output directly.
 	violations := t.checkRules(content, a.Chapter)
 	output, err := json.Marshal(commitOutput{CommitResult: result, RuleViolations: violations})
 	if err != nil {
@@ -900,7 +900,7 @@ func loadCoreCharacterNameSet(s *store.Store) (map[string]bool, error) {
 // applyCompletion decides whether this commit completes the whole book; if so it calls MarkComplete and returns true.
 //   - Non-layered: complete once the agreed total chapter count is written.
 //   - Layered: the architect explicitly calling save_foundation type=complete_book is the main path; this adds a
-//     deterministic fallback (see layeredComplete), preventing the model from neither append_volume nor
+//     deterministic fallback (see layeredComplete), when the model does neither append_volume nor
 //     complete_book at the end point, which causes a livelock of "writer runs bare past the range → out-of-range guard intercepts → retries repeatedly"
 //     (root cause of the Mortal Bone ch204..347 case).
 func (t *CommitChapterTool) applyCompletion(result *domain.CommitResult, progress *domain.Progress) (bool, error) {

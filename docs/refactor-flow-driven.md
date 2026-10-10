@@ -14,7 +14,7 @@
 > - `assets/prompts/coordinator.md` compressed from 88 lines to ~45 lines (responsibility narrowed to executing Host instructions + ruling + startup selection)
 > - `internal/host/resume.go` greatly simplified: it only generates a label and a short prompt, and the concrete next step is dispatched by the Router after the first TurnEnd
 > - `internal/store/` gained the helper methods `HasArcReview` / `HasArcSummary` / `HasVolumeSummary` / `CheckConsistency`
-> - The bug where the `observer.go` agent state no longer stayed at working was fixed along the way
+> - The bug where the agent state in `observer.go` stayed stuck at working was also fixed
 
 ---
 
@@ -122,7 +122,7 @@ Coordinator LLM turns per chapter:
 │   │  Pure function: route(Progress, Checkpoint, Boundary)│    │
 │   │      → NextInstruction                             │     │
 │   │  Has instruction → coordinator.FollowUp(instruction)│    │
-│   │  No instruction (ruling) → no intervention, LLM free│    │
+│   │  No ruling → no intervention, LLM acts autonomously│    │
 │   └──────────────────────────────────────────────────┘     │
 │                                                             │
 │   Kept: lifecycle API / Observer / Usage Tracker            │

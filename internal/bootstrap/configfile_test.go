@@ -289,8 +289,8 @@ func TestExampleConfigIsValidAndSelfConsistent(t *testing.T) {
 	if _, ok := cfg.Providers[cfg.Provider]; !ok {
 		t.Errorf("示例顶层 provider %q 未指向 providers 中的条目——指针正面样板自己悬空了", cfg.Provider)
 	}
-	if !contains(exampleConfig, "指针") {
-		t.Error("示例应点破“provider 是指针”——别让 #37 的认知陷阱回潮")
+	if !contains(exampleConfig, "con trỏ (pointer)") {
+		t.Error("example must spell out that \"provider\" is a pointer, so the #37 cognitive trap does not return")
 	}
 }
 
